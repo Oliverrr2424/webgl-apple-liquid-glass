@@ -14,6 +14,7 @@ const scene = Number(flag('scene', 0));
 const focus = flag('focus');
 const set = flag('set');
 const noPanel = args.includes('--no-panel');
+const clean = args.includes('--clean');
 
 // ANGLE backend differs per platform; fall back to the system Chrome when the
 // bundled chromium was never downloaded (npm install without `playwright install`).
@@ -29,6 +30,7 @@ await page.goto('http://localhost:8765/index.html', { waitUntil: 'load' });
 await page.waitForFunction('window.__lg !== undefined');
 
 if (noPanel) { await page.click('#togglePanel'); await page.waitForTimeout(100); }
+if (clean) await page.addStyleTag({ content: '#stageHud, #loadState { display: none !important; }' });
 await page.evaluate((s) => window.__lg.setScene(s), scene);
 if (set) {
   const patch = {};
