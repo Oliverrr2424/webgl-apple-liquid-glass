@@ -1,7 +1,7 @@
 // Physical + artistic parameters of the material. Lengths are CSS pixels.
 export const DEFAULT_MATERIAL = {
   radius: 64,          // corner radius (clamped to 23.5% of the side)
-  squircle: 2.0,       // superellipse exponent -> Apple's continuous corners
+  squircle: 2.0,       // Folder corner exponent selected from the references
   bevel: 34,           // width of the refracting rim
   height: 21,          // optical thickness of the slab
   ior: 2.0,            // effective IOR after screen-space calibration

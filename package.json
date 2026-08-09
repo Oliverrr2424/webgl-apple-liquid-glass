@@ -1,11 +1,24 @@
 {
-  "name": "liquid-glass-replica",
-  "version": "1.0.0",
-  "private": true,
+  "name": "apple-liquid-glass-webgl",
+  "version": "0.1.1",
+  "description": "Reusable WebGL2 liquid glass surfaces for folders, rectangles, pills, and circles.",
+  "private": false,
+  "license": "MIT",
   "type": "module",
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "assets/readme"
+  ],
   "scripts": {
     "serve": "python3 -m http.server 8765",
-    "shot": "node tools/shot.mjs"
+    "shot": "node tools/shot.mjs",
+    "pack:check": "npm pack --dry-run"
   },
   "devDependencies": {
     "playwright": "^1.49.0"

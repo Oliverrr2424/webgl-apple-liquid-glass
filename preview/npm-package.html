@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>apple-liquid-glass-webgl - npm preview</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; color: #f4f5f8; background: #101217; }
+      main { width: min(1180px, calc(100vw - 40px)); margin: 0 auto; padding: 28px 0 36px; }
+      header { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+      h1 { margin: 0; font-size: clamp(24px, 4vw, 42px); letter-spacing: -0.04em; }
+      p { margin: 8px 0 0; color: #a7adba; }
+      .status { display: inline-flex; align-items: center; gap: 8px; color: #8de5ac; font-size: 13px; }
+      .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 16px currentColor; }
+      .frame { overflow: hidden; position: relative; min-height: 620px; border: 1px solid #343944; border-radius: 28px; background: #161922; box-shadow: 0 24px 80px #0007; }
+      canvas { display: block; width: 100%; height: 620px; }
+      .caption { position: absolute; left: 24px; bottom: 22px; padding: 10px 14px; border: 1px solid #ffffff24; border-radius: 999px; background: #10121788; color: #d7dbe4; backdrop-filter: blur(18px); font: 600 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .note { margin-top: 16px; font-size: 13px; }
+      @media (max-width: 680px) { main { width: min(100% - 24px, 1180px); padding-top: 18px; } header { align-items: start; flex-direction: column; } .frame, canvas { min-height: 520px; height: 520px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>apple-liquid-glass-webgl</h1>
+          <p>Installed from npm and rendered with the reusable WebGL2 component.</p>
+        </div>
+        <span class="status" data-status>Loading package...</span>
+      </header>
+      <section class="frame">
+        <canvas id="stage" aria-label="Liquid glass component preview"></canvas>
+        <span class="caption">folder / rect / pill / circle</span>
+      </section>
+      <p class="note">This page imports the package through the local <code>node_modules</code> folder created by <code>npm install</code>.</p>
+    </main>
+    <script type="importmap">
+      {"imports":{"apple-liquid-glass-webgl":"/node_modules/apple-liquid-glass-webgl/src/index.js"}}
+    </script>
+    <script type="module">
+      import { LiquidGlassWebGL } from 'apple-liquid-glass-webgl';
+
+      const canvas = document.querySelector('#stage');
+      const status = document.querySelector('[data-status]');
+      const glass = new LiquidGlassWebGL(canvas, { material: 'regular' });
+
+      await glass.setWallpaper('/node_modules/apple-liquid-glass-webgl/assets/readme/abstract-lines.png', false);
+
+      function layout() {
+        const width = canvas.clientWidth;
+        const compact = width < 720;
+        const scale = compact ? width / 720 : 1;
+        glass.setElements([
+          { id: 'folder', shape: 'folder', x: 72 * scale, y: 134, width: 220 * scale, height: 220 * scale },
+          { id: 'rect', shape: 'rect', x: 350 * scale, y: 100, width: 270 * scale, height: 180 },
+          { id: 'pill', shape: 'pill', x: 192 * scale, y: 406, width: 250 * scale, height: 88 },
+          { id: 'circle', shape: 'circle', x: 522 * scale, y: 370, size: 128 * scale },
+        ], false);
+        glass.render();
+      }
+
+      new ResizeObserver(layout).observe(canvas);
+      layout();
+      status.textContent = 'Loaded from npm';
+    </script>
+  </body>
+</html>

@@ -27,12 +27,16 @@ function drawIcon(ctx, icon, x, y, size) {
   ctx.save();
   roundRect(ctx, x, y, size, size, r);
   ctx.clip();
-  // glyph
-  ctx.fillStyle = icon.fg || '#fff';
-  ctx.font = `700 ${Math.round(size * (icon.small ? 0.34 : 0.46))}px -apple-system, "PingFang SC", "Helvetica Neue", system-ui, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(icon.t, x + size / 2, y + size * 0.52);
+  if (icon.image && icon.image.complete) {
+    const logoSize = size * 0.56;
+    ctx.drawImage(icon.image, x + (size - logoSize) / 2, y + (size - logoSize) / 2, logoSize, logoSize);
+  } else if (icon.t) {
+    ctx.fillStyle = icon.fg || '#fff';
+    ctx.font = `700 ${Math.round(size * (icon.small ? 0.34 : 0.46))}px -apple-system, "Helvetica Neue", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(icon.t, x + size / 2, y + size * 0.52);
+  }
   // top gloss
   const gl = ctx.createLinearGradient(x, y, x, y + size * 0.5);
   gl.addColorStop(0, 'rgba(255,255,255,0.20)');
@@ -42,27 +46,51 @@ function drawIcon(ctx, icon, x, y, size) {
   ctx.restore();
 }
 
-export function drawFolderContents(ctx, f) {
-  const cols = 3;
-  const pad = f.w * 0.10;
-  const gap = f.w * 0.045;
-  const size = (f.w - pad * 2 - gap * (cols - 1)) / cols;
+export function drawGlassContents(ctx, f) {
+  if (f.shape === 'pill' || f.shape === 'circle') {
+    ctx.save();
+    const short = Math.min(f.w, f.h);
+    ctx.fillStyle = 'rgba(255,255,255,0.96)';
+    ctx.shadowColor = 'rgba(0,0,0,0.32)';
+    ctx.shadowBlur = short * 0.06;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `600 ${Math.round(short * (f.shape === 'circle' ? 0.42 : 0.25))}px -apple-system, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif`;
+    ctx.fillText(f.content || '', f.x + f.w / 2, f.y + f.h * 0.50);
+    ctx.restore();
+    return;
+  }
+
+  if (!f.icons) return;
+  const cols = f.shape === 'rect' || f.shape === 'folderRect' ? 4 : 3;
+  const rows = Math.ceil(f.icons.length / cols);
+  const short = Math.min(f.w, f.h);
+  const padX = f.w * 0.145;
+  const padY = f.h * 0.155;
+  const gap = short * 0.055;
+  const size = Math.min(
+    (f.w - padX * 2 - gap * (cols - 1)) / cols,
+    (f.h - padY * 2 - gap * (rows - 1)) / rows,
+  );
   f.icons.forEach((icon, i) => {
     const cx = i % cols;
     const cy = Math.floor(i / cols);
-    drawIcon(ctx, icon, f.x + pad + cx * (size + gap), f.y + pad + cy * (size + gap), size);
+    drawIcon(ctx, icon,
+      f.x + padX + cx * (size + gap),
+      f.y + padY + cy * (size + gap), size);
   });
 }
 
 export function drawLabel(ctx, f) {
   ctx.save();
-  ctx.font = `600 ${Math.round(f.w * 0.125)}px -apple-system, "PingFang SC", "Helvetica Neue", system-ui, sans-serif`;
+  const unit = Math.min(f.w, f.h);
+  ctx.font = `600 ${Math.round(unit * 0.125)}px -apple-system, "PingFang SC", "Helvetica Neue", system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.shadowColor = 'rgba(0,0,0,0.45)';
   ctx.shadowBlur = 4;
   ctx.fillStyle = 'rgba(255,255,255,0.96)';
-  ctx.fillText(f.label, f.x + f.w / 2, f.y + f.h + f.w * 0.06);
+  ctx.fillText(f.label, f.x + f.w / 2, f.y + f.h + unit * 0.08);
   ctx.restore();
 }
 

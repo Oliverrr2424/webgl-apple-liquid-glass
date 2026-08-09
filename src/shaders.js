@@ -68,6 +68,8 @@ in vec2 vUV;
 uniform vec2 uRes;
 uniform int uScene;
 uniform float uZoom;
+uniform sampler2D uWallpaper;
+uniform int uUseImage;
 out vec4 outColor;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -161,11 +163,31 @@ vec3 islandOcean(vec2 uv) {
   return col;
 }
 
+vec2 coverUV(vec2 uv) {
+  vec2 imageSize = vec2(textureSize(uWallpaper, 0));
+  float imageAspect = imageSize.x / max(imageSize.y, 1.0);
+  float viewportAspect = uRes.x / max(uRes.y, 1.0);
+  vec2 p = uv;
+  if (imageAspect > viewportAspect) {
+    float crop = (imageAspect / viewportAspect - 1.0) * 0.5;
+    p.x = p.x * (1.0 - 2.0 * crop) + crop;
+  } else {
+    float crop = (viewportAspect / imageAspect - 1.0) * 0.5;
+    p.y = p.y * (1.0 - 2.0 * crop) + crop;
+  }
+  return clamp(p, vec2(0.001), vec2(0.999));
+}
+
 void main() {
   vec2 uv = (vUV - 0.5) / max(uZoom, 0.01) + 0.5;
-  vec3 col = uScene == 0 ? sunsetBranches(uv)
-           : uScene == 1 ? deepBlueCity(uv)
-                         : islandOcean(uv);
+  vec3 col;
+  if (uUseImage == 1) {
+    col = texture(uWallpaper, coverUV(uv)).rgb;
+  } else {
+    col = uScene == 0 ? sunsetBranches(uv)
+         : uScene == 1 ? deepBlueCity(uv)
+                       : islandOcean(uv);
+  }
   // Beer-Lambert representation of backdrop darkness. A value of 4 optical
   // density units already corresponds to ~1.8% transmission, enough for the
   // near-black branches while retaining useful precision in RGBA8.
@@ -177,7 +199,7 @@ void main() {
 // ---------------------------------------------------------------------------
 // The material itself.
 //
-// 1. shape          : squircle SDF d(p)  (continuous-curvature corners)
+// 1. shape          : square/rect folder / exact capsule / exact circle SDF
 // 2. thickness      : t = clamp(-d / bevel), height h(t) = a convex bevel
 //                     profile -> flat plateau in the middle, steep rim
 // 3. normal         : n = normalize(vec3(s * H/bevel * dh/dt * grad(d), 1))
@@ -204,6 +226,7 @@ uniform sampler2D uSrc;      // blurred mip chain of the backdrop
 uniform vec2  uRes;
 uniform vec2  uCenter;       // element centre, px (y up)
 uniform vec2  uHalf;         // element half size, px
+uniform int   uShapeType;    // 0 square/rect folder, 1 capsule, 2 circle
 uniform float uRadius;       // corner radius, px
 uniform float uSquircle;     // superellipse exponent (2 = circular corners)
 uniform float uBevel;        // width of the refracting rim, px
@@ -241,6 +264,20 @@ float sdSquircle(vec2 p, vec2 b, float r, float n) {
   vec2 m = max(q, 0.0) + 1e-5;
   float e = pow(pow(m.x, n) + pow(m.y, n), 1.0 / n);
   return min(max(q.x, q.y), 0.0) + e - r;
+}
+
+float sdAppleShape(vec2 p) {
+  if (uShapeType == 2) {
+    // Circle is invariant: layout cannot turn it into an ellipse.
+    return length(p) - min(uHalf.x, uHalf.y);
+  }
+  if (uShapeType == 1) {
+    // Apple's capsule rule: end-cap radius is exactly half the short side.
+    return sdSquircle(p, uHalf, min(uHalf.x, uHalf.y), 2.0);
+  }
+  // Square and rectangular folders share the same fixed-radius corner model;
+  // only their bounding boxes differ. The default exponent is 2 per reference.
+  return sdSquircle(p, uHalf, uRadius, max(uSquircle, 2.0));
 }
 
 vec4 sampleBg(vec2 px, float lod) {
@@ -303,15 +340,15 @@ void main() {
   vec2 px = vUV * uRes;
   vec2 p  = px - uCenter;
 
-  float d = sdSquircle(p, uHalf, uRadius, uSquircle);
+  float d = sdAppleShape(p);
   float aa = smoothstep(0.8, -0.8, d);
 
   // ---- gradient of the SDF = outward direction of the surface -------------
   float k = 1.0;
-  float dx = sdSquircle(p + vec2(k, 0.0), uHalf, uRadius, uSquircle) -
-             sdSquircle(p - vec2(k, 0.0), uHalf, uRadius, uSquircle);
-  float dy = sdSquircle(p + vec2(0.0, k), uHalf, uRadius, uSquircle) -
-             sdSquircle(p - vec2(0.0, k), uHalf, uRadius, uSquircle);
+  float dx = sdAppleShape(p + vec2(k, 0.0)) -
+             sdAppleShape(p - vec2(k, 0.0));
+  float dy = sdAppleShape(p + vec2(0.0, k)) -
+             sdAppleShape(p - vec2(0.0, k));
   vec2 g = normalize(vec2(dx, dy) + 1e-6);
 
   // ---- thickness field / bevel profile -----------------------------------
@@ -445,7 +482,7 @@ void main() {
   col += uBright;
 
   // ---- soft contact shadow ----------------------------------------------
-  float ds = sdSquircle(p + vec2(0.0, uShadowOffset), uHalf, uRadius, uSquircle);
+  float ds = sdAppleShape(p + vec2(0.0, uShadowOffset));
   float sh = exp(-max(ds, 0.0) / max(uShadowSize, 0.5)) * uShadow;
 
   if (uDebug == 1) col = vec3(h);
