@@ -11,6 +11,7 @@ export const DEFAULT_MATERIAL = {
                        // the rim (Apple);  0 = convex lens rim (magnifier)
   blurPlateau: 8,      // blur radius in the middle, CSS px (frosted)
   blurRim: 48,         // wide rim scattering, CSS px
+  rimStretch: 0.64,    // bevel fraction whose backdrop sample is pulled to edge
   opticalDensity: 1.8, // preserve dark occluders as blur spreads (0 = linear)
   specular: 0.89,
   specPower: 11.5,
@@ -65,6 +66,7 @@ export const SLIDERS = [
   ['meniscus', 0, 1, 0.05],
   ['blurPlateau', 0, 48, 0.5],
   ['blurRim', 0, 48, 0.5],
+  ['rimStretch', 0, 0.9, 0.01],
   ['opticalDensity', 0, 3, 0.05],
   ['specular', 0, 1, 0.01],
   ['specPower', 1, 40, 0.5],

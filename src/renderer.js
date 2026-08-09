@@ -170,6 +170,7 @@ export class GlassRenderer {
     gl.uniform1f(loc.uDispersion, m.dispersion);
     gl.uniform1f(loc.uBlurPlateau, m.blurPlateau * dpr);
     gl.uniform1f(loc.uBlurRim, m.blurRim * dpr);
+    gl.uniform1f(loc.uRimStretch, m.rimStretch);
     gl.uniform1f(loc.uOpticalDensity, m.opticalDensity);
     gl.uniform1f(loc.uMips, MIPS);
     gl.uniform1f(loc.uSpecular, m.specular);

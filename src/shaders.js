@@ -212,6 +212,7 @@ uniform float uIOR;
 uniform float uDispersion;
 uniform float uBlurPlateau;  // blur radius in the middle, px
 uniform float uBlurRim;      // blur radius at the rim, px
+uniform float uRimStretch;   // bevel fraction mapped back to one inner sample
 uniform float uOpticalDensity;// dark-detail preservation; 0 = linear radiance
 uniform float uMips;         // number of levels in the blurred chain
 uniform float uSpecular;
@@ -299,6 +300,27 @@ vec3 blurBg(vec2 px, float radius) {
   return linearCol * (targetLum / linearLum);
 }
 
+void refractionOffsets(vec3 normal, float surfaceHeight,
+                       out vec2 dR, out vec2 dG, out vec2 dB) {
+  vec3 incident = vec3(0.0, 0.0, -1.0);
+  float path = uHeight * mix(0.25, 1.0, surfaceHeight) * uRefractScale;
+
+  float eta = 1.0 / max(uIOR - uDispersion, 1.0);
+  vec3 ray = refract(incident, normal, eta);
+  dR = (ray == vec3(0.0)) ? vec2(0.0)
+                           : ray.xy / max(-ray.z, 0.25) * path;
+
+  eta = 1.0 / max(uIOR, 1.0);
+  ray = refract(incident, normal, eta);
+  dG = (ray == vec3(0.0)) ? vec2(0.0)
+                           : ray.xy / max(-ray.z, 0.25) * path;
+
+  eta = 1.0 / max(uIOR + uDispersion, 1.0);
+  ray = refract(incident, normal, eta);
+  dB = (ray == vec3(0.0)) ? vec2(0.0)
+                           : ray.xy / max(-ray.z, 0.25) * path;
+}
+
 void main() {
   vec2 px = vUV * uRes;
   vec2 p  = px - uCenter;
@@ -323,30 +345,46 @@ void main() {
 
   float curveSign = mix(1.0, -1.0, clamp(uMeniscus, 0.0, 1.0));
   vec3 n = normalize(vec3(curveSign * g * slope, 1.0));
-  vec3 I = vec3(0.0, 0.0, -1.0);
 
   // ---- refraction (Snell) + dispersion -----------------------------------
-  float path = uHeight * mix(0.25, 1.0, h) * uRefractScale;
   vec2 dR, dG, dB;
-  {
-    float e = 1.0 / max(uIOR - uDispersion, 1.0);
-    vec3 R = refract(I, n, e);
-    dR = (R == vec3(0.0)) ? vec2(0.0) : R.xy / max(-R.z, 0.25) * path;
-    e = 1.0 / max(uIOR, 1.0);
-    R = refract(I, n, e);
-    dG = (R == vec3(0.0)) ? vec2(0.0) : R.xy / max(-R.z, 0.25) * path;
-    e = 1.0 / max(uIOR + uDispersion, 1.0);
-    R = refract(I, n, e);
-    dB = (R == vec3(0.0)) ? vec2(0.0) : R.xy / max(-R.z, 0.25) * path;
-  }
+  refractionOffsets(n, h, dR, dG, dB);
+
+  // A steep droplet rim does not merely blur the image. Along its slope, many
+  // output pixels can see almost the same point of the backdrop. Pin the outer
+  // part of each normal column to a sample on the inner bevel, then ease back
+  // to ordinary refraction. This coordinate compression turns branches,
+  // windows and coastline colours into coherent ribbons that reach the
+  // silhouette instead of dissolving into an isotropic haze.
+  float anchorT = clamp(uRimStretch, 0.0, 0.9);
+  float stretchEnabled = step(1e-4, anchorT);
+  float stretchMask = stretchEnabled *
+                      (1.0 - smoothstep(anchorT * 0.68,
+                                        max(anchorT, 1e-4), t));
+  vec2 anchorPx = px - g * max(anchorT - t, 0.0) * uBevel;
+  float anchorCt = 1.0 - anchorT;
+  float anchorH = sqrt(max(1.0 - anchorCt * anchorCt, 0.0));
+  float anchorSlope = (uHeight / uBevel) *
+                      anchorCt / max(anchorH, 0.10);
+  vec3 anchorN = normalize(vec3(curveSign * g * anchorSlope, 1.0));
+  vec2 anchorDR, anchorDG, anchorDB;
+  refractionOffsets(anchorN, anchorH, anchorDR, anchorDG, anchorDB);
+
+  vec2 sampleR = mix(px + dR, anchorPx + anchorDR, stretchMask);
+  vec2 sampleG = mix(px + dG, anchorPx + anchorDG, stretchMask);
+  vec2 sampleB = mix(px + dB, anchorPx + anchorDB, stretchMask);
 
   // ---- scattering: rim stays readable, plateau is frosted ----------------
-  float radius = mix(uBlurRim, uBlurPlateau, smoothstep(0.0, 0.85, t));
+  float radiusHere = mix(uBlurRim, uBlurPlateau,
+                         smoothstep(0.0, 0.85, t));
+  float radiusAtAnchor = mix(uBlurRim, uBlurPlateau,
+                             smoothstep(0.0, 0.85, anchorT));
+  float radius = mix(radiusHere, radiusAtAnchor, stretchMask);
 
   vec3 col;
-  col.r = blurBg(px + dR, radius).r;
-  col.g = blurBg(px + dG, radius).g;
-  col.b = blurBg(px + dB, radius).b;
+  col.r = blurBg(sampleR, radius).r;
+  col.g = blurBg(sampleG, radius).g;
+  col.b = blurBg(sampleB, radius).b;
 
   // Saturation is boosted on the TRANSMITTED backdrop only (this is what
   // UIVisualEffectView's saturationDeltaFactor does). Any wide blur averages
@@ -450,8 +488,9 @@ void main() {
 
   if (uDebug == 1) col = vec3(h);
   if (uDebug == 2) col = vec3(0.5 + 0.5 * n.xy, n.z);
-  if (uDebug == 3) col = vec3(length(dG) / max(uHeight, 1.0),
-                              length(dR - dB) / max(uHeight, 1.0) * 6.0, 0.0);
+  if (uDebug == 3) col = vec3(length(sampleG - px) / max(uHeight, 1.0),
+                              length(sampleR - sampleB) /
+                              max(uHeight, 1.0) * 6.0, stretchMask);
 
   float a = aa + sh * (1.0 - aa);
   outColor = vec4(col * aa, a);   // premultiplied; shadow contributes black
