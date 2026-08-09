@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Liquid Glass — 物理复刻</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #0b0c0f; color: #e8e9ee;
+    font: 13px/1.45 -apple-system, "PingFang SC", system-ui, sans-serif; }
+  #app { display: flex; height: 100%; }
+  #stage { position: relative; flex: 1; overflow: hidden; }
+  #gl, #ui { position: absolute; inset: 0; display: block; }
+  #ui { touch-action: none; }
+  #panel { width: 290px; flex: 0 0 290px; height: 100%; overflow-y: auto;
+    padding: 14px; background: #14161b; border-left: 1px solid #23262e; }
+  body.hide-panel #panel { display: none; }
+  h1 { font-size: 14px; margin: 0 0 10px; letter-spacing: .02em; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .09em;
+    color: #8b90a0; margin: 16px 0 6px; }
+  .row { display: grid; grid-template-columns: 96px 1fr 44px; align-items: center;
+    gap: 6px; margin-bottom: 3px; }
+  .row span { color: #a8adbd; font-size: 11px; }
+  .row b { font-variant-numeric: tabular-nums; font-weight: 500; color: #cfd3e0;
+    font-size: 11px; text-align: right; }
+  input[type=range] { width: 100%; accent-color: #6ea8ff; }
+  button { background: #232733; color: #e8e9ee; border: 1px solid #333849;
+    border-radius: 7px; padding: 5px 9px; font-size: 11px; cursor: pointer; }
+  button:hover { background: #2c3140; }
+  select { width: 100%; background: #232733; color: #e8e9ee; border: 1px solid #333849;
+    border-radius: 7px; padding: 5px; font-size: 11px; }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .checks { display: flex; gap: 12px; margin-top: 8px; font-size: 11px; color: #a8adbd; }
+  .note { color: #7f8496; font-size: 11px; margin-top: 14px; }
+  .note code { color: #9fc6ff; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="gl"></canvas>
+    <canvas id="ui"></canvas>
+  </div>
+  <div id="panel">
+    <h1>Liquid Glass 物理复刻</h1>
+    <div class="btns">
+      <button data-preset="regular">Regular</button>
+      <button data-preset="clear">Clear</button>
+      <button data-preset="lens">Lens (夸张)</button>
+      <button id="togglePanel">隐藏面板</button>
+    </div>
+    <h2>场景</h2>
+    <select id="scene"></select>
+    <div class="checks">
+      <label><input type="checkbox" id="toggleIcons" checked> 图标</label>
+      <label><input type="checkbox" id="toggleLabels" checked> 名称/角标</label>
+    </div>
+    <h2>物理可视化</h2>
+    <div class="btns">
+      <button data-debug="0">成像</button>
+      <button data-debug="1">厚度场 h</button>
+      <button data-debug="2">法线 n</button>
+      <button data-debug="3">位移/色散</button>
+    </div>
+    <h2>参数</h2>
+    <div id="sliders"></div>
+    <div class="note">
+      形状 <code>squircle SDF</code> → 厚度场 → 法线 → <code>Snell 折射</code>
+      (+ 色散) → 可变模糊 → <code>Fresnel</code> 反射 + 高光 → 接触阴影。
+      可直接拖动文件夹观察边缘透镜效果。
+    </div>
+  </div>
+</div>
+<script type="module" src="./src/app.js"></script>
+</body>
+</html>
