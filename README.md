@@ -38,11 +38,11 @@ These screenshots are captured from the playground with the inspector hidden. Ea
 
 | Natural landscape | Abstract lines |
 | --- | --- |
-| ![Natural landscape](assets/readme/natural-lake.jpg) | ![Abstract lines](assets/readme/abstract-lines.jpg) |
+| ![Natural landscape](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/natural-lake.jpg) | ![Abstract lines](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/abstract-lines.jpg) |
 
 | Color blocks | Night city |
 | --- | --- |
-| ![Color blocks](assets/readme/color-blocks.jpg) | ![Night city](assets/readme/night-city.jpg) |
+| ![Color blocks](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/color-blocks.jpg) | ![Night city](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/night-city.jpg) |
 
 ## API
 
