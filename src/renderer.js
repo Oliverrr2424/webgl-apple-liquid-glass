@@ -170,9 +170,14 @@ export class GlassRenderer {
     gl.uniform1f(loc.uDispersion, m.dispersion);
     gl.uniform1f(loc.uBlurPlateau, m.blurPlateau * dpr);
     gl.uniform1f(loc.uBlurRim, m.blurRim * dpr);
+    gl.uniform1f(loc.uOpticalDensity, m.opticalDensity);
     gl.uniform1f(loc.uMips, MIPS);
     gl.uniform1f(loc.uSpecular, m.specular);
     gl.uniform1f(loc.uSpecPower, m.specPower);
+    gl.uniform1f(loc.uHighlightAdapt, m.highlightAdapt);
+    gl.uniform1f(loc.uHighlightWidth, m.highlightWidth);
+    gl.uniform1f(loc.uHighlightSharpness, m.highlightSharpness);
+    gl.uniform1f(loc.uHighlightBase, m.highlightBase);
     gl.uniform1f(loc.uFresnel, m.fresnel);
     gl.uniform1f(loc.uSat, m.saturation);
     gl.uniform1f(loc.uBright, m.brightness);

@@ -42,20 +42,22 @@ uniform vec2 uTexel;   // texel size of the SOURCE level
 out vec4 outColor;
 void main() {
   vec2 t = uTexel;
-  vec3 a = texture(uTex, vUV).rgb * 0.125;
-  vec3 b = (texture(uTex, vUV + vec2(-t.x, -t.y)).rgb +
-            texture(uTex, vUV + vec2( t.x, -t.y)).rgb +
-            texture(uTex, vUV + vec2(-t.x,  t.y)).rgb +
-            texture(uTex, vUV + vec2( t.x,  t.y)).rgb) * 0.125;
-  vec3 c = (texture(uTex, vUV + vec2(-2.0 * t.x, 0.0)).rgb +
-            texture(uTex, vUV + vec2( 2.0 * t.x, 0.0)).rgb +
-            texture(uTex, vUV + vec2(0.0, -2.0 * t.y)).rgb +
-            texture(uTex, vUV + vec2(0.0,  2.0 * t.y)).rgb) * 0.0625;
-  vec3 d = (texture(uTex, vUV + vec2(-2.0 * t.x, -2.0 * t.y)).rgb +
-            texture(uTex, vUV + vec2( 2.0 * t.x, -2.0 * t.y)).rgb +
-            texture(uTex, vUV + vec2(-2.0 * t.x,  2.0 * t.y)).rgb +
-            texture(uTex, vUV + vec2( 2.0 * t.x,  2.0 * t.y)).rgb) * 0.03125;
-  outColor = vec4(a + b + c + d, 1.0);
+  vec4 a = texture(uTex, vUV) * 0.125;
+  vec4 b = (texture(uTex, vUV + vec2(-t.x, -t.y)) +
+            texture(uTex, vUV + vec2( t.x, -t.y)) +
+            texture(uTex, vUV + vec2(-t.x,  t.y)) +
+            texture(uTex, vUV + vec2( t.x,  t.y))) * 0.125;
+  vec4 c = (texture(uTex, vUV + vec2(-2.0 * t.x, 0.0)) +
+            texture(uTex, vUV + vec2( 2.0 * t.x, 0.0)) +
+            texture(uTex, vUV + vec2(0.0, -2.0 * t.y)) +
+            texture(uTex, vUV + vec2(0.0,  2.0 * t.y))) * 0.0625;
+  vec4 d = (texture(uTex, vUV + vec2(-2.0 * t.x, -2.0 * t.y)) +
+            texture(uTex, vUV + vec2( 2.0 * t.x, -2.0 * t.y)) +
+            texture(uTex, vUV + vec2(-2.0 * t.x,  2.0 * t.y)) +
+            texture(uTex, vUV + vec2( 2.0 * t.x,  2.0 * t.y))) * 0.03125;
+  // RGB stores radiance. Alpha stores normalized optical density, so the mip
+  // chain can blur both representations with exactly the same footprint.
+  outColor = a + b + c + d;
 }`;
 
 // Procedural wallpapers. They only exist to give the glass something with hard,
@@ -164,7 +166,12 @@ void main() {
   vec3 col = uScene == 0 ? sunsetBranches(uv)
            : uScene == 1 ? deepBlueCity(uv)
                          : islandOcean(uv);
-  outColor = vec4(col, 1.0);
+  // Beer-Lambert representation of backdrop darkness. A value of 4 optical
+  // density units already corresponds to ~1.8% transmission, enough for the
+  // near-black branches while retaining useful precision in RGBA8.
+  float lum = max(dot(col, vec3(0.2126, 0.7152, 0.0722)), 0.018);
+  float density = clamp(-log(lum) / 4.0, 0.0, 1.0);
+  outColor = vec4(col, density);
 }`;
 
 // ---------------------------------------------------------------------------
@@ -205,9 +212,14 @@ uniform float uIOR;
 uniform float uDispersion;
 uniform float uBlurPlateau;  // blur radius in the middle, px
 uniform float uBlurRim;      // blur radius at the rim, px
+uniform float uOpticalDensity;// dark-detail preservation; 0 = linear radiance
 uniform float uMips;         // number of levels in the blurred chain
 uniform float uSpecular;
 uniform float uSpecPower;
+uniform float uHighlightAdapt;
+uniform float uHighlightWidth;
+uniform float uHighlightSharpness;
+uniform float uHighlightBase;
 uniform float uFresnel;
 uniform float uSat;
 uniform float uBright;
@@ -231,9 +243,13 @@ float sdSquircle(vec2 p, vec2 b, float r, float n) {
   return min(max(q.x, q.y), 0.0) + e - r;
 }
 
-vec3 sampleBg(vec2 px, float lod) {
+vec4 sampleBg(vec2 px, float lod) {
   vec2 uv = clamp(px / uRes, vec2(0.001), vec2(0.999));
-  return textureLod(uSrc, uv, lod).rgb;
+  return textureLod(uSrc, uv, lod);
+}
+
+float luminance(vec3 c) {
+  return dot(c, vec3(0.2126, 0.7152, 0.0722));
 }
 
 // Variable-radius blur, radius in device px.
@@ -252,19 +268,35 @@ const int TAPS = 12;
 const float GOLDEN_ANGLE = 2.39996323;
 
 vec3 blurBg(vec2 px, float radius) {
-  if (radius < 1.0) return sampleBg(px, 0.0);
+  if (radius < 1.0) return sampleBg(px, 0.0).rgb;
   float lod = clamp(log2(radius) - 1.585, 0.0, uMips - 1.0);   // 2^lod ~ r/3
   vec3 acc = vec3(0.0);
+  float densityAcc = 0.0;
   float wsum = 0.0;
   for (int i = 0; i < TAPS; i++) {
     float fi = float(i) + 0.5;
     float r  = sqrt(fi / float(TAPS));       // equal-area spacing over the disc
     float a  = fi * GOLDEN_ANGLE;
     float w  = exp(-1.8 * r * r);
-    acc  += sampleBg(px + vec2(cos(a), sin(a)) * r * radius, lod) * w;
+    vec4 s = sampleBg(px + vec2(cos(a), sin(a)) * r * radius, lod);
+    acc += s.rgb * w;
+    densityAcc += s.a * w;
     wsum += w;
   }
-  return acc / wsum;
+  vec3 linearCol = acc / wsum;
+
+  // A pure radiance average spreads a dark branch but also dilutes it toward
+  // the pale sky. The density channel averages -log(luminance), equivalent to
+  // geometrically averaging transmission. That preserves the visual weight of
+  // dark occluders while keeping uniform light regions unchanged. We retain
+  // the linear RGB hue and only restore the missing luminance contrast.
+  float linearLum = max(dot(linearCol, vec3(0.2126, 0.7152, 0.0722)), 0.001);
+  float densityLum = exp(-4.0 * densityAcc / wsum);
+  float densityGap = max(linearLum - densityLum, 0.0);
+  float radiusGate = smoothstep(1.0, 8.0, radius);
+  float targetLum = max(linearLum * 0.22,
+                        linearLum - densityGap * uOpticalDensity * radiusGate);
+  return linearCol * (targetLum / linearLum);
 }
 
 void main() {
@@ -323,21 +355,72 @@ void main() {
   // the specular/Fresnel highlights neutral.
   col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, uSat);
 
-  // ---- reflection: environment + two specular lobes on the bevel ---------
+  // ---- reflection: backdrop environment + narrow specular lobes -----------
   // Schlick: F0 for glass is ~4%, and the (1-cos)^5 falloff keeps the mirror
   // term confined to the steepest part of the bevel. A softer exponent smears
   // a grey wash across the whole rim and bleaches the refracted image there.
   float fres = 0.04 + 0.96 * pow(1.0 - n.z, 5.0);
   vec2 nn = normalize(n.xy + 1e-6);
-  vec3 env = mix(vec3(0.52, 0.57, 0.66), vec3(1.0), 0.30 + 0.70 * clamp(0.5 + 0.5 * nn.y, 0.0, 1.0));
-  col = mix(col, env, clamp(fres * uFresnel, 0.0, 1.0));
 
-  vec3 L1 = normalize(vec3(uLightDir, 0.62));
-  vec3 L2 = normalize(vec3(-uLightDir, 0.50));
-  float s1 = pow(max(dot(n, L1), 0.0), uSpecPower);
-  float s2 = pow(max(dot(n, L2), 0.0), uSpecPower * 0.55) * 0.5;
-  float rimBand = smoothstep(0.0, 0.30, t) * smoothstep(1.0, 0.55, t);
-  col += uSpecular * (s1 + s2) * (0.35 + 0.65 * rimBand);
+  // Probe a coarse ring just outside THIS element. Its luminance gradient is
+  // a cheap screen-space estimate of the dominant surrounding light, so two
+  // folders in different parts of the wallpaper no longer receive identical
+  // highlights. The old uLightDir remains a fallback for flat backgrounds.
+  float probeLod = min(3.5, uMips - 1.0);
+  vec2 probe = uHalf + vec2(max(0.65 * uBevel, 8.0));
+  vec3 envL = sampleBg(uCenter + vec2(-probe.x, 0.0), probeLod).rgb;
+  vec3 envR = sampleBg(uCenter + vec2( probe.x, 0.0), probeLod).rgb;
+  vec3 envB = sampleBg(uCenter + vec2(0.0, -probe.y), probeLod).rgb;
+  vec3 envT = sampleBg(uCenter + vec2(0.0,  probe.y), probeLod).rgb;
+  float lumL = luminance(envL), lumR = luminance(envR);
+  float lumB = luminance(envB), lumT = luminance(envT);
+  vec2 envGradient = vec2(lumR - lumL, lumT - lumB);
+  float envContrast = length(envGradient);
+  vec2 fallbackLight = normalize(uLightDir + vec2(1e-5));
+  vec2 inferredLight = envContrast > 1e-4
+                     ? envGradient / envContrast : fallbackLight;
+  float lightAdapt = clamp(uHighlightAdapt, 0.0, 1.0) *
+                     smoothstep(0.025, 0.22, envContrast);
+  vec2 lightDir = normalize(mix(fallbackLight, inferredLight, lightAdapt));
+
+  // Reflect the colour seen in the surface-normal direction. A local sample
+  // keeps small bright structures (tower lights, clouds, coastlines) attached
+  // to the nearby rim instead of turning every frame into the same white ring.
+  float wx = clamp(0.5 + 0.5 * nn.x, 0.0, 1.0);
+  float wy = clamp(0.5 + 0.5 * nn.y, 0.0, 1.0);
+  vec3 envX = mix(envL, envR, wx);
+  vec3 envY = mix(envB, envT, wy);
+  vec3 ringEnv = (envX * abs(nn.x) + envY * abs(nn.y)) /
+                 max(abs(nn.x) + abs(nn.y), 1e-3);
+  vec3 localEnv = sampleBg(px + g * max(0.55 * uBevel, 6.0),
+                           min(2.0, uMips - 1.0)).rgb;
+  vec3 env = mix(ringEnv, localEnv, 0.58);
+  float envLum = luminance(env);
+  env = mix(env, vec3(envLum), 0.10); // retain wallpaper hue, tame neon spikes
+  float envStrength = mix(0.58, 1.0, smoothstep(0.08, 0.75, envLum));
+  col = mix(col, env, clamp(fres * uFresnel * envStrength, 0.0, 0.82));
+
+  vec3 L1 = normalize(vec3(lightDir, 0.58));
+  vec3 L2 = normalize(vec3(-lightDir, 0.48));
+  float sharpness = max(uHighlightSharpness, 0.1);
+  float s1 = pow(max(dot(n, L1), 0.0),
+                 max(uSpecPower * sharpness, 1.0));
+  float s2 = pow(max(dot(n, L2), 0.0),
+                 max(uSpecPower * sharpness * 0.78, 1.0)) * 0.18;
+  float highlightWidth = clamp(uHighlightWidth, 0.16, 1.0);
+  float riseEnd = min(0.10, 0.25 * highlightWidth);
+  float specBand = smoothstep(0.015, riseEnd, t) *
+                   (1.0 - smoothstep(0.61 * highlightWidth,
+                                     highlightWidth, t));
+  float baseHighlight = clamp(uHighlightBase, 0.0, 1.0);
+  float sourceStrength = baseHighlight + (1.0 - baseHighlight) *
+                         smoothstep(0.025, 0.20, envContrast);
+  vec3 sourceEnv = mix(mix(envL, envR, 0.5 + 0.5 * lightDir.x),
+                       mix(envB, envT, 0.5 + 0.5 * lightDir.y), 0.5);
+  float sourceLum = max(luminance(sourceEnv), 0.08);
+  vec3 specColor = clamp(mix(vec3(1.0), sourceEnv / sourceLum, 0.42),
+                         vec3(0.45), vec3(2.2));
+  col += uSpecular * (s1 + s2) * specBand * sourceStrength * specColor;
 
   // Dark contour right at the silhouette: at grazing angles the rim reflects
   // the surroundings instead of transmitting, so real glass edges read dark.
@@ -345,10 +428,11 @@ void main() {
   float contour = smoothstep(w, 0.0, abs(d + 0.55 * w));
   col *= 1.0 - uEdgeDark * contour;
 
-  // crisp inner highlight line, brighter where the bevel faces the light
+  // Crisp inner highlight line; direction and colour follow the local probe.
   float line = smoothstep(1.35 * w, 0.0, abs(d + 2.2 * w));
-  float lit = 0.30 + 0.70 * max(dot(g, normalize(uLightDir)), 0.0);
-  col += uEdgeLine * line * lit;
+  float lit = 0.26 + 0.74 * max(dot(g, lightDir), 0.0);
+  vec3 lineColor = mix(vec3(1.0), env / max(envLum, 0.12), 0.28);
+  col += uEdgeLine * line * lit * lineColor;
 
   // ---- tint --------------------------------------------------------------
   // Tint and brightness are properties of the GLASS, so they must not depend on
