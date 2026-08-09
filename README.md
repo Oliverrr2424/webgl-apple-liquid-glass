@@ -34,15 +34,15 @@ The component accepts CSS-pixel coordinates. Content such as app icons, labels, 
 
 ## Visual preview
 
-The same reusable surfaces are shown against four included wallpaper directions:
+These screenshots are captured from the playground with the inspector hidden. Each scene uses the same folder, rect, pill, and circle surfaces:
 
 | Natural landscape | Abstract lines |
 | --- | --- |
-| ![Natural landscape](assets/readme/natural-lake.png) | ![Abstract lines](assets/readme/abstract-lines.png) |
+| ![Natural landscape](assets/readme/natural-lake.jpg) | ![Abstract lines](assets/readme/abstract-lines.jpg) |
 
 | Color blocks | Night city |
 | --- | --- |
-| ![Color blocks](assets/readme/color-blocks.png) | ![Night city](assets/readme/night-city.png) |
+| ![Color blocks](assets/readme/color-blocks.jpg) | ![Night city](assets/readme/night-city.jpg) |
 
 ## API
 
