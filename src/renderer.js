@@ -168,15 +168,15 @@ export class GlassRenderer {
     gl.uniform1f(loc.uHeight, m.height * dpr);
     gl.uniform1f(loc.uIOR, m.ior);
     gl.uniform1f(loc.uDispersion, m.dispersion);
-    gl.uniform1f(loc.uBlurPlateau, m.blurPlateau + Math.log2(dpr));
-    gl.uniform1f(loc.uBlurRim, m.blurRim + Math.log2(dpr));
+    gl.uniform1f(loc.uBlurPlateau, m.blurPlateau * dpr);
+    gl.uniform1f(loc.uBlurRim, m.blurRim * dpr);
+    gl.uniform1f(loc.uMips, MIPS);
     gl.uniform1f(loc.uSpecular, m.specular);
     gl.uniform1f(loc.uSpecPower, m.specPower);
     gl.uniform1f(loc.uFresnel, m.fresnel);
     gl.uniform1f(loc.uSat, m.saturation);
     gl.uniform1f(loc.uBright, m.brightness);
     gl.uniform1f(loc.uTintAmount, m.tintAmount);
-    gl.uniform1f(loc.uAdaptive, m.adaptive);
     gl.uniform3f(loc.uTintColor, ...m.tintColor);
     gl.uniform1f(loc.uShadow, m.shadow);
     gl.uniform1f(loc.uShadowSize, m.shadowSize * dpr);
@@ -188,8 +188,6 @@ export class GlassRenderer {
     gl.uniform1f(loc.uRefractScale, m.refractScale);
     gl.uniform1f(loc.uMeniscus, m.meniscus);
     gl.uniform1i(loc.uDebug, m.debug | 0);
-    gl.uniform1f(loc.uAvgLod,
-      Math.min(MIPS - 1, Math.max(0, Math.log2(Math.max(hw, hh) * 2))));
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.disable(gl.BLEND);

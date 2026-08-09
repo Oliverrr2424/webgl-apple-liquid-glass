@@ -9,15 +9,14 @@ export const DEFAULT_MATERIAL = {
   refractScale: 3.0,   // artistic gain on the displacement
   meniscus: 1.0,       // 1 = concave (liquid) rim -> surroundings squeeze into
                        // the rim (Apple);  0 = convex lens rim (magnifier)
-  blurPlateau: 2.25,   // mip lod in the middle (frosted)
-  blurRim: 5.4,        // mip lod on the rim
+  blurPlateau: 20,     // blur radius in the middle, CSS px (frosted)
+  blurRim: 7,          // blur radius on the rim, CSS px (stays readable)
   specular: 0.89,
   specPower: 11.5,
-  fresnel: 0.35,
-  saturation: 1.0,
+  fresnel: 0.9,        // multiplier on the Schlick term (1 = physical)
+  saturation: 1.35,    // boost on the transmitted backdrop, like iOS materials
   brightness: 0.0,
-  tintAmount: 0.0,
-  adaptive: 0.28,      // white veil added over dark backdrops (legibility)
+  tintAmount: 0.08,    // constant milky layer -- same for every element
   tintColor: [1.0, 1.0, 1.0],
   shadow: 0.38,
   shadowSize: 9,
@@ -35,14 +34,14 @@ export const PRESETS = {
   regular: {},
   // "Clear" variant: almost no frost, refraction and specular do all the work
   clear: {
-    blurPlateau: 1.1, blurRim: 0.4, height: 20, bevel: 15, refractScale: 1.5,
-    specular: 0.36, fresnel: 0.40, tintAmount: 0.02, brightness: 0.02,
+    blurPlateau: 3, blurRim: 1, height: 20, bevel: 15, refractScale: 1.5,
+    specular: 0.36, fresnel: 1.0, tintAmount: 0.02, brightness: 0.02,
     saturation: 1.18,
   },
   // exaggerated, for teaching the physics
   lens: {
     bevel: 26, height: 34, ior: 1.62, dispersion: 0.09, refractScale: 1.8,
-    blurPlateau: 0.6, blurRim: 0.0, specular: 0.42, fresnel: 0.5,
+    blurPlateau: 2, blurRim: 0, specular: 0.42, fresnel: 1.2,
   },
 };
 
@@ -59,15 +58,14 @@ export const SLIDERS = [
   ['dispersion', 0, 0.15, 0.005],
   ['refractScale', 0, 3, 0.05],
   ['meniscus', 0, 1, 0.05],
-  ['blurPlateau', 0, 6, 0.05],
-  ['blurRim', 0, 6, 0.05],
+  ['blurPlateau', 0, 48, 0.5],
+  ['blurRim', 0, 48, 0.5],
   ['specular', 0, 1, 0.01],
   ['specPower', 1, 40, 0.5],
-  ['fresnel', 0, 1, 0.01],
+  ['fresnel', 0, 2, 0.01],
   ['saturation', 0, 2, 0.02],
   ['brightness', -0.2, 0.3, 0.01],
   ['tintAmount', 0, 0.4, 0.01],
-  ['adaptive', 0, 0.5, 0.01],
   ['shadow', 0, 1, 0.01],
   ['shadowSize', 1, 30, 0.5],
   ['shadowOffset', 0, 20, 0.5],

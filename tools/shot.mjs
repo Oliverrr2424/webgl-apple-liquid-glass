@@ -15,9 +15,13 @@ const focus = flag('focus');
 const set = flag('set');
 const noPanel = args.includes('--no-panel');
 
-const browser = await chromium.launch({
-  args: ['--use-gl=angle', '--use-angle=metal', '--enable-unsafe-swiftshader'],
-});
+// ANGLE backend differs per platform; fall back to the system Chrome when the
+// bundled chromium was never downloaded (npm install without `playwright install`).
+const launchArgs = process.platform === 'darwin'
+  ? ['--use-gl=angle', '--use-angle=metal', '--enable-unsafe-swiftshader']
+  : ['--use-angle=default', '--enable-unsafe-swiftshader'];
+const browser = await chromium.launch({ args: launchArgs })
+  .catch(() => chromium.launch({ args: launchArgs, channel: 'chrome' }));
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 2 });
 page.on('console', (m) => { if (m.type() === 'error') console.error('PAGE:', m.text()); });
 page.on('pageerror', (e) => console.error('PAGEERROR:', e.message));

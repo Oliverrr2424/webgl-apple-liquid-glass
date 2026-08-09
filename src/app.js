@@ -233,11 +233,10 @@ window.__lg = {
     state.folders = [f];
     state.wallZoom = zoom;
     const m = state.material;
-    for (const k of ['radius', 'bevel', 'height', 'shadowSize', 'shadowOffset', 'edgeWidth']) {
+    for (const k of ['radius', 'bevel', 'height', 'shadowSize', 'shadowOffset',
+                     'edgeWidth', 'blurPlateau', 'blurRim']) {
       m[k] *= zoom;
     }
-    m.blurPlateau += Math.log2(zoom);
-    m.blurRim += Math.log2(zoom);
     syncSliders();
     render();
   },

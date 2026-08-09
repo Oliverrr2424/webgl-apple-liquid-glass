@@ -182,11 +182,11 @@ void main() {
 // 4. refraction     : Snell (refract()) through that surface, screen-space
 //                     displacement = R.xy / -R.z * optical path length
 // 5. dispersion     : R/G/B refracted with slightly different IOR
-// 6. scattering     : variable blur via textureLod on the blurred mip chain,
-//                     strong on the plateau, weak on the rim
-// 7. reflection     : Fresnel-weighted environment + 2 specular lobes on the
+// 6. scattering     : variable-radius blur (multi-tap disc on the blurred mip
+//                     chain), strong on the plateau, weak on the rim
+// 7. reflection     : Schlick-Fresnel environment + 2 specular lobes on the
 //                     bevel -> the bright glass rim
-// 8. shading        : adaptive tint / saturation + soft contact shadow
+// 8. shading        : saturation boost / tint / soft contact shadow
 // ---------------------------------------------------------------------------
 export const FS_GLASS = `#version 300 es
 precision highp float;
@@ -203,15 +203,15 @@ uniform float uBevel;        // width of the refracting rim, px
 uniform float uHeight;       // glass height / optical thickness, px
 uniform float uIOR;
 uniform float uDispersion;
-uniform float uBlurPlateau;  // mip lod in the middle
-uniform float uBlurRim;      // mip lod at the rim
+uniform float uBlurPlateau;  // blur radius in the middle, px
+uniform float uBlurRim;      // blur radius at the rim, px
+uniform float uMips;         // number of levels in the blurred chain
 uniform float uSpecular;
 uniform float uSpecPower;
 uniform float uFresnel;
 uniform float uSat;
 uniform float uBright;
 uniform float uTintAmount;
-uniform float uAdaptive;
 uniform vec3  uTintColor;
 uniform float uShadow;
 uniform float uShadowSize;
@@ -223,7 +223,6 @@ uniform float uEdgeDark;
 uniform float uRefractScale;
 uniform float uMeniscus;     // 1 = concave meniscus rim, 0 = convex lens rim
 uniform int   uDebug;        // 0 final, 1 thickness, 2 normals, 3 displacement
-uniform float uAvgLod;       // mip level whose texel covers the whole element
 
 float sdSquircle(vec2 p, vec2 b, float r, float n) {
   vec2 q = abs(p) - b + r;
@@ -235,6 +234,37 @@ float sdSquircle(vec2 p, vec2 b, float r, float n) {
 vec3 sampleBg(vec2 px, float lod) {
   vec2 uv = clamp(px / uRes, vec2(0.001), vec2(0.999));
   return textureLod(uSrc, uv, lod).rgb;
+}
+
+// Variable-radius blur, radius in device px.
+//
+// A single textureLod() tap on the mip chain is not enough. The chain only
+// offers radii in powers of two, and on the top levels one texel is tens of
+// pixels wide, so a lone bilinear tap (a) averages in a huge slab of the
+// screen, which drags the colour toward the frame mean -> washed out, and
+// (b) reconstructs as a handful of big diamonds -> the "too few samples" mush.
+// Instead take the level whose own radius is about a third of what we want and
+// spread TAPS samples over the remainder on a golden-angle spiral. Neighbouring
+// taps then land roughly one texel apart at that level, which is exactly the
+// spacing at which the level's own filtering makes the disc continuous, so the
+// result is a real wide Gaussian that keeps its local colour.
+const int TAPS = 12;
+const float GOLDEN_ANGLE = 2.39996323;
+
+vec3 blurBg(vec2 px, float radius) {
+  if (radius < 1.0) return sampleBg(px, 0.0);
+  float lod = clamp(log2(radius) - 1.585, 0.0, uMips - 1.0);   // 2^lod ~ r/3
+  vec3 acc = vec3(0.0);
+  float wsum = 0.0;
+  for (int i = 0; i < TAPS; i++) {
+    float fi = float(i) + 0.5;
+    float r  = sqrt(fi / float(TAPS));       // equal-area spacing over the disc
+    float a  = fi * GOLDEN_ANGLE;
+    float w  = exp(-1.8 * r * r);
+    acc  += sampleBg(px + vec2(cos(a), sin(a)) * r * radius, lod) * w;
+    wsum += w;
+  }
+  return acc / wsum;
 }
 
 void main() {
@@ -279,15 +309,25 @@ void main() {
   }
 
   // ---- scattering: rim stays readable, plateau is frosted ----------------
-  float lod = mix(uBlurRim, uBlurPlateau, smoothstep(0.0, 0.85, t));
+  float radius = mix(uBlurRim, uBlurPlateau, smoothstep(0.0, 0.85, t));
 
   vec3 col;
-  col.r = sampleBg(px + dR, lod).r;
-  col.g = sampleBg(px + dG, lod).g;
-  col.b = sampleBg(px + dB, lod).b;
+  col.r = blurBg(px + dR, radius).r;
+  col.g = blurBg(px + dG, radius).g;
+  col.b = blurBg(px + dB, radius).b;
+
+  // Saturation is boosted on the TRANSMITTED backdrop only (this is what
+  // UIVisualEffectView's saturationDeltaFactor does). Any wide blur averages
+  // colours toward grey; without this the frosted panel reads pale even though
+  // the wallpaper behind it is saturated. Doing it before the reflections keeps
+  // the specular/Fresnel highlights neutral.
+  col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, uSat);
 
   // ---- reflection: environment + two specular lobes on the bevel ---------
-  float fres = pow(1.0 - n.z, 3.0);
+  // Schlick: F0 for glass is ~4%, and the (1-cos)^5 falloff keeps the mirror
+  // term confined to the steepest part of the bevel. A softer exponent smears
+  // a grey wash across the whole rim and bleaches the refracted image there.
+  float fres = 0.04 + 0.96 * pow(1.0 - n.z, 5.0);
   vec2 nn = normalize(n.xy + 1e-6);
   vec3 env = mix(vec3(0.52, 0.57, 0.66), vec3(1.0), 0.30 + 0.70 * clamp(0.5 + 0.5 * nn.y, 0.0, 1.0));
   col = mix(col, env, clamp(fres * uFresnel, 0.0, 1.0));
@@ -310,19 +350,15 @@ void main() {
   float lit = 0.30 + 0.70 * max(dot(g, normalize(uLightDir)), 0.0);
   col += uEdgeLine * line * lit;
 
-  // ---- adaptive tint -----------------------------------------------------
-  float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
-  col = mix(vec3(lum), col, uSat);
+  // ---- tint --------------------------------------------------------------
+  // Tint and brightness are properties of the GLASS, so they must not depend on
+  // what happens to be behind the element. An earlier version drove a white
+  // veil (and gated brightness) off the average backdrop luminance, which made
+  // one folder go pale as soon as something dark passed behind it while an
+  // identically configured neighbour stayed clear -- same parameters, two
+  // different materials. Every element now gets exactly the same treatment.
   col = mix(col, uTintColor, uTintAmount);
-  // Adaptive: the veil follows the AVERAGE luminance of the backdrop behind the
-  // whole element (one low-res tap), not the per-pixel luminance. That is what
-  // keeps dark details dark while still lightening the panel over dark
-  // wallpapers -- per-pixel adaptation would grey out the content.
-  float bgLum = dot(textureLod(uSrc, uCenter / uRes, uAvgLod).rgb,
-                    vec3(0.2126, 0.7152, 0.0722));
-  float dark = smoothstep(0.45, 0.05, bgLum);
-  col = mix(col, vec3(1.0), uAdaptive * dark);
-  col += uBright * dark;
+  col += uBright;
 
   // ---- soft contact shadow ----------------------------------------------
   float ds = sdSquircle(p + vec2(0.0, uShadowOffset), uHalf, uRadius, uSquircle);
