@@ -57,6 +57,7 @@ export class GlassRenderer {
     this.progGlass = program(gl, VS_GLASS, FS_GLASS);
 
     this.tex = null;
+    this.wallpapers = [];
     this.fbos = [];
     this.w = 0;
     this.h = 0;
@@ -89,6 +90,24 @@ export class GlassRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
+  setWallpapers(images) {
+    const gl = this.gl;
+    this.wallpapers.forEach((texture) => gl.deleteTexture(texture));
+    this.wallpapers = images.map((image) => {
+      const texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      return texture;
+    });
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
   mipSize(level) {
     return [Math.max(1, this.w >> level), Math.max(1, this.h >> level)];
   }
@@ -105,6 +124,10 @@ export class GlassRenderer {
     gl.uniform2f(this.progWall.loc.uRes, this.w, this.h);
     gl.uniform1i(this.progWall.loc.uScene, scene);
     gl.uniform1f(this.progWall.loc.uZoom, zoom);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.wallpapers[scene] || this.tex);
+    gl.uniform1i(this.progWall.loc.uWallpaper, 1);
+    gl.uniform1i(this.progWall.loc.uUseImage, this.wallpapers[scene] ? 1 : 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     gl.useProgram(this.progDown.p);
@@ -139,7 +162,7 @@ export class GlassRenderer {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  // element: {x, y, w, h} in CSS pixels, y measured from the TOP.
+  // element: {x, y, w, h, shape} in CSS pixels, y measured from the TOP.
   drawGlass(element, m, dpr) {
     const gl = this.gl;
     const { loc, p } = this.progGlass;
@@ -161,6 +184,8 @@ export class GlassRenderer {
     gl.uniform2f(loc.uRes, this.w, this.h);
     gl.uniform2f(loc.uCenter, cx, cy);
     gl.uniform2f(loc.uHalf, hw, hh);
+    gl.uniform1i(loc.uShapeType,
+      element.shape === 'pill' ? 1 : element.shape === 'circle' ? 2 : 0);
     gl.uniform1f(loc.uPad, (m.shadowSize * 4 + 8) * dpr);
     gl.uniform1f(loc.uRadius, m.radius * dpr);
     gl.uniform1f(loc.uSquircle, m.squircle);
@@ -196,5 +221,15 @@ export class GlassRenderer {
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.disable(gl.BLEND);
+  }
+
+  destroy() {
+    const gl = this.gl;
+    if (this.tex) gl.deleteTexture(this.tex);
+    this.wallpapers.forEach((texture) => gl.deleteTexture(texture));
+    this.fbos.forEach((framebuffer) => gl.deleteFramebuffer(framebuffer));
+    this.tex = null;
+    this.wallpapers = [];
+    this.fbos = [];
   }
 }

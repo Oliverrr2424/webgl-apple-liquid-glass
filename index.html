@@ -1,38 +1,92 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Liquid Glass — 物理复刻</title>
+<title>Liquid Glass — Playground</title>
 <style>
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: #0b0c0f; color: #e8e9ee;
-    font: 13px/1.45 -apple-system, "PingFang SC", system-ui, sans-serif; }
-  #app { display: flex; height: 100%; }
-  #stage { position: relative; flex: 1; overflow: hidden; }
+  :root {
+    color-scheme: dark;
+    --panel: #101318;
+    --surface: #171b22;
+    --surface-raised: #1d222b;
+    --line: rgba(255,255,255,.10);
+    --line-strong: rgba(255,255,255,.18);
+    --muted: #8e97a8;
+    --text: #eff2f8;
+    --accent: #9abaff;
+    --success: #82dea3;
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d10; color: var(--text);
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  #app { display: grid; grid-template-columns: minmax(0, 1fr) 364px; height: 100%; }
+  #stage { position: relative; min-width: 0; overflow: hidden; background: #0b0c0f; }
   #gl, #ui { position: absolute; inset: 0; display: block; }
   #ui { touch-action: none; }
-  #panel { width: 290px; flex: 0 0 290px; height: 100%; overflow-y: auto;
-    padding: 14px; background: #14161b; border-left: 1px solid #23262e; }
+  #stageHud { position: absolute; left: 24px; bottom: 22px; pointer-events: none; text-shadow: 0 2px 16px rgba(0,0,0,.48); }
+  #stageHud .eyebrow { color: rgba(255,255,255,.68); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
+  #stageHud strong { display: block; margin-top: 4px; font-size: 21px; letter-spacing: -.03em; }
+  #stageHud span { color: rgba(255,255,255,.72); font-size: 11px; }
+  #loadState { position: absolute; top: 18px; left: 20px; padding: 6px 9px; color: rgba(255,255,255,.75); font-size: 10px; border: 1px solid rgba(255,255,255,.16); background: rgba(9,11,16,.40); border-radius: 999px; backdrop-filter: blur(10px); transition: opacity .3s ease; }
+  body.wallpapers-ready #loadState { opacity: 0; }
+  #panel { width: auto; height: 100%; overflow-y: auto; padding: 22px 20px 26px; background: var(--panel); border-left: 1px solid var(--line); }
   body.hide-panel #panel { display: none; }
-  h1 { font-size: 14px; margin: 0 0 10px; letter-spacing: .02em; }
-  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .09em;
-    color: #8b90a0; margin: 16px 0 6px; }
-  .row { display: grid; grid-template-columns: 96px 1fr 44px; align-items: center;
-    gap: 6px; margin-bottom: 3px; }
-  .row span { color: #a8adbd; font-size: 11px; }
-  .row b { font-variant-numeric: tabular-nums; font-weight: 500; color: #cfd3e0;
-    font-size: 11px; text-align: right; }
-  input[type=range] { width: 100%; accent-color: #6ea8ff; }
-  button { background: #232733; color: #e8e9ee; border: 1px solid #333849;
-    border-radius: 7px; padding: 5px 9px; font-size: 11px; cursor: pointer; }
-  button:hover { background: #2c3140; }
-  select { width: 100%; background: #232733; color: #e8e9ee; border: 1px solid #333849;
-    border-radius: 7px; padding: 5px; font-size: 11px; }
-  .btns { display: flex; gap: 6px; flex-wrap: wrap; }
-  .checks { display: flex; gap: 12px; margin-top: 8px; font-size: 11px; color: #a8adbd; }
-  .note { color: #7f8496; font-size: 11px; margin-top: 14px; }
-  .note code { color: #9fc6ff; }
+  .panelHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 20px; line-height: 1.1; margin: 0; letter-spacing: -.04em; }
+  h2 { font-size: 12px; line-height: 1; margin: 0; color: var(--text); font-weight: 600; letter-spacing: -.01em; }
+  .kicker { color: var(--accent); font-size: 10px; text-transform: uppercase; letter-spacing: .18em; margin-bottom: 7px; }
+  .subhead { color: var(--muted); font-size: 11px; margin: 7px 0 0; }
+  .status { color: var(--success); font-size: 11px; white-space: nowrap; }
+  .status::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 5px; background: currentColor; border-radius: 50%; vertical-align: 1px; }
+  .toolbar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 16px; }
+  button { min-height: 32px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); font: inherit; font-size: 11px; cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
+  button:hover { background: var(--surface-raised); border-color: var(--line-strong); }
+  button:active { transform: translateY(1px) scale(.99); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.active { background: rgba(154,186,255,.16); border-color: rgba(154,186,255,.55); color: #d9e6ff; }
+  #togglePanel { grid-column: 1 / -1; color: var(--muted); }
+  .section { padding-top: 20px; }
+  .sectionHeader { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .sectionMeta { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+  .sceneGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .sceneCard { position: relative; min-height: 68px; overflow: hidden; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; text-align: left; isolation: isolate; border-color: rgba(255,255,255,.12); }
+  .sceneCard::before, .sceneCard::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
+  .sceneCard::before { z-index: -2; background-image: var(--scene-image); background-size: cover; background-position: center; transition: transform .3s ease; }
+  .sceneCard::after { z-index: -1; background: linear-gradient(180deg, rgba(0,0,0,.02), rgba(0,0,0,.72)); }
+  .sceneCard:hover::before { transform: scale(1.06); }
+  .sceneCard span, .sceneCard small { position: relative; z-index: 1; }
+  .sceneCard span { font-size: 11px; font-weight: 600; }
+  .sceneCard small { margin-top: 2px; color: rgba(255,255,255,.72); font-size: 9px; }
+  .sceneCard.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px rgba(154,186,255,.45); }
+  .segmented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.025); }
+  .segmented button { min-height: 30px; border: 0; background: transparent; color: var(--muted); }
+  .segmented button.active { background: var(--surface-raised); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.22); }
+  .debugGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .debugGrid button { padding: 0 4px; font-size: 10px; }
+  #sliders { display: grid; gap: 6px; }
+  .sliderGroup { border-top: 1px solid var(--line); padding-top: 9px; }
+  .sliderGroup summary { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; cursor: pointer; list-style: none; }
+  .sliderGroup summary::-webkit-details-marker { display: none; }
+  .sliderGroup summary span::after { content: '+'; color: var(--muted); font-size: 14px; line-height: 1; }
+  .sliderGroup[open] summary span::after { content: '−'; }
+  .sliderRows { display: grid; gap: 6px; padding-top: 9px; }
+  .row { display: grid; grid-template-columns: 116px minmax(0, 1fr) 42px; align-items: center; gap: 8px; }
+  .row span { overflow: hidden; color: #aeb7c8; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+  .row b { color: #dce3f2; font-size: 10px; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; height: 14px; accent-color: var(--accent); }
+  .tip { margin-top: 17px; padding: 10px 11px; border-left: 2px solid var(--accent); background: rgba(154,186,255,.06); color: #b7c5dd; font-size: 10px; }
+  .note { color: #737e91; font-size: 10px; margin-top: 14px; }
+  .note code { color: #a9c4f7; }
+  .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  @media (max-width: 900px) {
+    html, body { overflow: auto; }
+    #app { min-height: 100dvh; height: auto; grid-template-columns: 1fr; grid-template-rows: minmax(480px, 68dvh) auto; }
+    #panel { height: auto; max-height: none; border-top: 1px solid var(--line); border-left: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  }
 </style>
 </head>
 <body>
@@ -40,34 +94,49 @@
   <div id="stage">
     <canvas id="gl"></canvas>
     <canvas id="ui"></canvas>
+    <div id="loadState">Loading source imagery</div>
+    <div id="stageHud"><div class="eyebrow">LIQUID GLASS / PLAYGROUND</div><strong id="hudScene">Alpine Lake</strong><span id="hudKind">Natural landscape / drag a glass surface to explore</span></div>
   </div>
   <div id="panel">
-    <h1>Liquid Glass 物理复刻</h1>
-    <div class="btns">
+    <div class="panelHead"><div><div class="kicker">Material lab</div><h1>Liquid Glass</h1><p class="subhead">A small physics playground for translucent surfaces.</p></div><span class="status">Ready</span></div>
+    <div class="toolbar">
       <button data-preset="regular">Regular</button>
       <button data-preset="clear">Clear</button>
-      <button data-preset="lens">Lens (夸张)</button>
-      <button id="togglePanel">隐藏面板</button>
+      <button data-preset="lens">Lens</button>
+      <button id="togglePanel">Hide inspector</button>
     </div>
-    <h2>场景</h2>
-    <select id="scene"></select>
-    <div class="checks">
-      <label><input type="checkbox" id="toggleIcons" checked> 图标</label>
-      <label><input type="checkbox" id="toggleLabels" checked> 名称/角标</label>
+    <div class="section">
+      <div class="sectionHeader"><h2>Scene</h2><span class="sectionMeta" id="sceneCount">01 / 04</span></div>
+      <select class="srOnly" id="scene" aria-label="Scene"></select>
+      <div class="sceneGrid" id="scenePicker"></div>
     </div>
-    <h2>物理可视化</h2>
-    <div class="btns">
-      <button data-debug="0">成像</button>
-      <button data-debug="1">厚度场 h</button>
-      <button data-debug="2">法线 n</button>
-      <button data-debug="3">位移/色散</button>
+    <div class="section">
+      <div class="sectionHeader"><h2>View</h2><span class="sectionMeta" id="sceneKind">Natural landscape</span></div>
+      <div class="segmented">
+        <button type="button" data-icon-mode="on">With icons</button>
+        <button type="button" data-icon-mode="off">Folders only</button>
+      </div>
+      <div class="segmented" style="margin-top: 6px">
+        <button type="button" data-label-mode="on">Show labels</button>
+        <button type="button" data-label-mode="off">Clean stage</button>
+      </div>
     </div>
-    <h2>参数</h2>
+    <div class="section">
+      <div class="sectionHeader"><h2>Debug view</h2><span class="sectionMeta">shader output</span></div>
+      <div class="segmented debugGrid">
+        <button type="button" data-debug="0">Final</button>
+        <button type="button" data-debug="1">Thickness</button>
+        <button type="button" data-debug="2">Normals</button>
+        <button type="button" data-debug="3">Dispersion</button>
+      </div>
+    </div>
+    <div class="section">
+      <div class="sectionHeader"><h2>Material</h2><span class="sectionMeta">live controls</span></div>
     <div id="sliders"></div>
+    </div>
+    <div class="tip">Drag a surface over a high-contrast edge to inspect refraction, blur, and highlight behavior.</div>
     <div class="note">
-      形状 <code>squircle SDF</code> → 厚度场 → 法线 → <code>Snell 折射</code>
-      (+ 色散) → 可变模糊 → <code>Fresnel</code> 反射 + 高光 → 接触阴影。
-      可直接拖动文件夹观察边缘透镜效果。
+      Shapes use folder, rect, capsule, and circle SDFs. The material combines Snell refraction, variable blur, Fresnel reflection, and contact shadows.
     </div>
   </div>
 </div>

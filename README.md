@@ -1,138 +1,82 @@
-# Liquid Glass — 物理原理与复刻
+# apple-liquid-glass-webgl
 
-WebGL2 从零复刻 iOS 26 / macOS Tahoe 的 **Liquid Glass**（以主屏文件夹为例），
-并按参考截图做了多轮视觉对比与修正。
+Reusable WebGL2 liquid glass surfaces for folders, rectangles, pills, and circles.
 
-```bash
-npm install          # 只装 playwright（截图验证用）
-npm run serve        # http://localhost:8765
-```
+This package is framework-free and renders Apple-inspired translucent surfaces with screen-space refraction, variable blur, Fresnel reflection, chromatic dispersion, edge highlights, and contact shadows.
 
-右侧面板可实时调参、切换场景/预设，并把材质拆成
-**厚度场 / 法线 / 位移+色散** 三种可视化；画面里的文件夹可以直接拖动，
-拖到高对比的树枝或岛屿边界上最容易看清边缘透镜。
-
----
-
-## 1. 物理模型
-
-Liquid Glass 不是"毛玻璃 + 白色半透明层"。它是一块**有厚度、有边缘曲率的
-透明介质**，屏幕内容就是它背面的贴图。整条链路：
-
-| 步 | 物理量 | 实现 |
-| --- | --- | --- |
-| 1 | 形状 | squircle（超椭圆）SDF `d(p)`，指数 `n≈4.2` 得到 Apple 的连续曲率圆角 |
-| 2 | 厚度场 | `t = clamp(-d / bevel)`，高度 `h(t) = sqrt(1-(1-t)²)`：中间是平台，只有边缘一圈是斜面 |
-| 3 | 法线 | `n = normalize(vec3(s · H/bevel · dh/dt · ∇d, 1))` |
-| 4 | 折射 | Snell：`R = refract((0,0,-1), n, 1/ior)`，屏幕空间位移 `Δ = R.xy / -R.z · 光程` |
-| 5 | 色散 | R/G/B 用 `ior ∓ dispersion` 各算一次 → 边缘彩边 |
-| 6 | 散射 | 背景模糊金字塔同时保存线性颜色与光学密度：颜色负责扩散，密度负责让深色枝干在宽模糊下不被浅色天空洗掉 |
-| 7 | 反射 | Schlick Fresnel 混合逐元件背景环境色；四向亮度探针估计局部主光方向，再叠加收窄的双高光波瓣 |
-| 8 | 边缘 | 掠射角变暗的暗轮廓线 + 内侧亮线 |
-| 9 | 着色 | 透射光饱和度提升 + **恒定**白纱 `tintAmount` |
-| 10 | 阴影 | SDF 外侧指数衰减的接触阴影，略向下偏移 |
-
-### 关键结论：边缘是"液面"而不是凸透镜
-
-`s` 的符号决定了整个观感，这是复刻里最容易搞错的一点：
-
-* `s = +1`（凸透镜边缘）：法线朝外倾 → 折射把采样点推向**内**，
-  边缘放大内部内容，外面的东西完全进不来。
-* `s = -1`（**meniscus / 凹液面**，`meniscus = 1`）：法线朝内倾 → 折射把采样点推向**外**，
-  于是边缘一圈会把**外部背景挤压进来**，直线在边界处被"拉着"沿边缘走。
-
-参考截图里树枝穿过文件夹边界时正是被压弯、贴着边框走，所以 Apple 的边缘等价于
-**液体在容器壁上被表面张力拉起来的凹液面**——这也正是 "Liquid" 的来处。
-面板里把 `meniscus` 拉到 0 就能看到两者区别（`shots/` 里也留了对比图）。
-
-### 第二个易错点：白纱/亮度不能跟着背景走
-
-曾经试过"自适应"：按元件背后的**平均**亮度决定加多少白纱
-（`dark = smoothstep(0.45, 0.05, bgLum)`），并且把 `brightness` 也乘在这个系数上。
-结果是同一套参数下，**背后压到黑色树枝的那个文件夹会莫名发白**，
-旁边背景亮的那个却完全不变——看上去像两种材质；而且 `brightness` 滑杆
-在亮背景上等于失效，怎么调都"对不上"。
-
-白纱和亮度是**玻璃自己的属性**，不该知道背后是什么。现在改成恒定的
-`tintAmount` / `brightness`，所有元件一视同仁；深色壁纸上的可读性靠这层
-恒定奶白 + 边缘反射解决。
-
-### 第三个易错点：模糊不能只 `textureLod` 一发
-
-`blurPlateau` / `blurRim` 原来是**mip 层号**。层号只能取到 2 的幂，而且顶层一个
-texel 就有几十像素宽，于是单次 `textureLod`：
-
-* 一次采样把大半屏幕平均进来 → 颜色被拉向画面均值，**发灰发淡**；
-* 双线性重建只有 2×2 个巨大 texel → 几块菱形色斑，**"采样太少"的糊感**；
-* 7 级链在 dpr=2 下 lod 5.4 就已经撞顶，滑杆再往上推毫无变化。
-
-现在两个参数是**CSS px 的模糊半径**。着色器先取"自身半径约为目标 1/3"的那一级
-（`lod = log2(r) - 1.585`），再用 12 个黄金角螺旋 tap 铺满剩下的宽度：相邻 tap
-差不多正好一个 texel，该级自身的滤波把圆盘补成连续的，于是得到真正的宽高斯，
-拉到多大都平滑、并且保住局部颜色。透射光另外做一次饱和度提升
-（`saturation`，对应 iOS `saturationDeltaFactor`），补偿模糊本身的去饱和。
-
-### 第四个易错点：暗线扩散后不能被洗白
-
-线性 RGB 卷积会把少量深色树枝与大面积浅色天空平均：形状确实散到边缘了，
-但暗带的视觉重量会消失。现在 mip 链的 RGB 保存线性辐亮度，alpha 额外保存
-`-log(luminance)` 形式的光学密度；着色器用同一组采样核模糊两者，再用
-`opticalDensity` 恢复被线性平均抹掉的暗部亮度。均匀区域不变，高反差暗线则能
-“散而不白”；设为 `0` 可以退回原先的纯 RGB 模糊。
-
-### 高光方向来自元件周围，而不是全局固定灯
-
-固定 `lightX/lightY` 会让每个文件夹都在同一角落出现同样大小的白色光斑；参考图里
-高光却会跟着塔灯、云层、海岸和金属壁纸改变方向与颜色。现在每个元件在自身外圈
-采样左、右、上、下四个低频环境值，用亮度梯度估计主光方向，并沿当前边缘法线再取
-一个局部环境色。`lightX/lightY` 只在背景过于均匀、无法可靠判断方向时作为兜底。
-高光波瓣同时限制在斜面外侧较窄的一段，保留细轮廓，但不再形成厚重的统一白块。
-面板中的 `highlightAdapt` 控制背景对方向的影响，`highlightWidth` 控制斜面上的
-高光厚度，`highlightSharpness` 控制沿边框方向的集中度，`highlightBase` 则控制
-均匀背景下仍保留多少基础高光；总强度仍由 `specular` 控制。
-
----
-
-## 2. 代码结构
-
-```
-index.html            舞台 + 调参面板
-src/shaders.js         GLSL：壁纸、模糊降采样、玻璃材质（含推导注释）
-src/renderer.js        WebGL2：mip 模糊链、每个玻璃元件一次 draw
-src/material.js        材质参数默认值 / 预设 / 滑杆定义
-src/overlay.js         玻璃之上的图标网格、名称、红色角标（2D canvas）
-src/app.js             场景布局、交互、调试视图、window.__lg 自动化接口
-tools/shot.mjs         Playwright 截图（复刻验证用）
-```
-
-渲染流程：壁纸 → mip 0；13-tap dual filter 逐级降采样出 7 级模糊链 →
-背景直出屏幕 → 每个文件夹画一个带阴影 padding 的四边形（premultiplied 混合）→
-2D canvas 画图标/文字。
-
-模糊半径、斜面宽度、玻璃厚度都是 **CSS px**，渲染时统一乘 dpr，
-所以在任何缩放/DPR 下是同一块物理玻璃。
-
----
-
-## 3. 视觉验证流程
+## Install
 
 ```bash
+npm install apple-liquid-glass-webgl
+```
+
+WebGL2 is required. Give the canvas a CSS width and height before rendering.
+
+## Usage
+
+```js
+import { LiquidGlassWebGL } from 'apple-liquid-glass-webgl';
+
+const canvas = document.querySelector('canvas');
+const glass = new LiquidGlassWebGL(canvas, { material: 'regular' });
+
+await glass.setWallpaper('/images/wallpaper.jpg');
+glass.setElements([
+  { id: 'folder', shape: 'folder', x: 80, y: 80, width: 220, height: 220 },
+  { id: 'rect', shape: 'rect', x: 360, y: 100, width: 280, height: 190 },
+  { id: 'pill', shape: 'pill', x: 700, y: 130, width: 250, height: 110 },
+  { id: 'circle', shape: 'circle', x: 1000, y: 130, size: 110 },
+]);
+glass.render();
+```
+
+The component accepts CSS-pixel coordinates. Content such as app icons, labels, or buttons can be drawn in a separate canvas layer above the WebGL canvas.
+
+## Visual preview
+
+The same reusable surfaces are shown against four included wallpaper directions:
+
+| Natural landscape | Abstract lines |
+| --- | --- |
+| ![Natural landscape](assets/readme/natural-lake.png) | ![Abstract lines](assets/readme/abstract-lines.png) |
+
+| Color blocks | Night city |
+| --- | --- |
+| ![Color blocks](assets/readme/color-blocks.png) | ![Night city](assets/readme/night-city.png) |
+
+## API
+
+```js
+glass.setMaterial('clear');
+glass.setMaterial({ blurPlateau: 4, edgeLine: 0.2 });
+glass.setWallpaperIndex(0);
+glass.addElement({ id: 'new-folder', shape: 'folder', x: 20, y: 20, size: 180 });
+glass.updateElement('new-folder', { x: 40 });
+glass.removeElement('new-folder');
+glass.resize();
+glass.destroy();
+```
+
+Available presets are `regular`, `clear`, and `lens`. Available shapes are `folder`, `rect`, `pill`, and `circle`.
+
+## Playground
+
+The repository also contains the interactive demo used to develop the material:
+
+```bash
+npm install
 npm run serve
-node tools/shot.mjs shots/final0.png --scene 0 --size 620x420 --no-panel
-node tools/shot.mjs shots/finalz.png --scene 0 --size 500x340 --no-panel --focus 0,2.4
-node tools/shot.mjs shots/dbg3.png  --scene 0 --no-panel --focus 0,2.4 --set debug=3
 ```
 
-`--focus i,zoom` 是**真放大**：文件夹尺寸、圆角、斜面、厚度、模糊半径、
-边线宽度、壁纸都按同一倍率放大，因此近景截图能直接和参考大图比例对照。
-`--set k=v,...` 可临时改任意参数，用来做参数扫描。
+Open [http://localhost:8765](http://localhost:8765). The inspector includes scene previews, icon visibility, labels, debug shader outputs, and grouped material controls.
 
-对照参考截图后依次修掉的问题：
+## Development
 
-1. 壁纸树枝是离散的"珠链" → 贝塞尔改成折线段距离。
-2. 边缘没有透镜感 → 发现折射符号反了，引入 meniscus 曲率。
-3. 内部糊成一片粉色 → 降低平台 lod，并把树枝加粗到参考照片的比例。
-4. 边界不清 → 加掠射角暗轮廓 + 内侧亮线（`edgeDark` / `edgeLine` / `edgeWidth`）。
-5. 深色壁纸上玻璃不够亮 → 加白纱。
-6. 白纱按背景亮度自适应 → 元件之间亮度不一致，改回恒定 `tintAmount`。
-7. 模糊发淡发糊、`blurRim` 拉满没反应 → mip 层号改成 px 半径 + 多 tap 圆盘采样。
+```bash
+npm run shot /tmp/liquid-glass.png -- --scene 0 --size 1200x720 --no-panel
+npm run pack:check
+```
+
+## License
+
+MIT

@@ -1,6 +1,6 @@
 import { GlassRenderer } from './renderer.js';
 import { makeMaterial, PRESETS, SLIDERS } from './material.js';
-import { drawFolderContents, drawLabel, drawBadge } from './overlay.js';
+import { drawGlassContents, drawLabel, drawBadge } from './overlay.js';
 
 const glCanvas = document.getElementById('gl');
 const uiCanvas = document.getElementById('ui');
@@ -9,55 +9,54 @@ const ctx = uiCanvas.getContext('2d');
 const renderer = new GlassRenderer(glCanvas);
 
 const I = {
-  red: (t) => ({ t, c0: '#ff4b3e', c1: '#e01b0c' }),
-  blue: (t) => ({ t, c0: '#3f8bff', c1: '#1155e0' }),
-  green: (t) => ({ t, c0: '#4bd964', c1: '#12a83a' }),
-  dark: (t) => ({ t, c0: '#3a3f47', c1: '#15181c' }),
-  white: (t) => ({ t, c0: '#ffffff', c1: '#e6e6ea', fg: '#22242a' }),
-  orange: (t) => ({ t, c0: '#ffb648', c1: '#f27a12' }),
-  purple: (t) => ({ t, c0: '#a06bff', c1: '#6a2bd8' }),
-  teal: (t) => ({ t, c0: '#3ad2c8', c1: '#128f9c' }),
-  pink: (t) => ({ t, c0: '#ff6fa8', c1: '#e02a72' }),
+  youtube: () => ({ name: 'YouTube', src: './assets/icons/youtube.svg', c0: '#f7f8fb', c1: '#d9dde7' }),
+  spotify: () => ({ name: 'Spotify', src: './assets/icons/spotify.svg', c0: '#e8f8ed', c1: '#b9e8c8' }),
+  whatsapp: () => ({ name: 'WhatsApp', src: './assets/icons/whatsapp.svg', c0: '#e3f8ec', c1: '#b9ebce' }),
+  notion: () => ({ name: 'Notion', src: './assets/icons/notion.svg', c0: '#2c3039', c1: '#15171d' }),
+  figma: () => ({ name: 'Figma', src: './assets/icons/figma.svg', c0: '#fff1ea', c1: '#ffd9c9' }),
+  github: () => ({ name: 'GitHub', src: './assets/icons/github.svg', c0: '#3a404c', c1: '#181b22' }),
+  photos: () => ({ name: 'Google Photos', src: './assets/icons/google-photos.svg', c0: '#edf5ff', c1: '#d2e6ff' }),
 };
 
-// Layout in fractions of the stage. size = folder width / stage width.
+// The same four-shape test set is used on every wallpaper so geometry and
+// material can be compared without scene-specific layout becoming a variable.
+const SHAPE_SET = [
+  { shape: 'folder', fx: 0.17, fy: 0.44, size: 0.20, label: 'Folder',
+    icons: [I.youtube(), I.spotify(), I.whatsapp(), I.notion()] },
+  { shape: 'rect', fx: 0.43, fy: 0.44, width: 0.24, height: 0.17,
+    label: 'Rect',
+    icons: [I.figma(), I.github(), I.photos(), I.spotify()] },
+  { shape: 'pill', fx: 0.69, fy: 0.44, width: 0.22, height: 0.12,
+    label: 'Pill', content: 'Continue' },
+  { shape: 'circle', fx: 0.90, fy: 0.44, size: 0.12,
+    label: 'Circle', content: '+' },
+];
+
+// Layout in fractions of the stage. `size` is square; width/height define a
+// rectangular folder or pill while their SDF rules remain shape-specific.
+const WALLPAPER_FILES = [
+  './assets/wallpapers/natural-lake.png',
+  './assets/wallpapers/abstract-lines.png',
+  './assets/wallpapers/color-blocks.png',
+  './assets/wallpapers/night-city.png',
+];
+
 const SCENES = [
   {
-    name: '黄昏树枝 (ref 1/2/5)', wallpaper: 0,
-    folders: [
-      { fx: 0.46, fy: 0.45, size: 0.20, label: '社交网络',
-        icons: [I.red('剧'), I.red('红')] },
-      { fx: 0.80, fy: 0.63, size: 0.20, label: 'UofT',
-        icons: [I.green('微'), I.blue('U'), I.blue('T'), I.red('◎')] },
-    ],
+    name: 'Alpine Lake', kind: 'Natural landscape', wallpaper: 0,
+    folders: SHAPE_SET,
   },
   {
-    name: '深蓝夜景 (ref 3)', wallpaper: 1,
-    folders: [
-      { fx: 0.40, fy: 0.13, size: 0.24, label: '照片与视频', badge: '505',
-        icons: [I.dark('●'), I.dark('✂')] },
-      { fx: 0.44, fy: 0.42, size: 0.24, label: '生活', badge: '408',
-        icons: [I.red('淘'), I.orange('美'), I.blue('支'), I.dark('U'), I.blue('鲸'),
-                I.red('京'), I.green('TD'), I.orange('人'), I.dark('得')] },
-      { fx: 0.36, fy: 0.70, size: 0.24, label: 'Productivity', badge: '2',
-        icons: [I.white('◉'), I.teal('◈'), I.purple('≋'), I.pink('☺'),
-                I.white('✦'), I.blue('≈'), I.white('♥'), I.dark('◎'), I.green('▲')] },
-    ],
+    name: 'Flow Lines', kind: 'Abstract lines', wallpaper: 1,
+    folders: SHAPE_SET,
   },
   {
-    name: '海岛 (ref 4)', wallpaper: 2,
-    folders: [
-      { fx: 0.11, fy: 0.36, size: 0.16, label: '邮箱', badge: '1,126',
-        icons: [I.blue('✉'), I.white('M'), I.purple('◑')] },
-      { fx: 0.34, fy: 0.36, size: 0.16, label: '游戏', badge: '4',
-        icons: [I.dark('S'), I.dark('▚'), I.red('忍'), I.pink('◆'), I.orange('S'),
-                I.green('◇'), I.green('Z'), I.red('▤'), I.orange('★')] },
-      { fx: 0.58, fy: 0.36, size: 0.16, label: '生活', badge: '408',
-        icons: [I.red('淘'), I.orange('美'), I.blue('支'), I.dark('U'), I.blue('鲸'),
-                I.red('京'), I.green('TD'), I.orange('人'), I.dark('得')] },
-      { fx: 0.82, fy: 0.36, size: 0.16, label: 'App Store',
-        icons: [I.dark('B'), I.green('♪'), I.red('网')] },
-    ],
+    name: 'Color Blocks', kind: 'Color blocks', wallpaper: 2,
+    folders: SHAPE_SET,
+  },
+  {
+    name: 'Rainy City', kind: 'Night city', wallpaper: 3,
+    folders: SHAPE_SET,
   },
 ];
 
@@ -76,19 +75,22 @@ function layout() {
   const h = stage.clientHeight;
   const sc = SCENES[state.scene];
   state.folders = sc.folders.map((f) => {
-    const size = f.size * w;
+    const fw = (f.width ?? f.size) * w;
+    const fh = (f.height ?? f.size) * w;
     return {
-      ...f,
-      w: size, h: size,
-      x: f.fx * w - size / 2,
-      y: f.fy * h - size / 2,
+      shape: 'folder', ...f,
+      w: fw, h: fh,
+      x: f.fx * w - fw / 2,
+      y: f.fy * h - fh / 2,
     };
   });
 }
 
 function radiusFor(f) {
-  // iOS folder corner radius is ~23.5% of the side
-  return Math.min(state.material.radius, f.w * 0.235);
+  const short = Math.min(f.w, f.h);
+  if (f.shape === 'pill' || f.shape === 'circle') return short / 2;
+  // Both folder variants use the same fixed corner at ~23.5% of the short side.
+  return Math.min(state.material.radius, short * 0.235);
 }
 
 function render() {
@@ -112,7 +114,7 @@ function render() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
   for (const f of state.folders) {
-    if (state.showIcons) drawFolderContents(ctx, f);
+    if (state.showIcons) drawGlassContents(ctx, f);
     if (state.showLabels) { drawLabel(ctx, f); drawBadge(ctx, f); }
   }
 }
@@ -127,10 +129,36 @@ function invalidate() {
 // ---------------------------------------------------------------- controls
 const panel = document.getElementById('sliders');
 const inputs = {};
+const SLIDER_GROUPS = {
+  geometry: new Set(['radius', 'squircle', 'bevel', 'height']),
+  optics: new Set(['ior', 'dispersion', 'refractScale', 'meniscus', 'blurPlateau', 'blurRim', 'opticalDensity']),
+  lighting: new Set(['specular', 'specPower', 'highlightAdapt', 'highlightWidth', 'highlightSharpness', 'highlightBase', 'fresnel', 'saturation', 'brightness', 'tintAmount']),
+  edge: new Set(['shadow', 'shadowSize', 'shadowOffset', 'lightX', 'lightY', 'edgeLine', 'edgeWidth', 'edgeDark']),
+};
+const SLIDER_LABELS = {
+  radius: 'Corner radius', squircle: 'Corner shape', bevel: 'Bevel width', height: 'Optical height',
+  ior: 'Index of refraction', dispersion: 'Chromatic spread', refractScale: 'Refraction scale',
+  meniscus: 'Meniscus curve', blurPlateau: 'Plateau blur', blurRim: 'Rim blur', opticalDensity: 'Optical density',
+  specular: 'Specular', specPower: 'Specular power', highlightAdapt: 'Light adaptation',
+  highlightWidth: 'Highlight width', highlightSharpness: 'Highlight sharpness', highlightBase: 'Highlight base',
+  fresnel: 'Fresnel', saturation: 'Saturation', brightness: 'Brightness', tintAmount: 'Tint amount',
+  shadow: 'Shadow', shadowSize: 'Shadow size', shadowOffset: 'Shadow offset', lightX: 'Light X', lightY: 'Light Y',
+  edgeLine: 'Edge highlight', edgeWidth: 'Edge width', edgeDark: 'Edge contrast',
+};
+const sliderGroups = {};
+Object.entries(SLIDER_GROUPS).forEach(([key]) => {
+  const group = document.createElement('details');
+  group.className = 'sliderGroup';
+  group.open = key === 'geometry' || key === 'optics';
+  group.innerHTML = `<summary>${key}<span></span></summary><div class="sliderRows"></div>`;
+  panel.appendChild(group);
+  sliderGroups[key] = group.querySelector('.sliderRows');
+});
 for (const [key, min, max, step] of SLIDERS) {
   const row = document.createElement('label');
   row.className = 'row';
-  row.innerHTML = `<span>${key}</span><input type="range" min="${min}" max="${max}" step="${step}"><b></b>`;
+  const groupKey = Object.entries(SLIDER_GROUPS).find(([, keys]) => keys.has(key))?.[0] || 'geometry';
+  row.innerHTML = `<span title="${key}">${SLIDER_LABELS[key] || key}</span><input aria-label="${SLIDER_LABELS[key] || key}" type="range" min="${min}" max="${max}" step="${step}"><b></b>`;
   const input = row.querySelector('input');
   const out = row.querySelector('b');
   input.value = state.material[key];
@@ -141,7 +169,7 @@ for (const [key, min, max, step] of SLIDERS) {
     invalidate();
   });
   inputs[key] = { input, out };
-  panel.appendChild(row);
+  sliderGroups[groupKey].appendChild(row);
 }
 
 function syncSliders() {
@@ -151,37 +179,126 @@ function syncSliders() {
   }
 }
 
+function syncPresetButtons(active) {
+  document.querySelectorAll('[data-preset]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.preset === active);
+  });
+}
+
 document.querySelectorAll('[data-preset]').forEach((b) => {
   b.addEventListener('click', () => {
     state.material = makeMaterial(b.dataset.preset);
     syncSliders();
+    syncPresetButtons(b.dataset.preset);
     invalidate();
   });
 });
 
+function syncDebugButtons() {
+  document.querySelectorAll('[data-debug]').forEach((button) => {
+    button.classList.toggle('active', +button.dataset.debug === state.material.debug);
+  });
+}
+
 document.querySelectorAll('[data-debug]').forEach((b) => {
   b.addEventListener('click', () => {
     state.material.debug = +b.dataset.debug;
+    syncDebugButtons();
     invalidate();
   });
 });
 
 const sceneSel = document.getElementById('scene');
+const sceneKind = document.getElementById('sceneKind');
+const hudScene = document.getElementById('hudScene');
+const hudKind = document.getElementById('hudKind');
+const sceneCount = document.getElementById('sceneCount');
+const scenePicker = document.getElementById('scenePicker');
 SCENES.forEach((s, i) => {
   const o = document.createElement('option');
   o.value = i; o.textContent = s.name;
   sceneSel.appendChild(o);
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'sceneCard';
+  card.dataset.scene = i;
+  card.style.setProperty('--scene-image', `url("${WALLPAPER_FILES[i]}")`);
+  card.innerHTML = `<span>${s.name}</span><small>${s.kind}</small>`;
+  card.addEventListener('click', () => {
+    state.scene = i;
+    sceneSel.value = i;
+    syncSceneUI();
+    layout();
+    invalidate();
+  });
+  scenePicker.appendChild(card);
 });
+function syncScenePicker() {
+  scenePicker.querySelectorAll('[data-scene]').forEach((button) => {
+    button.classList.toggle('active', +button.dataset.scene === state.scene);
+  });
+}
+function syncSceneUI() {
+  const scene = SCENES[state.scene];
+  sceneKind.textContent = scene.kind;
+  hudScene.textContent = scene.name;
+  hudKind.textContent = `${scene.kind} / drag a glass surface to explore`;
+  sceneCount.textContent = `${String(state.scene + 1).padStart(2, '0')} / ${String(SCENES.length).padStart(2, '0')}`;
+  syncScenePicker();
+}
 sceneSel.addEventListener('change', () => {
   state.scene = +sceneSel.value;
-  layout(); invalidate();
+  syncSceneUI(); layout(); invalidate();
 });
 
-document.getElementById('toggleIcons').addEventListener('change', (e) => {
-  state.showIcons = e.target.checked; invalidate();
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+}
+
+Promise.all(WALLPAPER_FILES.map(loadImage))
+  .then((images) => {
+    renderer.setWallpapers(images);
+    document.body.classList.add('wallpapers-ready');
+    invalidate();
+  })
+  .catch((error) => console.warn('Wallpaper loading failed; using procedural fallback.', error));
+
+const iconSources = [...new Set(SHAPE_SET.flatMap((folder) => folder.icons || []).map((icon) => icon.src))];
+Promise.all(iconSources.map(loadImage))
+  .then((images) => {
+    SHAPE_SET.flatMap((folder) => folder.icons || []).forEach((icon) => {
+      icon.image = images[iconSources.indexOf(icon.src)];
+    });
+    invalidate();
+  })
+  .catch((error) => console.warn('App icon loading failed; using fallback glyphs.', error));
+
+function syncViewButtons() {
+  document.querySelectorAll('[data-icon-mode]').forEach((button) => {
+    button.classList.toggle('active', (button.dataset.iconMode === 'on') === state.showIcons);
+  });
+  document.querySelectorAll('[data-label-mode]').forEach((button) => {
+    button.classList.toggle('active', (button.dataset.labelMode === 'on') === state.showLabels);
+  });
+}
+document.querySelectorAll('[data-icon-mode]').forEach((button) => {
+  button.addEventListener('click', () => {
+    state.showIcons = button.dataset.iconMode === 'on';
+    syncViewButtons();
+    invalidate();
+  });
 });
-document.getElementById('toggleLabels').addEventListener('change', (e) => {
-  state.showLabels = e.target.checked; invalidate();
+document.querySelectorAll('[data-label-mode]').forEach((button) => {
+  button.addEventListener('click', () => {
+    state.showLabels = button.dataset.labelMode === 'on';
+    syncViewButtons();
+    invalidate();
+  });
 });
 document.getElementById('togglePanel').addEventListener('click', () => {
   document.body.classList.toggle('hide-panel');
@@ -218,7 +335,7 @@ window.addEventListener('resize', () => { layout(); invalidate(); });
 window.__lg = {
   state, render, invalidate, layout, PRESETS, syncSliders,
   set(patch) { Object.assign(state.material, patch); syncSliders(); render(); },
-  setScene(i) { state.scene = i; sceneSel.value = i; state.wallZoom = 1; layout(); render(); },
+  setScene(i) { state.scene = i; sceneSel.value = i; state.wallZoom = 1; syncSceneUI(); layout(); render(); },
   focus(index, zoom = 2) {
     // isolate one folder, centred and enlarged, for close-up comparisons.
     // Every length of the material scales with the zoom, so this is a true
@@ -226,10 +343,10 @@ window.__lg = {
     layout();
     const f = state.folders[index];
     const w = stage.clientWidth, h = stage.clientHeight;
-    const s = f.w * zoom;
-    f.w = f.h = s;
-    f.x = w / 2 - s / 2;
-    f.y = h / 2 - s / 2;
+    f.w *= zoom;
+    f.h *= zoom;
+    f.x = w / 2 - f.w / 2;
+    f.y = h / 2 - f.h / 2;
     state.folders = [f];
     state.wallZoom = zoom;
     const m = state.material;
@@ -243,4 +360,8 @@ window.__lg = {
 };
 
 layout();
+syncSceneUI();
+syncPresetButtons('regular');
+syncViewButtons();
+syncDebugButtons();
 render();
