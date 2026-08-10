@@ -18,8 +18,8 @@ const I = {
   photos: () => ({ name: 'Google Photos', src: './assets/icons/google-photos.svg', c0: '#edf5ff', c1: '#d2e6ff' }),
 };
 
-// The same four-shape test set is used on every wallpaper so geometry and
-// material can be compared without scene-specific layout becoming a variable.
+// The same shape set is used on every wallpaper so geometry and material can
+// be compared without scene-specific layout becoming a variable.
 const SHAPE_SET = [
   { shape: 'folder', fx: 0.19, fy: 0.49, size: 0.20, label: 'Folder',
     icons: [I.youtube(), I.spotify(), I.whatsapp(), I.notion()] },
@@ -69,12 +69,23 @@ const state = {
   wallZoom: 1,
   folders: [],
   dragging: null,
+  wallpaperImages: [],
+  customScene: null,
+  customObjectUrl: null,
 };
+
+function scenes() {
+  return state.customScene ? [...SCENES, state.customScene] : SCENES;
+}
+
+function currentScene() {
+  return scenes()[state.scene] || SCENES[0];
+}
 
 function layout() {
   const w = stage.clientWidth;
   const h = stage.clientHeight;
-  const sc = SCENES[state.scene];
+  const sc = currentScene();
   state.folders = sc.folders.map((f) => {
     const fw = (f.width ?? f.size) * w;
     const fh = (f.height ?? f.size) * w;
@@ -106,7 +117,7 @@ function render() {
   uiCanvas.style.width = w + 'px';
   uiCanvas.style.height = h + 'px';
 
-  renderer.buildBackdrop(SCENES[state.scene].wallpaper, state.wallZoom);
+  renderer.buildBackdrop(currentScene().wallpaper, state.wallZoom);
   renderer.drawBackdrop();
   if (state.fusion) {
     renderer.drawGlassGroup(state.folders, state.material, dpr);
@@ -219,41 +230,58 @@ const hudScene = document.getElementById('hudScene');
 const hudKind = document.getElementById('hudKind');
 const sceneCount = document.getElementById('sceneCount');
 const scenePicker = document.getElementById('scenePicker');
-SCENES.forEach((s, i) => {
-  const o = document.createElement('option');
-  o.value = i; o.textContent = s.name;
-  sceneSel.appendChild(o);
-  const card = document.createElement('button');
-  card.type = 'button';
-  card.className = 'sceneCard';
-  card.dataset.scene = i;
-  card.style.setProperty('--scene-image', `url("${WALLPAPER_FILES[i]}")`);
-  card.innerHTML = `<span>${s.name}</span><small>${s.kind}</small>`;
-  card.addEventListener('click', () => {
-    state.scene = i;
-    sceneSel.value = i;
-    syncSceneUI();
-    layout();
-    invalidate();
+const customImageInput = document.getElementById('customImage');
+const customSceneStatus = document.getElementById('customSceneStatus');
+
+function selectScene(index) {
+  state.scene = Math.max(0, Math.min(index, scenes().length - 1));
+  sceneSel.value = state.scene;
+  syncSceneUI();
+  layout();
+  invalidate();
+}
+
+function renderScenePicker() {
+  scenePicker.replaceChildren();
+  scenes().forEach((scene, i) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'sceneCard';
+    card.dataset.scene = i;
+    const imageSource = scene.custom ? state.customObjectUrl : WALLPAPER_FILES[i];
+    if (imageSource) card.style.setProperty('--scene-image', `url("${imageSource}")`);
+    card.innerHTML = `<span>${scene.name}</span><small>${scene.kind}</small>`;
+    card.addEventListener('click', () => selectScene(i));
+    scenePicker.appendChild(card);
   });
-  scenePicker.appendChild(card);
-});
+}
+
+function syncSceneOptions() {
+  sceneSel.replaceChildren();
+  scenes().forEach((scene, i) => {
+    const option = document.createElement('option');
+    option.value = i;
+    option.textContent = scene.name;
+    sceneSel.appendChild(option);
+  });
+  sceneSel.value = state.scene;
+}
+
 function syncScenePicker() {
   scenePicker.querySelectorAll('[data-scene]').forEach((button) => {
     button.classList.toggle('active', +button.dataset.scene === state.scene);
   });
 }
 function syncSceneUI() {
-  const scene = SCENES[state.scene];
+  const scene = currentScene();
   sceneKind.textContent = scene.kind;
   hudScene.textContent = scene.name;
   hudKind.textContent = `${scene.kind} / drag the shapes together and apart`;
-  sceneCount.textContent = `${String(state.scene + 1).padStart(2, '0')} / ${String(SCENES.length).padStart(2, '0')}`;
+  sceneCount.textContent = `${String(state.scene + 1).padStart(2, '0')} / ${String(scenes().length).padStart(2, '0')}`;
   syncScenePicker();
 }
 sceneSel.addEventListener('change', () => {
-  state.scene = +sceneSel.value;
-  syncSceneUI(); layout(); invalidate();
+  selectScene(+sceneSel.value);
 });
 
 function loadImage(src) {
@@ -267,11 +295,51 @@ function loadImage(src) {
 
 Promise.all(WALLPAPER_FILES.map(loadImage))
   .then((images) => {
-    renderer.setWallpapers(images);
+    state.wallpaperImages = images;
+    renderer.setWallpapers(state.customScene
+      ? [...images, state.customScene.image]
+      : images);
     document.body.classList.add('wallpapers-ready');
     invalidate();
   })
   .catch((error) => console.warn('Wallpaper loading failed; using procedural fallback.', error));
+
+customImageInput.addEventListener('change', async () => {
+  const [file] = customImageInput.files || [];
+  if (!file) return;
+  customSceneStatus.textContent = 'Loading image…';
+  let objectUrl;
+  try {
+    objectUrl = URL.createObjectURL(file);
+    const image = await loadImage(objectUrl);
+    if (state.customObjectUrl) URL.revokeObjectURL(state.customObjectUrl);
+    state.customObjectUrl = objectUrl;
+    state.customScene = {
+      name: file.name.replace(/\.[^/.]+$/, '') || 'Custom image',
+      kind: 'Custom image',
+      wallpaper: WALLPAPER_FILES.length,
+      folders: SHAPE_SET,
+      custom: true,
+      image,
+    };
+    if (state.wallpaperImages.length) {
+      renderer.setWallpapers([...state.wallpaperImages, image]);
+    }
+    renderScenePicker();
+    syncSceneOptions();
+    selectScene(scenes().length - 1);
+    customSceneStatus.textContent = 'Local image ready';
+  } catch (error) {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    customSceneStatus.textContent = 'Could not load that image';
+    console.warn('Custom image loading failed.', error);
+  } finally {
+    customImageInput.value = '';
+  }
+});
+
+renderScenePicker();
+syncSceneOptions();
 
 const iconSources = [...new Set(SHAPE_SET.flatMap((folder) => folder.icons || []).map((icon) => icon.src))];
 Promise.all(iconSources.map(loadImage))
@@ -315,10 +383,12 @@ document.querySelectorAll('[data-fusion-mode]').forEach((button) => {
     invalidate();
   });
 });
-document.getElementById('togglePanel').addEventListener('click', () => {
-  document.body.classList.toggle('hide-panel');
+function setPanelHidden(hidden) {
+  document.body.classList.toggle('hide-panel', hidden);
   requestAnimationFrame(() => { layout(); invalidate(); });
-});
+}
+document.getElementById('togglePanel').addEventListener('click', () => setPanelHidden(true));
+document.getElementById('showPanel').addEventListener('click', () => setPanelHidden(false));
 
 // ---------------------------------------------------------------- dragging
 uiCanvas.addEventListener('pointerdown', (e) => {
@@ -350,7 +420,7 @@ window.addEventListener('resize', () => { layout(); invalidate(); });
 window.__lg = {
   state, render, invalidate, layout, PRESETS, syncSliders,
   set(patch) { Object.assign(state.material, patch); syncSliders(); render(); },
-  setScene(i) { state.scene = i; sceneSel.value = i; state.wallZoom = 1; syncSceneUI(); layout(); render(); },
+  setScene(i) { state.wallZoom = 1; selectScene(i); render(); },
   focus(index, zoom = 2) {
     // isolate one folder, centred and enlarged, for close-up comparisons.
     // Every length of the material scales with the zoom, so this is a true

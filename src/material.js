@@ -56,17 +56,17 @@ export function makeMaterial(preset = 'regular') {
 }
 
 export const SLIDERS = [
-  ['radius', 0, 64, 0.5],
+  ['radius', 0, 128, 0.5],
   ['squircle', 2, 8, 0.1],
   ['mergeRadius', 0, 96, 1],
   ['bevel', 2, 40, 0.5],
   ['height', 0, 48, 0.5],
-  ['ior', 1.0, 2.0, 0.01],
+  ['ior', 1.0, 3.0, 0.01],
   ['dispersion', 0, 0.15, 0.005],
-  ['refractScale', 0, 3, 0.05],
-  ['meniscus', 0, 1, 0.05],
+  ['refractScale', 0, 6, 0.05],
+  ['meniscus', 0, 2, 0.05],
   ['blurPlateau', 0, 48, 0.5],
-  ['blurRim', 0, 48, 0.5],
+  ['blurRim', 0, 96, 0.5],
   ['opticalDensity', 0, 3, 0.05],
   ['specular', 0, 1, 0.01],
   ['specPower', 1, 40, 0.5],

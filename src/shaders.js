@@ -399,7 +399,9 @@ void main() {
   float dhdt = ct / max(h, 0.10);            // slope, clamped at the silhouette
   float slope = (uHeight / uBevel) * dhdt;
 
-  float curveSign = mix(1.0, -1.0, clamp(uMeniscus, 0.0, 1.0));
+  // 0 = convex lens, 1 = the default Apple-like concave rim. Values above 1
+  // deliberately exaggerate the inward normal for exploratory tuning.
+  float curveSign = 1.0 - 2.0 * uMeniscus;
   vec3 n = normalize(vec3(curveSign * g * slope, 1.0));
   vec3 I = vec3(0.0, 0.0, -1.0);
 
