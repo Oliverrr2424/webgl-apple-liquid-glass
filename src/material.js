@@ -20,8 +20,8 @@ export const DEFAULT_MATERIAL = {
   brightness: 0.0,
   tintAmount: 0.08,    // constant milky layer -- same for every element
   tintColor: [1.0, 1.0, 1.0],
-  shadow: 0.24,
-  shadowSize: 8.5,
+  shadow: 0.09,
+  shadowSize: 4.0,
   shadowOffset: 0,
   lightX: -0.18,
   lightY: 0.08,
