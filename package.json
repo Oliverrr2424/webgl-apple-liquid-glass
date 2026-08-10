@@ -23,7 +23,8 @@
   },
   "files": [
     "src",
-    "assets/readme"
+    "assets/readme",
+    "assets/wallpapers/abstract-lines.png"
   ],
   "scripts": {
     "serve": "python3 -m http.server 8765",
