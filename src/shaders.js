@@ -285,25 +285,34 @@ float sdPrimitive(vec2 p, vec2 halfSize, int shapeType, float radius) {
   return sdSquircle(p, halfSize, radius, max(uSquircle, 2.0));
 }
 
-float smoothUnion(float a, float b, float radius) {
-  if (radius < 0.01) return min(a, b);
-  float h = clamp(0.5 + 0.5 * (b - a) / radius, 0.0, 1.0);
-  return mix(b, a, h) - radius * h * (1.0 - h);
-}
-
 // One distance field represents the complete component group. Because the
 // normal is derived from this same field below, the meniscus, refraction and
 // highlight bend continuously through the bridge instead of exposing two
 // composited glass layers.
 float sdAppleShape(vec2 px) {
-  float d = 1e8;
+  float nearest = 1e8;
   for (int i = 0; i < MAX_SHAPES; i++) {
     if (i >= uShapeCount) break;
     float next = sdPrimitive(px - uShapeCenters[i], uShapeHalves[i],
                              uShapeTypes[i], uShapeRadii[i]);
-    d = i == 0 ? next : smoothUnion(d, next, uMergeRadius);
+    nearest = min(nearest, next);
   }
-  return d;
+
+  if (uMergeRadius < 0.01) return nearest;
+
+  // Global exponential smooth-min is associative and C-infinity. Pairwise
+  // polynomial unions are only C1 and become order-dependent with 3+ shapes;
+  // their curvature boundaries show up as diagonal tears under sharp glass
+  // highlights. 0.36 matches the polynomial union's depth at equal distances.
+  float scale = max(uMergeRadius * 0.36, 0.01);
+  float sum = 0.0;
+  for (int i = 0; i < MAX_SHAPES; i++) {
+    if (i >= uShapeCount) break;
+    float next = sdPrimitive(px - uShapeCenters[i], uShapeHalves[i],
+                             uShapeTypes[i], uShapeRadii[i]);
+    sum += exp(-(next - nearest) / scale);
+  }
+  return nearest - scale * log(max(sum, 1e-6));
 }
 
 vec4 sampleBg(vec2 px, float lod) {
@@ -313,6 +322,13 @@ vec4 sampleBg(vec2 px, float lod) {
 
 float luminance(vec3 c) {
   return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+vec2 softLimitOffset(vec2 offset, float limit) {
+  float magnitude = length(offset);
+  if (magnitude < 1e-4) return offset;
+  float limited = tanh(magnitude / max(limit, 1.0)) * limit;
+  return offset * (limited / magnitude);
 }
 
 // Variable-radius blur, radius in device px.
@@ -369,7 +385,7 @@ void main() {
   float aa = smoothstep(0.8, -0.8, d);
 
   // ---- gradient of the SDF = outward direction of the surface -------------
-  float k = 1.0;
+  float k = max(1.0, 0.06 * uBevel);
   float dx = sdAppleShape(px + vec2(k, 0.0)) -
              sdAppleShape(px - vec2(k, 0.0));
   float dy = sdAppleShape(px + vec2(0.0, k)) -
@@ -402,6 +418,16 @@ void main() {
     dB = (R == vec3(0.0)) ? vec2(0.0) : R.xy / max(-R.z, 0.25) * path;
   }
 
+  // Strong concave meniscus normals can make the screen-space mapping fold
+  // over itself at multi-shape junctions. On hard-edged wallpapers that reads
+  // as triangular tearing rather than refraction. Compress only the extreme
+  // tail; ordinary offsets remain almost linear while caustic spikes stay
+  // within a bevel-sized optical footprint.
+  float maxDisplacement = max(1.15 * uBevel, 12.0);
+  dR = softLimitOffset(dR, maxDisplacement);
+  dG = softLimitOffset(dG, maxDisplacement);
+  dB = softLimitOffset(dB, maxDisplacement);
+
   // ---- scattering: rim stays readable, plateau is frosted ----------------
   float radius = mix(uBlurRim, uBlurPlateau, smoothstep(0.0, 0.85, t));
 
@@ -424,26 +450,28 @@ void main() {
   float fres = 0.04 + 0.96 * pow(1.0 - n.z, 5.0);
   vec2 nn = normalize(n.xy + 1e-6);
 
-  // Probe a coarse ring just outside THIS element. Its luminance gradient is
-  // a cheap screen-space estimate of the dominant surrounding light, so two
-  // folders in different parts of the wallpaper no longer receive identical
-  // highlights. The old uLightDir remains a fallback for flat backgrounds.
+  // Probe the wallpaper around this fragment rather than around either the
+  // union bounds or a selected primitive. The field is continuous in screen
+  // space, so there are no Voronoi ownership seams through fused components;
+  // and a remote component moving cannot affect samples under this one.
   float probeLod = min(3.5, uMips - 1.0);
-  vec2 probe = uHalf + vec2(max(0.65 * uBevel, 8.0));
-  vec3 envL = sampleBg(uCenter + vec2(-probe.x, 0.0), probeLod).rgb;
-  vec3 envR = sampleBg(uCenter + vec2( probe.x, 0.0), probeLod).rgb;
-  vec3 envB = sampleBg(uCenter + vec2(0.0, -probe.y), probeLod).rgb;
-  vec3 envT = sampleBg(uCenter + vec2(0.0,  probe.y), probeLod).rgb;
+  float probeRadius = max(1.35 * uBevel, 18.0);
+  vec3 envL = sampleBg(px + vec2(-probeRadius, 0.0), probeLod).rgb;
+  vec3 envR = sampleBg(px + vec2( probeRadius, 0.0), probeLod).rgb;
+  vec3 envB = sampleBg(px + vec2(0.0, -probeRadius), probeLod).rgb;
+  vec3 envT = sampleBg(px + vec2(0.0,  probeRadius), probeLod).rgb;
   float lumL = luminance(envL), lumR = luminance(envR);
   float lumB = luminance(envB), lumT = luminance(envT);
   vec2 envGradient = vec2(lumR - lumL, lumT - lumB);
   float envContrast = length(envGradient);
   vec2 fallbackLight = normalize(uLightDir + vec2(1e-5));
-  vec2 inferredLight = envContrast > 1e-4
-                     ? envGradient / envContrast : fallbackLight;
   float lightAdapt = clamp(uHighlightAdapt, 0.0, 1.0) *
                      smoothstep(0.025, 0.22, envContrast);
-  vec2 lightDir = normalize(mix(fallbackLight, inferredLight, lightAdapt));
+  // Keep the lobe direction material-local. Steering it with the wallpaper
+  // gradient creates a rapidly rotating direction field around hard colour
+  // edges, which appears as diagonal tears and lets unrelated components alter
+  // each other's highlights. The environment still adapts strength and colour.
+  vec2 lightDir = fallbackLight;
 
   // Reflect the colour seen in the surface-normal direction. A local sample
   // keeps small bright structures (tower lights, clouds, coastlines) attached
@@ -475,8 +503,7 @@ void main() {
                    (1.0 - smoothstep(0.61 * highlightWidth,
                                      highlightWidth, t));
   float baseHighlight = clamp(uHighlightBase, 0.0, 1.0);
-  float sourceStrength = baseHighlight + (1.0 - baseHighlight) *
-                         smoothstep(0.025, 0.20, envContrast);
+  float sourceStrength = baseHighlight + (1.0 - baseHighlight) * lightAdapt;
   vec3 sourceEnv = mix(mix(envL, envR, 0.5 + 0.5 * lightDir.x),
                        mix(envB, envT, 0.5 + 0.5 * lightDir.y), 0.5);
   float sourceLum = max(luminance(sourceEnv), 0.08);
