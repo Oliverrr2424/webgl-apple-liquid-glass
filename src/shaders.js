@@ -226,8 +226,13 @@ uniform sampler2D uSrc;      // blurred mip chain of the backdrop
 uniform vec2  uRes;
 uniform vec2  uCenter;       // element centre, px (y up)
 uniform vec2  uHalf;         // element half size, px
-uniform int   uShapeType;    // 0 square/rect folder, 1 capsule, 2 circle
-uniform float uRadius;       // corner radius, px
+const int MAX_SHAPES = 16;
+uniform int   uShapeCount;
+uniform vec2  uShapeCenters[MAX_SHAPES];
+uniform vec2  uShapeHalves[MAX_SHAPES];
+uniform int   uShapeTypes[MAX_SHAPES]; // 0 square/rect, 1 capsule, 2 circle
+uniform float uShapeRadii[MAX_SHAPES];
+uniform float uMergeRadius;  // smooth-union reach, px
 uniform float uSquircle;     // superellipse exponent (2 = circular corners)
 uniform float uBevel;        // width of the refracting rim, px
 uniform float uHeight;       // glass height / optical thickness, px
@@ -266,18 +271,39 @@ float sdSquircle(vec2 p, vec2 b, float r, float n) {
   return min(max(q.x, q.y), 0.0) + e - r;
 }
 
-float sdAppleShape(vec2 p) {
-  if (uShapeType == 2) {
+float sdPrimitive(vec2 p, vec2 halfSize, int shapeType, float radius) {
+  if (shapeType == 2) {
     // Circle is invariant: layout cannot turn it into an ellipse.
-    return length(p) - min(uHalf.x, uHalf.y);
+    return length(p) - min(halfSize.x, halfSize.y);
   }
-  if (uShapeType == 1) {
+  if (shapeType == 1) {
     // Apple's capsule rule: end-cap radius is exactly half the short side.
-    return sdSquircle(p, uHalf, min(uHalf.x, uHalf.y), 2.0);
+    return sdSquircle(p, halfSize, min(halfSize.x, halfSize.y), 2.0);
   }
   // Square and rectangular folders share the same fixed-radius corner model;
   // only their bounding boxes differ. The default exponent is 2 per reference.
-  return sdSquircle(p, uHalf, uRadius, max(uSquircle, 2.0));
+  return sdSquircle(p, halfSize, radius, max(uSquircle, 2.0));
+}
+
+float smoothUnion(float a, float b, float radius) {
+  if (radius < 0.01) return min(a, b);
+  float h = clamp(0.5 + 0.5 * (b - a) / radius, 0.0, 1.0);
+  return mix(b, a, h) - radius * h * (1.0 - h);
+}
+
+// One distance field represents the complete component group. Because the
+// normal is derived from this same field below, the meniscus, refraction and
+// highlight bend continuously through the bridge instead of exposing two
+// composited glass layers.
+float sdAppleShape(vec2 px) {
+  float d = 1e8;
+  for (int i = 0; i < MAX_SHAPES; i++) {
+    if (i >= uShapeCount) break;
+    float next = sdPrimitive(px - uShapeCenters[i], uShapeHalves[i],
+                             uShapeTypes[i], uShapeRadii[i]);
+    d = i == 0 ? next : smoothUnion(d, next, uMergeRadius);
+  }
+  return d;
 }
 
 vec4 sampleBg(vec2 px, float lod) {
@@ -338,17 +364,16 @@ vec3 blurBg(vec2 px, float radius) {
 
 void main() {
   vec2 px = vUV * uRes;
-  vec2 p  = px - uCenter;
 
-  float d = sdAppleShape(p);
+  float d = sdAppleShape(px);
   float aa = smoothstep(0.8, -0.8, d);
 
   // ---- gradient of the SDF = outward direction of the surface -------------
   float k = 1.0;
-  float dx = sdAppleShape(p + vec2(k, 0.0)) -
-             sdAppleShape(p - vec2(k, 0.0));
-  float dy = sdAppleShape(p + vec2(0.0, k)) -
-             sdAppleShape(p - vec2(0.0, k));
+  float dx = sdAppleShape(px + vec2(k, 0.0)) -
+             sdAppleShape(px - vec2(k, 0.0));
+  float dy = sdAppleShape(px + vec2(0.0, k)) -
+             sdAppleShape(px - vec2(0.0, k));
   vec2 g = normalize(vec2(dx, dy) + 1e-6);
 
   // ---- thickness field / bevel profile -----------------------------------
@@ -482,7 +507,7 @@ void main() {
   col += uBright;
 
   // ---- soft contact shadow ----------------------------------------------
-  float ds = sdAppleShape(p + vec2(0.0, uShadowOffset));
+  float ds = sdAppleShape(px + vec2(0.0, uShadowOffset));
   float sh = exp(-max(ds, 0.0) / max(uShadowSize, 0.5)) * uShadow;
 
   if (uDebug == 1) col = vec3(h);

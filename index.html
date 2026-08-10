@@ -23,7 +23,8 @@
   #app { display: grid; grid-template-columns: minmax(0, 1fr) 364px; height: 100%; }
   #stage { position: relative; min-width: 0; overflow: hidden; background: #0b0c0f; }
   #gl, #ui { position: absolute; inset: 0; display: block; }
-  #ui { touch-action: none; }
+  #ui { touch-action: none; cursor: grab; }
+  #ui:active { cursor: grabbing; }
   #stageHud { position: absolute; left: 24px; bottom: 22px; pointer-events: none; text-shadow: 0 2px 16px rgba(0,0,0,.48); }
   #stageHud .eyebrow { color: rgba(255,255,255,.68); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
   #stageHud strong { display: block; margin-top: 4px; font-size: 21px; letter-spacing: -.03em; }
@@ -96,7 +97,7 @@
     <canvas id="gl"></canvas>
     <canvas id="ui"></canvas>
     <div id="loadState">Loading source imagery</div>
-    <div id="stageHud"><div class="eyebrow">LIQUID GLASS / PLAYGROUND</div><strong id="hudScene">Alpine Lake</strong><span id="hudKind">Natural landscape / drag a glass surface to explore</span></div>
+    <div id="stageHud"><div class="eyebrow">LIQUID GLASS / SMOOTH UNION</div><strong id="hudScene">Alpine Lake</strong><span id="hudKind">Natural landscape / drag the shapes together and apart</span></div>
   </div>
   <div id="panel">
     <div class="panelHead"><div><div class="kicker">Material lab</div><h1>Liquid Glass</h1><p class="subhead">A small physics playground for translucent surfaces.</p></div><span class="status">Ready</span></div>
@@ -114,8 +115,12 @@
     <div class="section">
       <div class="sectionHeader"><h2>View</h2><span class="sectionMeta" id="sceneKind">Natural landscape</span></div>
       <div class="segmented">
+        <button type="button" data-fusion-mode="on">Smooth union</button>
+        <button type="button" data-fusion-mode="off">Separate layers</button>
+      </div>
+      <div class="segmented" style="margin-top: 6px">
         <button type="button" data-icon-mode="on">With icons</button>
-        <button type="button" data-icon-mode="off">Folders only</button>
+        <button type="button" data-icon-mode="off">Glass only</button>
       </div>
       <div class="segmented" style="margin-top: 6px">
         <button type="button" data-label-mode="on">Show labels</button>
@@ -135,9 +140,9 @@
       <div class="sectionHeader"><h2>Material</h2><span class="sectionMeta">live controls</span></div>
     <div id="sliders"></div>
     </div>
-    <div class="tip">Drag a surface over a high-contrast edge to inspect refraction, blur, and highlight behavior.</div>
+    <div class="tip">Drag components together. Inside the fusion distance they form one surface, so the silhouette, refraction and highlight flow through a shared bridge.</div>
     <div class="note">
-      Shapes use folder, rect, capsule, and circle SDFs. The material combines Snell refraction, variable blur, Fresnel reflection, and contact shadows.
+      Nearby folder, rect, capsule, and circle SDFs are smoothly unioned before the material is shaded. Up to 16 components can share one liquid surface.
     </div>
   </div>
 </div>
