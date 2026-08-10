@@ -18,7 +18,10 @@ WebGL2 is required. Give the canvas a CSS width and height before rendering.
 import { LiquidGlassWebGL } from 'apple-liquid-glass-webgl';
 
 const canvas = document.querySelector('canvas');
-const glass = new LiquidGlassWebGL(canvas, { material: 'regular' });
+const glass = new LiquidGlassWebGL(canvas, {
+  material: 'regular',
+  fusion: true,
+});
 
 await glass.setWallpaper('/images/wallpaper.jpg');
 glass.setElements([
@@ -36,6 +39,14 @@ The component accepts CSS-pixel coordinates. Content such as app icons, labels, 
 
 These screenshots are captured from the playground with the inspector hidden. Each scene uses the same folder, rect, pill, and circle surfaces:
 
+### Smooth-union fusion
+
+Nearby components can share one continuous distance field, so the silhouette, refraction, highlights, and shadow flow through the merged surface.
+
+![Smooth-union liquid glass fusion](https://cdn.jsdelivr.net/npm/apple-liquid-glass-webgl@0.1.7/assets/readme/smooth-union.jpg)
+
+### Individual scene previews
+
 | Natural landscape | Abstract lines |
 | --- | --- |
 | ![Natural landscape](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/natural-lake.jpg) | ![Abstract lines](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/abstract-lines.jpg) |
@@ -49,6 +60,7 @@ These screenshots are captured from the playground with the inspector hidden. Ea
 ```js
 glass.setMaterial('clear');
 glass.setMaterial({ blurPlateau: 4, edgeLine: 0.2 });
+glass.setFusion(true, 52); // smooth-union distance in CSS pixels
 glass.setWallpaperIndex(0);
 glass.addElement({ id: 'new-folder', shape: 'folder', x: 20, y: 20, size: 180 });
 glass.updateElement('new-folder', { x: 40 });
@@ -57,7 +69,7 @@ glass.resize();
 glass.destroy();
 ```
 
-Available presets are `regular`, `clear`, and `lens`. Available shapes are `folder`, `rect`, `pill`, and `circle`.
+Available presets are `regular`, `clear`, and `lens`. Available shapes are `folder`, `rect`, `pill`, and `circle`. With `fusion` enabled, up to 16 nearby elements are evaluated as one smooth-union distance field, so their silhouette, normals, refraction, highlights, and shadow merge continuously.
 
 ## Playground
 

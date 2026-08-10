@@ -58,6 +58,7 @@ export class LiquidGlassWebGL {
       ? makeMaterial(options.material)
       : { ...makeMaterial('regular'), ...(options.material || {}) };
     this.elements = [];
+    this.fusion = Boolean(options.fusion ?? false);
     this.wallpaperIndex = 0;
     this.wallpaperZoom = options.wallpaperZoom ?? 1;
     if (options.elements) this.setElements(options.elements, false);
@@ -99,6 +100,13 @@ export class LiquidGlassWebGL {
     return this;
   }
 
+  setFusion(enabled, mergeRadius = this.material.mergeRadius, shouldRender = true) {
+    this.fusion = Boolean(enabled);
+    if (Number.isFinite(mergeRadius)) this.material.mergeRadius = Math.max(0, mergeRadius);
+    if (shouldRender) this.render();
+    return this;
+  }
+
   setWallpapers(images, shouldRender = true) {
     this.renderer.setWallpapers(images);
     if (shouldRender) this.render();
@@ -133,8 +141,12 @@ export class LiquidGlassWebGL {
     const { dpr } = this.resize(width, height);
     this.renderer.buildBackdrop(this.wallpaperIndex, this.wallpaperZoom);
     this.renderer.drawBackdrop();
-    for (const element of this.elements) {
-      this.renderer.drawGlass(element, this.material, dpr);
+    if (this.fusion) {
+      this.renderer.drawGlassGroup(this.elements, this.material, dpr);
+    } else {
+      for (const element of this.elements) {
+        this.renderer.drawGlass(element, this.material, dpr);
+      }
     }
     return this;
   }

@@ -16,6 +16,7 @@ export interface LiquidGlassElement {
 
 export interface LiquidGlassOptions {
   material?: LiquidGlassPreset | Record<string, unknown>;
+  fusion?: boolean;
   wallpaperZoom?: number;
   wallpapers?: Array<CanvasImageSource>;
   elements?: LiquidGlassElement[];
@@ -40,6 +41,7 @@ export declare class LiquidGlassWebGL {
   updateElement(id: string, patch: LiquidGlassElement): this;
   removeElement(id: string): this;
   setMaterial(materialOrPreset: LiquidGlassPreset | Record<string, unknown>): this;
+  setFusion(enabled: boolean, mergeRadius?: number): this;
   setWallpapers(images: CanvasImageSource[]): this;
   loadWallpapers(sources: Array<string | CanvasImageSource>): Promise<this>;
   setWallpaper(source: string | CanvasImageSource): Promise<this>;

@@ -30,6 +30,7 @@ function program(gl, vs, fs) {
 }
 
 export const MIPS = 7;
+export const MAX_GLASS_SHAPES = 16;
 
 export class GlassRenderer {
   constructor(canvas) {
@@ -162,10 +163,24 @@ export class GlassRenderer {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  // element: {x, y, w, h, shape} in CSS pixels, y measured from the TOP.
-  drawGlass(element, m, dpr) {
+  // elements: {x, y, w, h, shape} in CSS pixels, y measured from the TOP.
+  // The group is evaluated as a single smooth-union SDF. This is important:
+  // compositing independent glass draws can overlap, but can never produce the
+  // shared silhouette and continuous normals of one fused liquid surface.
+  drawGlassGroup(elements, m, dpr, mergeRadius = m.mergeRadius ?? 0) {
+    if (!elements.length) return;
+
     const gl = this.gl;
     const { loc, p } = this.progGlass;
+    const shapes = elements.slice(0, MAX_GLASS_SHAPES);
+
+    const minX = Math.min(...shapes.map((element) => element.x));
+    const minY = Math.min(...shapes.map((element) => element.y));
+    const maxX = Math.max(...shapes.map((element) => element.x + element.w));
+    const maxY = Math.max(...shapes.map((element) => element.y + element.h));
+    const groupWidth = maxX - minX;
+    const groupHeight = maxY - minY;
+
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.w, this.h);
     gl.enable(gl.BLEND);
@@ -173,10 +188,24 @@ export class GlassRenderer {
     gl.bindVertexArray(this.quad);
     gl.useProgram(p);
 
-    const cx = (element.x + element.w / 2) * dpr;
-    const cy = this.h - (element.y + element.h / 2) * dpr;
-    const hw = (element.w / 2) * dpr;
-    const hh = (element.h / 2) * dpr;
+    const cx = (minX + groupWidth / 2) * dpr;
+    const cy = this.h - (minY + groupHeight / 2) * dpr;
+    const hw = (groupWidth / 2) * dpr;
+    const hh = (groupHeight / 2) * dpr;
+    const centers = new Float32Array(MAX_GLASS_SHAPES * 2);
+    const halves = new Float32Array(MAX_GLASS_SHAPES * 2);
+    const radii = new Float32Array(MAX_GLASS_SHAPES);
+    const types = new Int32Array(MAX_GLASS_SHAPES);
+
+    shapes.forEach((element, i) => {
+      const short = Math.min(element.w, element.h);
+      centers[i * 2] = (element.x + element.w / 2) * dpr;
+      centers[i * 2 + 1] = this.h - (element.y + element.h / 2) * dpr;
+      halves[i * 2] = element.w / 2 * dpr;
+      halves[i * 2 + 1] = element.h / 2 * dpr;
+      radii[i] = Math.min(element.radius ?? m.radius, short * 0.235) * dpr;
+      types[i] = element.shape === 'pill' ? 1 : element.shape === 'circle' ? 2 : 0;
+    });
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.tex);
@@ -184,10 +213,13 @@ export class GlassRenderer {
     gl.uniform2f(loc.uRes, this.w, this.h);
     gl.uniform2f(loc.uCenter, cx, cy);
     gl.uniform2f(loc.uHalf, hw, hh);
-    gl.uniform1i(loc.uShapeType,
-      element.shape === 'pill' ? 1 : element.shape === 'circle' ? 2 : 0);
-    gl.uniform1f(loc.uPad, (m.shadowSize * 4 + 8) * dpr);
-    gl.uniform1f(loc.uRadius, m.radius * dpr);
+    gl.uniform1i(loc.uShapeCount, shapes.length);
+    gl.uniform2fv(loc.uShapeCenters, centers);
+    gl.uniform2fv(loc.uShapeHalves, halves);
+    gl.uniform1iv(loc.uShapeTypes, types);
+    gl.uniform1fv(loc.uShapeRadii, radii);
+    gl.uniform1f(loc.uMergeRadius, Math.max(0, mergeRadius) * dpr);
+    gl.uniform1f(loc.uPad, (m.shadowSize * 4 + Math.max(mergeRadius, 0) * 0.3 + 8) * dpr);
     gl.uniform1f(loc.uSquircle, m.squircle);
     gl.uniform1f(loc.uBevel, m.bevel * dpr);
     gl.uniform1f(loc.uHeight, m.height * dpr);
@@ -221,6 +253,10 @@ export class GlassRenderer {
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.disable(gl.BLEND);
+  }
+
+  drawGlass(element, m, dpr) {
+    this.drawGlassGroup([element], m, dpr, 0);
   }
 
   destroy() {

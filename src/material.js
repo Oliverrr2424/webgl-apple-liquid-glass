@@ -2,6 +2,7 @@
 export const DEFAULT_MATERIAL = {
   radius: 64,          // corner radius (clamped to 23.5% of the side)
   squircle: 2.0,       // Folder corner exponent selected from the references
+  mergeRadius: 52,     // smooth-union reach between nearby components
   bevel: 34,           // width of the refracting rim
   height: 21,          // optical thickness of the slab
   ior: 2.0,            // effective IOR after screen-space calibration
@@ -19,8 +20,8 @@ export const DEFAULT_MATERIAL = {
   brightness: 0.0,
   tintAmount: 0.08,    // constant milky layer -- same for every element
   tintColor: [1.0, 1.0, 1.0],
-  shadow: 0.24,
-  shadowSize: 8.5,
+  shadow: 0.09,
+  shadowSize: 4.0,
   shadowOffset: 0,
   lightX: -0.18,
   lightY: 0.08,
@@ -57,6 +58,7 @@ export function makeMaterial(preset = 'regular') {
 export const SLIDERS = [
   ['radius', 0, 64, 0.5],
   ['squircle', 2, 8, 0.1],
+  ['mergeRadius', 0, 96, 1],
   ['bevel', 2, 40, 0.5],
   ['height', 0, 48, 0.5],
   ['ior', 1.0, 2.0, 0.01],

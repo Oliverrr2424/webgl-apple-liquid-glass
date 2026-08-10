@@ -21,14 +21,14 @@ const I = {
 // The same four-shape test set is used on every wallpaper so geometry and
 // material can be compared without scene-specific layout becoming a variable.
 const SHAPE_SET = [
-  { shape: 'folder', fx: 0.17, fy: 0.44, size: 0.20, label: 'Folder',
+  { shape: 'folder', fx: 0.19, fy: 0.49, size: 0.20, label: 'Folder',
     icons: [I.youtube(), I.spotify(), I.whatsapp(), I.notion()] },
-  { shape: 'rect', fx: 0.43, fy: 0.44, width: 0.24, height: 0.17,
+  { shape: 'rect', fx: 0.47, fy: 0.52, width: 0.24, height: 0.18,
     label: 'Rect',
     icons: [I.figma(), I.github(), I.photos(), I.spotify()] },
-  { shape: 'pill', fx: 0.69, fy: 0.44, width: 0.22, height: 0.12,
+  { shape: 'pill', fx: 0.68, fy: 0.48, width: 0.22, height: 0.12,
     label: 'Pill', content: 'Continue' },
-  { shape: 'circle', fx: 0.90, fy: 0.44, size: 0.12,
+  { shape: 'circle', fx: 0.37, fy: 0.37, size: 0.13,
     label: 'Circle', content: '+' },
 ];
 
@@ -63,8 +63,9 @@ const SCENES = [
 const state = {
   scene: 0,
   material: makeMaterial('regular'),
-  showIcons: true,
-  showLabels: true,
+  showIcons: false,
+  showLabels: false,
+  fusion: true,
   wallZoom: 1,
   folders: [],
   dragging: null,
@@ -107,8 +108,12 @@ function render() {
 
   renderer.buildBackdrop(SCENES[state.scene].wallpaper, state.wallZoom);
   renderer.drawBackdrop();
-  for (const f of state.folders) {
-    renderer.drawGlass(f, { ...state.material, radius: radiusFor(f) }, dpr);
+  if (state.fusion) {
+    renderer.drawGlassGroup(state.folders, state.material, dpr);
+  } else {
+    for (const f of state.folders) {
+      renderer.drawGlass(f, { ...state.material, radius: radiusFor(f) }, dpr);
+    }
   }
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -130,13 +135,13 @@ function invalidate() {
 const panel = document.getElementById('sliders');
 const inputs = {};
 const SLIDER_GROUPS = {
-  geometry: new Set(['radius', 'squircle', 'bevel', 'height']),
+  geometry: new Set(['radius', 'squircle', 'mergeRadius', 'bevel', 'height']),
   optics: new Set(['ior', 'dispersion', 'refractScale', 'meniscus', 'blurPlateau', 'blurRim', 'opticalDensity']),
   lighting: new Set(['specular', 'specPower', 'highlightAdapt', 'highlightWidth', 'highlightSharpness', 'highlightBase', 'fresnel', 'saturation', 'brightness', 'tintAmount']),
   edge: new Set(['shadow', 'shadowSize', 'shadowOffset', 'lightX', 'lightY', 'edgeLine', 'edgeWidth', 'edgeDark']),
 };
 const SLIDER_LABELS = {
-  radius: 'Corner radius', squircle: 'Corner shape', bevel: 'Bevel width', height: 'Optical height',
+  radius: 'Corner radius', squircle: 'Corner shape', mergeRadius: 'Fusion distance', bevel: 'Bevel width', height: 'Optical height',
   ior: 'Index of refraction', dispersion: 'Chromatic spread', refractScale: 'Refraction scale',
   meniscus: 'Meniscus curve', blurPlateau: 'Plateau blur', blurRim: 'Rim blur', opticalDensity: 'Optical density',
   specular: 'Specular', specPower: 'Specular power', highlightAdapt: 'Light adaptation',
@@ -242,7 +247,7 @@ function syncSceneUI() {
   const scene = SCENES[state.scene];
   sceneKind.textContent = scene.kind;
   hudScene.textContent = scene.name;
-  hudKind.textContent = `${scene.kind} / drag a glass surface to explore`;
+  hudKind.textContent = `${scene.kind} / drag the shapes together and apart`;
   sceneCount.textContent = `${String(state.scene + 1).padStart(2, '0')} / ${String(SCENES.length).padStart(2, '0')}`;
   syncScenePicker();
 }
@@ -285,6 +290,9 @@ function syncViewButtons() {
   document.querySelectorAll('[data-label-mode]').forEach((button) => {
     button.classList.toggle('active', (button.dataset.labelMode === 'on') === state.showLabels);
   });
+  document.querySelectorAll('[data-fusion-mode]').forEach((button) => {
+    button.classList.toggle('active', (button.dataset.fusionMode === 'on') === state.fusion);
+  });
 }
 document.querySelectorAll('[data-icon-mode]').forEach((button) => {
   button.addEventListener('click', () => {
@@ -296,6 +304,13 @@ document.querySelectorAll('[data-icon-mode]').forEach((button) => {
 document.querySelectorAll('[data-label-mode]').forEach((button) => {
   button.addEventListener('click', () => {
     state.showLabels = button.dataset.labelMode === 'on';
+    syncViewButtons();
+    invalidate();
+  });
+});
+document.querySelectorAll('[data-fusion-mode]').forEach((button) => {
+  button.addEventListener('click', () => {
+    state.fusion = button.dataset.fusionMode === 'on';
     syncViewButtons();
     invalidate();
   });
