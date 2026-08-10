@@ -39,6 +39,14 @@ The component accepts CSS-pixel coordinates. Content such as app icons, labels, 
 
 These screenshots are captured from the playground with the inspector hidden. Each scene uses the same folder, rect, pill, and circle surfaces:
 
+### Smooth-union fusion
+
+Nearby components can share one continuous distance field, so the silhouette, refraction, highlights, and shadow flow through the merged surface.
+
+![Smooth-union liquid glass fusion](https://cdn.jsdelivr.net/npm/apple-liquid-glass-webgl@0.1.7/assets/readme/smooth-union.jpg)
+
+### Individual scene previews
+
 | Natural landscape | Abstract lines |
 | --- | --- |
 | ![Natural landscape](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/natural-lake.jpg) | ![Abstract lines](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/abstract-lines.jpg) |
