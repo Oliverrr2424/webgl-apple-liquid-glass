@@ -172,7 +172,7 @@ npm install
 npm run serve
 ```
 
-Open [http://localhost:8765](http://localhost:8765). The inspector includes scene previews, icon visibility, labels, debug shader outputs, and grouped material controls.
+Open [http://localhost:8765](http://localhost:8765). The inspector includes scene previews, local image or looping-video uploads, icon visibility, labels, debug shader outputs, and grouped material controls.
 
 ## Development
 

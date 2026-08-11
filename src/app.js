@@ -230,13 +230,87 @@ const hudScene = document.getElementById('hudScene');
 const hudKind = document.getElementById('hudKind');
 const sceneCount = document.getElementById('sceneCount');
 const scenePicker = document.getElementById('scenePicker');
-const customImageInput = document.getElementById('customImage');
+const customMediaInput = document.getElementById('customMedia');
 const customSceneStatus = document.getElementById('customSceneStatus');
+let backdropSetKey = '';
+let liveMediaSource = null;
+let liveMediaFrame = 0;
+let liveMediaFrameKind = '';
+
+function stopLiveMedia() {
+  if (liveMediaFrame) {
+    if (liveMediaFrameKind === 'video' && liveMediaSource?.cancelVideoFrameCallback) {
+      liveMediaSource.cancelVideoFrameCallback(liveMediaFrame);
+    } else {
+      cancelAnimationFrame(liveMediaFrame);
+    }
+  }
+  liveMediaFrame = 0;
+  liveMediaFrameKind = '';
+  liveMediaSource?.pause?.();
+  liveMediaSource = null;
+}
+
+function scheduleLiveMediaFrame(video) {
+  if (liveMediaSource !== video || !currentScene().custom || currentScene().source !== video) return;
+  const draw = () => {
+    liveMediaFrame = 0;
+    if (liveMediaSource !== video || document.hidden) return;
+    render();
+    scheduleLiveMediaFrame(video);
+  };
+  if (typeof video.requestVideoFrameCallback === 'function') {
+    liveMediaFrameKind = 'video';
+    liveMediaFrame = video.requestVideoFrameCallback(draw);
+  } else {
+    liveMediaFrameKind = 'animation';
+    liveMediaFrame = requestAnimationFrame(draw);
+  }
+}
+
+function startLiveMedia(video) {
+  if (liveMediaSource === video && liveMediaFrame) return;
+  stopLiveMedia();
+  liveMediaSource = video;
+  video.play()
+    .then(() => {
+      if (liveMediaSource !== video) return;
+      customSceneStatus.textContent = 'Looping video · live';
+      scheduleLiveMediaFrame(video);
+    })
+    .catch((error) => {
+      customSceneStatus.textContent = 'Video ready · select scene to play';
+      console.warn('Custom video autoplay was blocked.', error);
+    });
+}
+
+function syncBackdropForScene() {
+  const scene = currentScene();
+  if (scene.custom) {
+    const update = scene.mediaType === 'video' ? 'live' : 'static';
+    const nextKey = `custom:${state.customObjectUrl}`;
+    if (backdropSetKey !== nextKey) {
+      renderer.setWallpapers([scene.source], { update });
+      backdropSetKey = nextKey;
+    }
+    scene.wallpaper = 0;
+    if (scene.mediaType === 'video') startLiveMedia(scene.source);
+    else stopLiveMedia();
+    return;
+  }
+
+  stopLiveMedia();
+  if (state.wallpaperImages.length && backdropSetKey !== 'builtins') {
+    renderer.setWallpapers(state.wallpaperImages);
+    backdropSetKey = 'builtins';
+  }
+}
 
 function selectScene(index) {
   state.scene = Math.max(0, Math.min(index, scenes().length - 1));
   sceneSel.value = state.scene;
   syncSceneUI();
+  syncBackdropForScene();
   layout();
   invalidate();
 }
@@ -248,7 +322,7 @@ function renderScenePicker() {
     card.type = 'button';
     card.className = 'sceneCard';
     card.dataset.scene = i;
-    const imageSource = scene.custom ? state.customObjectUrl : WALLPAPER_FILES[i];
+    const imageSource = scene.custom ? scene.previewUrl : WALLPAPER_FILES[i];
     if (imageSource) card.style.setProperty('--scene-image', `url("${imageSource}")`);
     card.innerHTML = `<span>${scene.name}</span><small>${scene.kind}</small>`;
     card.addEventListener('click', () => selectScene(i));
@@ -293,49 +367,92 @@ function loadImage(src) {
   });
 }
 
+function loadVideo(src) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.onloadeddata = () => resolve(video);
+    video.onerror = () => reject(new Error('The browser could not decode this video.'));
+    video.src = src;
+    video.load();
+  });
+}
+
+function makeVideoPreview(video) {
+  const canvas = document.createElement('canvas');
+  const scale = Math.min(1, 360 / Math.max(video.videoWidth, 1));
+  canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+  canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.82);
+}
+
 Promise.all(WALLPAPER_FILES.map(loadImage))
   .then((images) => {
     state.wallpaperImages = images;
-    renderer.setWallpapers(state.customScene
-      ? [...images, state.customScene.image]
-      : images);
+    backdropSetKey = '';
+    syncBackdropForScene();
     document.body.classList.add('wallpapers-ready');
     invalidate();
   })
   .catch((error) => console.warn('Wallpaper loading failed; using procedural fallback.', error));
 
-customImageInput.addEventListener('change', async () => {
-  const [file] = customImageInput.files || [];
+customMediaInput.addEventListener('change', async () => {
+  const [file] = customMediaInput.files || [];
   if (!file) return;
-  customSceneStatus.textContent = 'Loading image…';
+  const mediaType = file.type.startsWith('video/') ? 'video'
+    : file.type.startsWith('image/') ? 'image' : '';
+  if (!mediaType) {
+    customSceneStatus.textContent = 'Choose an image or video file';
+    customMediaInput.value = '';
+    return;
+  }
+  customSceneStatus.textContent = mediaType === 'video' ? 'Loading video…' : 'Loading image…';
   let objectUrl;
+  let source;
   try {
     objectUrl = URL.createObjectURL(file);
-    const image = await loadImage(objectUrl);
-    if (state.customObjectUrl) URL.revokeObjectURL(state.customObjectUrl);
+    source = mediaType === 'video' ? await loadVideo(objectUrl) : await loadImage(objectUrl);
+    const previousObjectUrl = state.customObjectUrl;
+    stopLiveMedia();
     state.customObjectUrl = objectUrl;
     state.customScene = {
-      name: file.name.replace(/\.[^/.]+$/, '') || 'Custom image',
-      kind: 'Custom image',
-      wallpaper: WALLPAPER_FILES.length,
+      name: file.name.replace(/\.[^/.]+$/, '') || `Custom ${mediaType}`,
+      kind: mediaType === 'video' ? 'Dynamic video' : 'Custom image',
+      wallpaper: 0,
       folders: SHAPE_SET,
       custom: true,
-      image,
+      mediaType,
+      source,
+      previewUrl: mediaType === 'video' ? makeVideoPreview(source) : objectUrl,
     };
-    if (state.wallpaperImages.length) {
-      renderer.setWallpapers([...state.wallpaperImages, image]);
-    }
+    backdropSetKey = '';
+    if (previousObjectUrl) URL.revokeObjectURL(previousObjectUrl);
     renderScenePicker();
     syncSceneOptions();
     selectScene(scenes().length - 1);
-    customSceneStatus.textContent = 'Local image ready';
+    if (mediaType === 'image') customSceneStatus.textContent = 'Local image ready';
   } catch (error) {
+    source?.pause?.();
     if (objectUrl) URL.revokeObjectURL(objectUrl);
-    customSceneStatus.textContent = 'Could not load that image';
-    console.warn('Custom image loading failed.', error);
+    customSceneStatus.textContent = `Could not load that ${mediaType || 'file'}`;
+    console.warn('Custom scene loading failed.', error);
   } finally {
-    customImageInput.value = '';
+    customMediaInput.value = '';
   }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopLiveMedia();
+  else syncBackdropForScene();
+});
+
+window.addEventListener('beforeunload', () => {
+  stopLiveMedia();
+  if (state.customObjectUrl) URL.revokeObjectURL(state.customObjectUrl);
 });
 
 renderScenePicker();
