@@ -261,7 +261,7 @@ npm run pack:check
 
 `tests/*.test.mjs` are Node unit tests over the geometry and material rules. `tests/*.html` are browser pages, each exporting `window.runTest()`; they cover live and static backdrops, context loss and recovery, and the dirty-tracking contract by counting draw calls.
 
-Visual regression forces ANGLE's SwiftShader backend so local development and Linux CI compare against the same deterministic renderer. Baselines live in `shots/baseline/<renderer>/`; a missing baseline fails the run, and rejected frames are written to `shots/tmp-*.png`.
+Visual regression forces ANGLE's deterministic SwiftShader backend. Baselines live in `shots/baseline/<renderer>/`; Linux's Subzero JIT and macOS's LLVM JIT have separate golden sets because a small number of edge pixels round differently. A missing baseline fails the run, and rejected frames are written to `shots/tmp-*.png`.
 
 ## Automated npm publishing
 

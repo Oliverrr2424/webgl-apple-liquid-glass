@@ -8,9 +8,10 @@
 // is the regression that matters most - and the one that eyeballing misses.
 //
 // Visual CI deliberately uses SwiftShader. A software renderer is slower, but
-// it gives macOS development and Linux Actions the same repeatable target. A
-// missing baseline is an error: silently accepting one would turn this gate
-// into a no-op on every machine except the one that recorded the images.
+// it gives each platform a repeatable target. SwiftShader's LLVM and Subzero
+// JITs round a small number of edge pixels differently, so each has an explicit
+// baseline. A missing baseline is an error: silently accepting one would turn
+// this gate into a no-op on every machine except the one that recorded images.
 import { createServer } from 'node:http';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -176,10 +177,13 @@ try {
     const info = gl.getExtension('WEBGL_debug_renderer_info');
     return info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
   });
-  // SwiftShader reports its platform JIT in the renderer string (LLVM on
-  // macOS, Subzero on Linux). That implementation detail does not identify a
-  // different renderer and must not select a different golden-image set.
-  const fingerprint = /swiftshader/i.test(renderer) ? 'swiftshader' : slug(renderer);
+  // The SwiftShader JIT affects sub-pixel rounding: macOS currently reports
+  // LLVM while Linux Actions reports Subzero. Use short, stable identifiers
+  // instead of the full ANGLE string, but keep their strict baselines separate.
+  const rendererName = renderer.toLowerCase();
+  const fingerprint = rendererName.includes('swiftshader')
+    ? `swiftshader-${rendererName.includes('subzero') ? 'subzero' : 'llvm'}`
+    : slug(renderer);
   const baselineDirectory = join(baselineRoot, fingerprint);
   console.log(`renderer: ${renderer}`);
   console.log(`baseline: shots/baseline/${fingerprint}`);
