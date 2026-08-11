@@ -176,7 +176,10 @@ try {
     const info = gl.getExtension('WEBGL_debug_renderer_info');
     return info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
   });
-  const fingerprint = slug(renderer);
+  // SwiftShader reports its platform JIT in the renderer string (LLVM on
+  // macOS, Subzero on Linux). That implementation detail does not identify a
+  // different renderer and must not select a different golden-image set.
+  const fingerprint = /swiftshader/i.test(renderer) ? 'swiftshader' : slug(renderer);
   const baselineDirectory = join(baselineRoot, fingerprint);
   console.log(`renderer: ${renderer}`);
   console.log(`baseline: shots/baseline/${fingerprint}`);
