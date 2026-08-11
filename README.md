@@ -12,6 +12,16 @@ npm install apple-liquid-glass-webgl
 
 WebGL2 is required. Give the canvas a CSS width and height before rendering.
 
+Check support before constructing, so a browser without WebGL2 can fall back instead of catching a constructor throw:
+
+```js
+if (LiquidGlassWebGL.isSupported()) {
+  const glass = new LiquidGlassWebGL(canvas);
+} else {
+  panel.classList.add('css-fallback');
+}
+```
+
 ## Usage
 
 ```js
@@ -63,7 +73,7 @@ const glass = new LiquidGlassWebGL(canvas, { material });
 | Optics | `meniscus` | `1.00` |
 | Optics | `blurPlateau` | `8.00` |
 | Optics | `blurRim` | `48.00` |
-| Optics | `opticalDensity` | `1.80` |
+| Optics | `opticalDensity` | `0.65` |
 | Lighting | `specular` | `0.89` |
 | Lighting | `specPower` | `11.50` |
 | Lighting | `highlightAdapt` | `0.83` |
@@ -73,17 +83,20 @@ const glass = new LiquidGlassWebGL(canvas, { material });
 | Lighting | `fresnel` | `0.65` |
 | Lighting | `saturation` | `1.35` |
 | Lighting | `brightness` | `0.00` |
-| Lighting | `tintAmount` | `0.08` |
+| Lighting | `tintAmount` | `0.02` |
+| Lighting | `tintAdapt` | `0.14` |
 | Edge | `shadow` | `0.09` |
 | Edge | `shadowSize` | `4.00` |
 | Edge | `shadowOffset` | `0.00` |
 | Edge | `lightX` | `-0.18` |
 | Edge | `lightY` | `0.08` |
 | Edge | `edgeLine` | `0.30` |
-| Edge | `edgeWidth` | `1.10` |
-| Edge | `edgeDark` | `0.11` |
+| Edge | `edgeWidth` | `0.50` |
+| Edge | `edgeDark` | `0.02` |
 
 The returned object also includes `tintColor: [1, 1, 1]` and `debug: 0`. Parameter names use the JavaScript API names; for example, `highlightAdapt` is the “Light adaptation” control and `edgeLine` is the “Edge highlight” control.
+
+Backdrop RGB is stored in `SRGB8_ALPHA8`: image uploads decode to linear light, every downsample and tent-upsample pass filters linear radiance, and writes encode back to sRGB. Alpha remains linear for the optical-density channel. Wide blur blends in the reconstructed chain to avoid coarse-mip breathing; final glass output receives a sub-LSB triangular dither to suppress dark-gradient banding. `tintAdapt` controls the component-level light/dark material switch (`0` keeps `tintColor` fixed, `1` fully follows the backdrop below the component).
 
 ## Live backdrops and overlay mode
 
@@ -131,7 +144,7 @@ These screenshots are captured from the playground with the inspector hidden. Ea
 
 Nearby components can share one continuous distance field, so the silhouette, refraction, highlights, and shadow flow through the merged surface.
 
-![Smooth-union liquid glass fusion](https://cdn.jsdelivr.net/npm/apple-liquid-glass-webgl@0.1.7/assets/readme/smooth-union.jpg)
+![Smooth-union liquid glass fusion](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/smooth-union.jpg)
 
 ### Individual scene previews
 
@@ -143,9 +156,58 @@ Nearby components can share one continuous distance field, so the silhouette, re
 | --- | --- |
 | ![Color blocks](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/color-blocks.jpg) | ![Night city](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/night-city.jpg) |
 
+## Hit testing
+
+`hitTest()` evaluates the same signed distance field as the shader, so a pointer lands on the shape rather than on its bounding box: the corners of a circle are not clickable, and inside a fused group the bridge between two components is.
+
+```js
+canvas.addEventListener('pointerdown', (event) => {
+  const element = glass.hitTestEvent(event); // null outside the surface
+  if (element) startDragging(element.id);
+});
+
+const { x, y } = glass.pointerPosition(event); // canvas-relative CSS pixels
+glass.hitTest(x, y, { tolerance: 8 });         // slack for coarse pointers
+glass.distanceAt(x, y);                        // signed distance, negative inside
+```
+
+A gap between two components only closes into a bridge while it is narrower than about half the fusion distance; past that, `mergeRadius` only softens the approach.
+
+## Rendering behaviour
+
+`render()` returns without touching the GPU when nothing changed since the last frame, so an animation loop over a static scene is free. Every mutator marks the component dirty; a live backdrop always redraws. The sampled backdrop and its mip chain have a separate dirty flag, so moving a shape or changing its material only redraws the visible glass passes.
+
+```js
+glass.render();                  // no-op when clean
+glass.render({ force: true });   // always draws, for pixel read-back
+glass.markDirty();               // after mutating glass.material in place
+glass.markBackdropDirty();       // after changing a backdrop source in place
+```
+
+Pass `preserveDrawingBuffer: true` if you read the canvas back with `readPixels` or `toDataURL` after the frame has been composited.
+
+## Context loss and accessibility
+
+A GPU context can be lost at any time. The component takes over recovery: the canvas holds its last frame, every call is a safe no-op while the context is gone, and programs, render targets and backdrop textures are rebuilt when the browser restores it.
+
+```js
+const glass = new LiquidGlassWebGL(canvas, {
+  onContextLost: () => showPlaceholder(),
+  onContextRestored: () => hidePlaceholder(),
+});
+
+glass.contextLost; // true while the surface is frozen
+```
+
+Under `prefers-reduced-transparency: reduce` the material falls back to a near-opaque surface: refraction, dispersion and scattering are removed while the shape, edge and shadow stay. Opt out with `respectReducedTransparency: false`, and read `glass.effectiveMaterial` for the parameters actually in use.
+
+`autoResize` (on by default) redraws when the canvas element is resized, which dirty tracking would otherwise miss in an app that renders on demand.
+
 ## API
 
 ```js
+LiquidGlassWebGL.isSupported();
+
 glass.setMaterial('clear');
 glass.setMaterial({ blurPlateau: 4, edgeLine: 0.2 });
 glass.setBackdrop(animatedCanvas, { update: 'live' });
@@ -157,33 +219,53 @@ glass.setWallpaperIndex(0);
 glass.addElement({ id: 'new-folder', shape: 'folder', x: 20, y: 20, size: 180 });
 glass.updateElement('new-folder', { x: 40 });
 glass.removeElement('new-folder');
+glass.hitTest(x, y);
 glass.resize();
 glass.destroy();
 ```
 
-Available presets are `regular`, `clear`, and `lens`. Available shapes are `folder`, `rect`, `pill`, and `circle`. With `fusion` enabled, up to 16 nearby elements are evaluated as one smooth-union distance field, so their silhouette, normals, refraction, highlights, and shadow merge continuously.
+Available presets are `regular`, `clear`, and `lens`. Available shapes are `folder`, `rect`, `pill`, and `circle`. With `fusion` enabled, nearby elements are evaluated as one smooth-union distance field, so their silhouette, normals, refraction, highlights, and shadow merge continuously.
+
+The shader carries 16 shapes per pass. Elements too far apart to influence each other are split into separate passes automatically, so the 16 shape limit applies per fused cluster rather than per scene; a cluster larger than that is still split, and logs a warning explaining that the silhouette will not bridge across every one of them.
+
+The geometry helpers behind all of this are exported for use without a canvas — `sdGroup`, `hitTestElements`, `connectedElementGroups` and `groupElements`.
 
 ## Playground
 
-The repository also contains the interactive demo used to develop the material:
+The interactive demo used to develop the material is deployed at
+[oliverrr2424.github.io/webgl-apple-liquid-glass](https://oliverrr2424.github.io/webgl-apple-liquid-glass/), or run it locally:
 
 ```bash
 npm install
 npm run serve
 ```
 
-Open [http://localhost:8765](http://localhost:8765). The inspector includes scene previews, local image or looping-video uploads, icon visibility, labels, debug shader outputs, and grouped material controls.
+Open [http://localhost:8765](http://localhost:8765). It drives the published component through its public API, and the inspector covers:
+
+- Eight scenes: four wallpapers, plus a tab bar over app content, a notification, a control-centre grid, and a scrolling feed that exercises the live backdrop path.
+- Component editing: add, retype, resize and delete surfaces; drag them, or select one and use the arrow keys (`Shift` for ten pixels, `Alt` to resize, `[` and `]` to cycle, `Delete` to remove).
+- Every material parameter as both a slider and a typed value. Double click a parameter name to reset just that one; modified parameters are marked.
+- **Copy link** puts the whole session in the URL, **Copy code** emits the snippet that reproduces it.
+- A frame-rate, CPU-per-frame, drawing-buffer and pass-count readout. A static scene reports `idle`, because dirty tracking skips the GPU entirely.
+- Local image or looping-video uploads, and the thickness, normals and dispersion debug outputs.
 
 ## Development
 
 ```bash
+npm test                     # unit tests, then the browser test pages
+npm run test:visual          # golden image comparison
+npm run test:visual:update   # record a baseline for this renderer
 npm run shot /tmp/liquid-glass.png -- --scene 0 --size 1200x720 --no-panel
 npm run pack:check
 ```
 
+`tests/*.test.mjs` are Node unit tests over the geometry and material rules. `tests/*.html` are browser pages, each exporting `window.runTest()`; they cover live and static backdrops, context loss and recovery, and the dirty-tracking contract by counting draw calls.
+
+Visual regression forces ANGLE's SwiftShader backend so local development and Linux CI compare against the same deterministic renderer. Baselines live in `shots/baseline/<renderer>/`; a missing baseline fails the run, and rejected frames are written to `shots/tmp-*.png`.
+
 ## Automated npm publishing
 
-Every push to `main` runs [`.github/workflows/publish-npm.yml`](.github/workflows/publish-npm.yml). The workflow publishes the package when the version in `package.json` is newer than the version already on npm.
+Every push to `main` runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and then [`.github/workflows/publish-npm.yml`](.github/workflows/publish-npm.yml), which publishes with provenance when the version in `package.json` is newer than the version already on npm. Publishing depends on the test job, so a failing test blocks the release.
 
 To enable publishing, add a repository secret named `NPM_TOKEN` containing an npm token with permission to publish `apple-liquid-glass-webgl`. Bump the package version before pushing a release to `main`.
 

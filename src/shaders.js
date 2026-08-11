@@ -29,7 +29,13 @@ precision highp float;
 in vec2 vUV;
 uniform sampler2D uTex;
 out vec4 outColor;
-void main() { outColor = vec4(texture(uTex, vUV).rgb, 1.0); }`;
+vec3 linearToSrgb(vec3 c) {
+  c = max(c, 0.0);
+  return mix(1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055,
+             12.92 * c,
+             lessThanEqual(c, vec3(0.0031308)));
+}
+void main() { outColor = vec4(linearToSrgb(texture(uTex, vUV).rgb), 1.0); }`;
 
 // Dual-filter downsample (13 tap) used to build a progressively blurred mip
 // chain. Sampling that chain with textureLod() gives a cheap variable blur,
@@ -60,6 +66,33 @@ void main() {
   outColor = a + b + c + d;
 }`;
 
+// Bloom-style tent reconstruction. Each level combines its own downsampled
+// detail with a tent-filtered version of the next coarser reconstructed level.
+// The resulting chain removes the block boundaries that a downsample-only mip
+// pyramid exposes when wide blur moves over high-contrast content.
+export const FS_UP = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uLow;
+uniform sampler2D uHigh;
+uniform vec2 uLowTexel;
+out vec4 outColor;
+void main() {
+  vec2 t = uLowTexel;
+  vec4 low = texture(uLow, vUV) * 4.0;
+  low += (texture(uLow, vUV + vec2( t.x, 0.0)) +
+          texture(uLow, vUV + vec2(-t.x, 0.0)) +
+          texture(uLow, vUV + vec2(0.0,  t.y)) +
+          texture(uLow, vUV + vec2(0.0, -t.y))) * 2.0;
+  low += texture(uLow, vUV + vec2( t.x,  t.y)) +
+         texture(uLow, vUV + vec2(-t.x,  t.y)) +
+         texture(uLow, vUV + vec2( t.x, -t.y)) +
+         texture(uLow, vUV + vec2(-t.x, -t.y));
+  low *= 1.0 / 16.0;
+  vec4 high = texture(uHigh, vUV);
+  outColor = mix(high, low, 0.65);
+}`;
+
 // Procedural wallpapers. They only exist to give the glass something with hard,
 // high contrast edges to bend -- exactly what the reference screenshots have.
 export const FS_WALLPAPER = `#version 300 es
@@ -73,6 +106,12 @@ uniform int uUseImage;
 out vec4 outColor;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+vec3 srgbToLinear(vec3 c) {
+  bvec3 cutoff = lessThanEqual(c, vec3(0.04045));
+  vec3 low = c / 12.92;
+  vec3 high = pow((c + 0.055) / 1.055, vec3(2.4));
+  return mix(high, low, cutoff);
+}
 float noise(vec2 p) {
   vec2 i = floor(p), f = fract(p);
   f = f * f * (3.0 - 2.0 * f);
@@ -182,11 +221,15 @@ void main() {
   vec2 uv = (vUV - 0.5) / max(uZoom, 0.01) + 0.5;
   vec3 col;
   if (uUseImage == 1) {
+    // Wallpaper textures use SRGB8_ALPHA8, so texture() already returns linear
+    // radiance here.
     col = texture(uWallpaper, coverUV(uv)).rgb;
   } else {
-    col = uScene == 0 ? sunsetBranches(uv)
-         : uScene == 1 ? deepBlueCity(uv)
-                       : islandOcean(uv);
+    // Procedural palette constants are authored as display/sRGB colours. The
+    // SRGB render target expects linear shader output and encodes it on write.
+    col = srgbToLinear(uScene == 0 ? sunsetBranches(uv)
+                       : uScene == 1 ? deepBlueCity(uv)
+                                     : islandOcean(uv));
   }
   // Beer-Lambert representation of backdrop darkness. A value of 4 optical
   // density units already corresponds to ~1.8% transmission, enough for the
@@ -223,8 +266,9 @@ in vec2 vUV;
 out vec4 outColor;
 
 uniform sampler2D uSrc;      // blurred mip chain of the backdrop
+uniform sampler2D uBlurSrc;  // tent-upsampled reconstruction chain
 uniform vec2  uRes;
-uniform vec2  uCenter;       // element centre, px (y up)
+uniform vec2  uCenter;       // draw-group bounds centre, px (vertex quad only)
 uniform vec2  uHalf;         // element half size, px
 const int MAX_SHAPES = 16;
 uniform int   uShapeCount;
@@ -253,6 +297,7 @@ uniform float uSat;
 uniform float uBright;
 uniform float uTintAmount;
 uniform vec3  uTintColor;
+uniform float uTintAdapt;    // content-aware light/dark material polarity
 uniform float uShadow;
 uniform float uShadowSize;
 uniform float uShadowOffset;
@@ -315,13 +360,70 @@ float sdAppleShape(vec2 px) {
   return nearest - scale * log(max(sum, 1e-6));
 }
 
+// Shading adaptation belongs to the primitive under this fragment, not to the
+// bounds of the whole draw group. The latter changes whenever any component in
+// a connected fusion group moves, making every highlight pulse in sympathy.
+//
+// Around a genuine smooth-union bridge, use the same exponential influence as
+// the distance field so the material centre crosses continuously from one
+// primitive to the next. Contributions too weak to affect the visible bridge
+// are smoothly discarded; a nearby-but-separate component then has exactly no
+// influence on this component's highlight or light/dark tint.
+vec2 localComponentCenter(vec2 px) {
+  float nearest = 1e8;
+  vec2 nearestCenter = uShapeCenters[0];
+  for (int i = 0; i < MAX_SHAPES; i++) {
+    if (i >= uShapeCount) break;
+    float next = sdPrimitive(px - uShapeCenters[i], uShapeHalves[i],
+                             uShapeTypes[i], uShapeRadii[i]);
+    if (next < nearest) {
+      nearest = next;
+      nearestCenter = uShapeCenters[i];
+    }
+  }
+
+  if (uMergeRadius < 0.01 || uShapeCount == 1) return nearestCenter;
+
+  float scale = max(uMergeRadius * 0.36, 0.01);
+  vec2 centreSum = vec2(0.0);
+  float weightSum = 0.0;
+  for (int i = 0; i < MAX_SHAPES; i++) {
+    if (i >= uShapeCount) break;
+    float next = sdPrimitive(px - uShapeCenters[i], uShapeHalves[i],
+                             uShapeTypes[i], uShapeRadii[i]);
+    float weight = exp(-(next - nearest) / scale);
+    weight *= smoothstep(0.04, 0.20, weight);
+    centreSum += uShapeCenters[i] * weight;
+    weightSum += weight;
+  }
+  return weightSum > 0.0 ? centreSum / weightSum : nearestCenter;
+}
+
 vec4 sampleBg(vec2 px, float lod) {
   vec2 uv = clamp(px / uRes, vec2(0.001), vec2(0.999));
   return textureLod(uSrc, uv, lod);
 }
 
+vec4 sampleReconstructedBg(vec2 px, float lod) {
+  vec2 uv = clamp(px / uRes, vec2(0.001), vec2(0.999));
+  return textureLod(uBlurSrc, uv, lod);
+}
+
 float luminance(vec3 c) {
   return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+float hash12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
+vec3 linearToSrgb(vec3 c) {
+  c = max(c, 0.0);
+  return mix(1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055,
+             12.92 * c,
+             lessThanEqual(c, vec3(0.0031308)));
 }
 
 vec2 softLimitOffset(vec2 offset, float limit) {
@@ -357,7 +459,13 @@ vec3 blurBg(vec2 px, float radius) {
     float r  = sqrt(fi / float(TAPS));       // equal-area spacing over the disc
     float a  = fi * GOLDEN_ANGLE;
     float w  = exp(-1.8 * r * r);
-    vec4 s = sampleBg(px + vec2(cos(a), sin(a)) * r * radius, lod);
+    vec2 samplePx = px + vec2(cos(a), sin(a)) * r * radius;
+    // Keep narrow blur faithful to the original downsample chain, then lean on
+    // the reconstructed chain where coarse mip blocks and temporal breathing
+    // become visible. Both samplers return linear radiance from sRGB textures.
+    float reconstruction = 0.78 * smoothstep(10.0, 52.0, radius);
+    vec4 s = mix(sampleBg(samplePx, lod),
+                 sampleReconstructedBg(samplePx, lod), reconstruction);
     acc += s.rgb * w;
     densityAcc += s.a * w;
     wsum += w;
@@ -452,23 +560,30 @@ void main() {
   float fres = 0.04 + 0.96 * pow(1.0 - n.z, 5.0);
   vec2 nn = normalize(n.xy + 1e-6);
 
-  // Probe the wallpaper around this fragment rather than around either the
-  // union bounds or a selected primitive. The field is continuous in screen
-  // space, so there are no Voronoi ownership seams through fused components;
-  // and a remote component moving cannot affect samples under this one.
+  // Keep the reflected environment local to the fragment. Stabilise the lobe
+  // controls around the owning primitive below so hard wallpaper edges do not
+  // chop one rim into unrelated bright and dark pieces.
   float probeLod = min(3.5, uMips - 1.0);
   float probeRadius = max(1.35 * uBevel, 18.0);
   vec3 envL = sampleBg(px + vec2(-probeRadius, 0.0), probeLod).rgb;
   vec3 envR = sampleBg(px + vec2( probeRadius, 0.0), probeLod).rgb;
   vec3 envB = sampleBg(px + vec2(0.0, -probeRadius), probeLod).rgb;
   vec3 envT = sampleBg(px + vec2(0.0,  probeRadius), probeLod).rgb;
-  float lumL = luminance(envL), lumR = luminance(envR);
-  float lumB = luminance(envB), lumT = luminance(envT);
-  vec2 envGradient = vec2(lumR - lumL, lumT - lumB);
-  float envContrast = length(envGradient);
   vec2 fallbackLight = normalize(uLightDir + vec2(1e-5));
+  vec2 adaptCenter = localComponentCenter(px);
+  // Highlight adaptation must be stable across one component. Driving its
+  // strength and colour from each fragment's probe makes a mountain ridge or
+  // tree line cut the rim into bright and dark pieces. Probe around the local
+  // component centre while retaining per-fragment environment reflection.
+  vec3 adaptL = sampleBg(adaptCenter + vec2(-probeRadius, 0.0), probeLod).rgb;
+  vec3 adaptR = sampleBg(adaptCenter + vec2( probeRadius, 0.0), probeLod).rgb;
+  vec3 adaptB = sampleBg(adaptCenter + vec2(0.0, -probeRadius), probeLod).rgb;
+  vec3 adaptT = sampleBg(adaptCenter + vec2(0.0,  probeRadius), probeLod).rgb;
+  vec2 adaptGradient = vec2(luminance(adaptR) - luminance(adaptL),
+                            luminance(adaptT) - luminance(adaptB));
+  float stableContrast = length(adaptGradient);
   float lightAdapt = clamp(uHighlightAdapt, 0.0, 1.0) *
-                     smoothstep(0.025, 0.22, envContrast);
+                     smoothstep(0.025, 0.22, stableContrast);
   // Keep the lobe direction material-local. Steering it with the wallpaper
   // gradient creates a rapidly rotating direction field around hard colour
   // edges, which appears as diagonal tears and lets unrelated components alter
@@ -506,8 +621,8 @@ void main() {
                                      highlightWidth, t));
   float baseHighlight = clamp(uHighlightBase, 0.0, 1.0);
   float sourceStrength = baseHighlight + (1.0 - baseHighlight) * lightAdapt;
-  vec3 sourceEnv = mix(mix(envL, envR, 0.5 + 0.5 * lightDir.x),
-                       mix(envB, envT, 0.5 + 0.5 * lightDir.y), 0.5);
+  vec3 sourceEnv = mix(mix(adaptL, adaptR, 0.5 + 0.5 * lightDir.x),
+                       mix(adaptB, adaptT, 0.5 + 0.5 * lightDir.y), 0.5);
   float sourceLum = max(luminance(sourceEnv), 0.08);
   vec3 specColor = clamp(mix(vec3(1.0), sourceEnv / sourceLum, 0.42),
                          vec3(0.45), vec3(2.2));
@@ -522,17 +637,22 @@ void main() {
   // Crisp inner highlight line; direction and colour follow the local probe.
   float line = smoothstep(1.35 * w, 0.0, abs(d + 2.2 * w));
   float lit = 0.26 + 0.74 * max(dot(g, lightDir), 0.0);
-  vec3 lineColor = mix(vec3(1.0), env / max(envLum, 0.12), 0.28);
+  vec3 stableEnv = (adaptL + adaptR + adaptB + adaptT) * 0.25;
+  float stableEnvLum = max(luminance(stableEnv), 0.12);
+  vec3 lineColor = mix(vec3(1.0), stableEnv / stableEnvLum, 0.28);
   col += uEdgeLine * line * lit * lineColor;
 
   // ---- tint --------------------------------------------------------------
-  // Tint and brightness are properties of the GLASS, so they must not depend on
-  // what happens to be behind the element. An earlier version drove a white
-  // veil (and gated brightness) off the average backdrop luminance, which made
-  // one folder go pale as soon as something dark passed behind it while an
-  // identically configured neighbour stayed clear -- same parameters, two
-  // different materials. Every element now gets exactly the same treatment.
-  col = mix(col, uTintColor, uTintAmount);
+  // Tint polarity adapts once per local component, not per draw group.
+  // This captures the system-material light/dark switch without letting a hard
+  // background edge split one surface into visibly different materials.
+  float materialLum = luminance(sampleBg(adaptCenter, uMips - 1.0).rgb);
+  float useDarkMaterial = smoothstep(0.38, 0.68, materialLum);
+  vec3 automaticTint = mix(vec3(0.97, 0.985, 1.0),
+                           vec3(0.035, 0.055, 0.080), useDarkMaterial);
+  vec3 resolvedTint = mix(uTintColor, automaticTint, clamp(uTintAdapt, 0.0, 1.0));
+  float adaptiveAmount = uTintAmount * mix(1.10, 0.92, useDarkMaterial);
+  col = mix(col, resolvedTint, clamp(adaptiveAmount, 0.0, 1.0));
   col += uBright;
 
   // ---- soft contact shadow ----------------------------------------------
@@ -543,6 +663,16 @@ void main() {
   if (uDebug == 2) col = vec3(0.5 + 0.5 * n.xy, n.z);
   if (uDebug == 3) col = vec3(length(dG) / max(uHeight, 1.0),
                               length(dR - dB) / max(uHeight, 1.0) * 6.0, 0.0);
+
+  // The browser drawing buffer stores display/sRGB values, unlike the explicit
+  // SRGB8_ALPHA8 offscreen attachments. Encode the final linear material here,
+  // then add triangular-distribution noise smaller than one display-space LSB.
+  if (uDebug == 0) {
+    float n0 = hash12(gl_FragCoord.xy + vec2(17.0, 59.0));
+    float n1 = hash12(gl_FragCoord.yx + vec2(83.0, 11.0));
+    float noise = (n0 - n1) * (0.85 / 255.0);
+    col = clamp(linearToSrgb(col) + noise, 0.0, 1.0);
+  }
 
   float a = aa + sh * (1.0 - aa);
   outColor = vec4(col * aa, a);   // premultiplied; shadow contributes black

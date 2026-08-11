@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      html, body { margin: 0; background: #0b0d10; }
+      #output { display: block; width: 320px; height: 200px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="output"></canvas>
+    <script type="module">
+      import { LiquidGlassWebGL, MAX_GLASS_SHAPES } from '../src/index.js';
+
+      window.runTest = async () => {
+        const checks = [];
+        const output = document.querySelector('#output');
+        const backdrop = document.createElement('canvas');
+        backdrop.width = 320;
+        backdrop.height = 200;
+        backdrop.getContext('2d').fillRect(0, 0, 320, 200);
+
+        const glass = new LiquidGlassWebGL(output, { fusion: true });
+        glass.setBackdrop(backdrop, { update: 'static', autoStart: false, shouldRender: false });
+
+        const gl = glass.renderer.gl;
+        let draws = 0;
+        const drawGlassGroup = glass.renderer.drawGlassGroup.bind(glass.renderer);
+        glass.renderer.drawGlassGroup = (...args) => {
+          draws++;
+          return drawGlassGroup(...args);
+        };
+        const passes = (fn) => {
+          const before = draws;
+          fn();
+          return draws - before;
+        };
+
+        const warnings = [];
+        const warn = console.warn;
+        console.warn = (...args) => { warnings.push(args.join(' ')); };
+
+        try {
+          // Far apart: no shape can influence another, so every one is its own
+          // pass and the shader limit never applies.
+          const spread = Array.from({ length: MAX_GLASS_SHAPES + 4 }, (_, i) => ({
+            id: `spread-${i}`, shape: 'rect', x: i * 900, y: 20, width: 60, height: 60,
+          }));
+          glass.setElements(spread, false);
+          const spreadPasses = passes(() => glass.render({ force: true }));
+          if (spreadPasses !== spread.length) {
+            throw new Error(`expected ${spread.length} independent passes, saw ${spreadPasses}`);
+          }
+          if (warnings.length) throw new Error(`spread shapes warned: ${warnings[0]}`);
+          checks.push(`independent=${spreadPasses}`);
+
+          // Overlapping: one connected set larger than the uniform arrays, which
+          // has to be chunked and has to say so exactly once.
+          const stacked = Array.from({ length: MAX_GLASS_SHAPES + 4 }, (_, i) => ({
+            id: `stacked-${i}`, shape: 'rect', x: 10 + i * 4, y: 20, width: 60, height: 60,
+          }));
+          glass.setElements(stacked, false);
+          const stackedPasses = passes(() => glass.render({ force: true }));
+          if (stackedPasses !== Math.ceil(stacked.length / MAX_GLASS_SHAPES)) {
+            throw new Error(`expected chunked passes, saw ${stackedPasses}`);
+          }
+          if (warnings.length !== 1) {
+            throw new Error(`expected exactly one warning, saw ${warnings.length}`);
+          }
+          if (!warnings[0].includes(String(MAX_GLASS_SHAPES))) {
+            throw new Error(`the warning does not mention the limit: ${warnings[0]}`);
+          }
+          checks.push(`chunked=${stackedPasses}`);
+
+          // The warning must not repeat on every frame.
+          glass.render({ force: true });
+          if (warnings.length !== 1) throw new Error('the shape limit warning repeated');
+          checks.push('warned once');
+
+          // Two clusters that cannot reach each other stay two passes even though
+          // together they exceed the limit.
+          glass.setElements([
+            ...Array.from({ length: 8 }, (_, i) => ({ id: `a-${i}`, shape: 'rect', x: 10 + i * 4, y: 20, width: 50, height: 50 })),
+            ...Array.from({ length: 8 }, (_, i) => ({ id: `b-${i}`, shape: 'rect', x: 4000 + i * 4, y: 20, width: 50, height: 50 })),
+          ], false);
+          const clusterPasses = passes(() => glass.render({ force: true }));
+          if (clusterPasses !== 2) throw new Error(`expected 2 cluster passes, saw ${clusterPasses}`);
+          checks.push('clusters=2');
+        } finally {
+          console.warn = warn;
+          glass.destroy();
+        }
+
+        return { checks };
+      };
+    </script>
+  </body>
+</html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      html, body { margin: 0; background: #0b0d10; }
+      #output { display: block; width: 16px; height: 16px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="output"></canvas>
+    <script type="module">
+      import { LiquidGlassWebGL } from '../src/index.js';
+
+      window.runTest = async () => {
+        const output = document.querySelector('#output');
+        const glass = new LiquidGlassWebGL(output, {
+          compositeMode: 'overlay',
+          preserveDrawingBuffer: true,
+          elements: [{ id: 'dot', shape: 'circle', x: 2, y: 2, size: 12 }],
+        });
+        glass.render();
+
+        const gl = glass.renderer.gl;
+        if (gl.getError() !== gl.NO_ERROR) throw new Error('small canvas produced a WebGL error');
+        const expectedMips = Math.floor(Math.log2(Math.max(gl.drawingBufferWidth, gl.drawingBufferHeight))) + 1;
+        if (glass.renderer.mipLevels !== expectedMips) {
+          throw new Error(`small canvas should allocate ${expectedMips} mip levels, saw ${glass.renderer.mipLevels}`);
+        }
+        for (const framebuffer of [...glass.renderer.fbos, ...glass.renderer.blurFbos]) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+          if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+            throw new Error('small-canvas framebuffer is incomplete');
+          }
+        }
+        gl.bindFramebuffer(gl.FRAMEBUFFER, glass.renderer.fbos[0]);
+        const encoding = gl.getFramebufferAttachmentParameter(
+          gl.FRAMEBUFFER,
+          gl.COLOR_ATTACHMENT0,
+          gl.FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING,
+        );
+        if (encoding !== gl.SRGB) throw new Error(`mip framebuffer is not sRGB: ${encoding}`);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+        const pixel = new Uint8Array(4);
+        gl.readPixels(
+          Math.floor(gl.drawingBufferWidth / 2),
+          Math.floor(gl.drawingBufferHeight / 2),
+          1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel,
+        );
+        if (pixel[3] === 0) throw new Error(`small canvas did not draw its surface: ${pixel}`);
+
+        glass.destroy();
+        return { checks: [
+          `mips=${expectedMips}`, 'down/up framebuffers complete', 'sRGB', 'rendered',
+        ] };
+      };
+    </script>
+  </body>
+</html>

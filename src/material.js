@@ -12,14 +12,15 @@ export const DEFAULT_MATERIAL = {
                        // the rim (Apple);  0 = convex lens rim (magnifier)
   blurPlateau: 8,      // blur radius in the middle, CSS px (frosted)
   blurRim: 48,         // wide rim scattering, CSS px
-  opticalDensity: 1.8, // preserve dark occluders as blur spreads (0 = linear)
+  opticalDensity: 0.65,// artistic dark-detail weight; linear-light blur needs less compensation
   specular: 0.89,
   specPower: 11.5,
   fresnel: 0.65,       // multiplier on the Schlick term (1 = physical)
   saturation: 1.35,    // boost on the transmitted backdrop, like iOS materials
   brightness: 0.0,
-  tintAmount: 0.08,    // constant milky layer -- same for every element
+  tintAmount: 0.02,    // strength of the material tint layer
   tintColor: [1.0, 1.0, 1.0],
+  tintAdapt: 0.14,     // choose a light/dark tint from backdrop luminance
   shadow: 0.09,
   shadowSize: 4.0,
   shadowOffset: 0,
@@ -30,8 +31,8 @@ export const DEFAULT_MATERIAL = {
   highlightSharpness: 0.55, // multiplier on specPower
   highlightBase: 0.30, // fallback intensity on a flat backdrop
   edgeLine: 0.30,
-  edgeWidth: 1.1,      // px width of the contour / highlight lines
-  edgeDark: 0.11,      // grazing-angle darkening at the silhouette
+  edgeWidth: 0.5,      // px width of the contour / highlight lines
+  edgeDark: 0.02,      // grazing-angle darkening at the silhouette
   debug: 0,            // 0 final, 1 thickness, 2 normals, 3 displacement
 };
 
@@ -49,6 +50,26 @@ export const PRESETS = {
     bevel: 26, height: 34, ior: 1.62, dispersion: 0.09, refractScale: 1.8,
     blurPlateau: 2, blurRim: 0, specular: 0.42, fresnel: 1.2,
   },
+};
+
+/**
+ * Overrides applied on top of the active material while the user asks for
+ * reduced transparency. Refraction, dispersion and scattering are what make a
+ * translucent surface hard to read, so they are removed rather than softened;
+ * the shape, edge and shadow survive so the component keeps its identity.
+ */
+export const REDUCED_TRANSPARENCY_MATERIAL = {
+  tintAmount: 0.86,
+  blurPlateau: 0,
+  blurRim: 0,
+  refractScale: 0,
+  dispersion: 0,
+  meniscus: 0,
+  specular: 0.12,
+  fresnel: 0.15,
+  saturation: 1.0,
+  highlightBase: 0.06,
+  edgeLine: 0.22,
 };
 
 function cloneMaterial(material) {
@@ -95,6 +116,7 @@ export const SLIDERS = [
   ['saturation', 0, 2, 0.02],
   ['brightness', -0.2, 0.3, 0.01],
   ['tintAmount', 0, 0.4, 0.01],
+  ['tintAdapt', 0, 1, 0.01],
   ['shadow', 0, 1, 0.01],
   ['shadowSize', 1, 30, 0.5],
   ['shadowOffset', 0, 20, 0.5],

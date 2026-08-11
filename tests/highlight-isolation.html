@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      html, body { margin: 0; background: #111; }
+      canvas { display: block; width: 360px; height: 200px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="output"></canvas>
+    <script type="module">
+      import { GlassRenderer } from '../src/renderer.js';
+      import { getDefaultMaterial } from '../src/material.js';
+
+      window.runTest = () => {
+        const canvas = document.querySelector('#output');
+        const renderer = new GlassRenderer(canvas, { preserveDrawingBuffer: true });
+        renderer.resize(360, 200);
+
+        // High-contrast bands make a shared group-centre probe visibly change
+        // when only the remote component moves. The first component sits over
+        // an unchanged part of this static source in both frames.
+        const source = document.createElement('canvas');
+        source.width = 360;
+        source.height = 200;
+        const context = source.getContext('2d');
+        for (let x = 0; x < source.width; x++) {
+          const colour = x < 145 ? 'rgb(42, 8, 10)'
+            : x < 180 ? 'rgb(30, 245, 70)'
+              : x < 215 ? 'rgb(20, 45, 245)'
+                : 'rgb(250, 170, 35)';
+          context.fillStyle = colour;
+          context.fillRect(x, 0, 1, source.height);
+        }
+        renderer.setWallpapers([source]);
+        renderer.buildBackdrop(0, 1);
+
+        const material = {
+          ...getDefaultMaterial(),
+          highlightAdapt: 1,
+          tintAdapt: 1,
+          tintAmount: 0.24,
+          specular: 1,
+          edgeLine: 0.42,
+        };
+        const fixed = { id: 'fixed', shape: 'rect', x: 28, y: 50, w: 88, h: 88 };
+        const moving = { id: 'moving', shape: 'circle', x: 260, y: 65, w: 60, h: 60 };
+        const gl = renderer.gl;
+
+        const renderFixedRegion = (movingX) => {
+          moving.x = movingX;
+          renderer.drawBackdrop();
+          // Force both primitives through one draw. With mergeRadius=0 their
+          // geometry cannot affect one another, so any change around `fixed`
+          // is shading state leaking across components.
+          renderer.drawGlassGroup([fixed, moving], material, 1, 0);
+          const pixels = new Uint8Array(112 * 112 * 4);
+          gl.readPixels(16, 44, 112, 112, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+          return pixels;
+        };
+
+        const before = renderFixedRegion(260);
+        const after = renderFixedRegion(180);
+        let differing = 0;
+        let worst = 0;
+        for (let i = 0; i < before.length; i += 4) {
+          const delta = Math.max(
+            Math.abs(before[i] - after[i]),
+            Math.abs(before[i + 1] - after[i + 1]),
+            Math.abs(before[i + 2] - after[i + 2]),
+            Math.abs(before[i + 3] - after[i + 3]),
+          );
+          if (delta > worst) worst = delta;
+          if (delta > 1) differing++;
+        }
+
+        renderer.destroy();
+        if (differing) {
+          throw new Error(
+            `moving one component changed ${differing} pixels around another (worst=${worst})`,
+          );
+        }
+        return { checks: ['remote move leaves fixed highlight unchanged'] };
+      };
+    </script>
+  </body>
+</html>

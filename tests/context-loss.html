@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      html, body { margin: 0; background: #0b0d10; }
+      #output { display: block; width: 320px; height: 200px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="output"></canvas>
+    <script type="module">
+      import { LiquidGlassWebGL } from '../src/index.js';
+
+      const waitFor = async (predicate, label, timeout = 4000) => {
+        const deadline = performance.now() + timeout;
+        while (!predicate()) {
+          if (performance.now() > deadline) throw new Error(`timed out waiting for ${label}`);
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      window.runTest = async () => {
+        const checks = [];
+        if (!LiquidGlassWebGL.isSupported()) throw new Error('isSupported() said no in a WebGL2 browser');
+        checks.push('isSupported');
+
+        const backdrop = document.createElement('canvas');
+        backdrop.width = 320;
+        backdrop.height = 200;
+        const context = backdrop.getContext('2d');
+        context.fillStyle = '#d02020';
+        context.fillRect(0, 0, 320, 200);
+
+        const output = document.querySelector('#output');
+        let lostEvents = 0;
+        let restoredEvents = 0;
+        const glass = new LiquidGlassWebGL(output, {
+          compositeMode: 'overlay',
+          preserveDrawingBuffer: true,
+          onContextLost: () => lostEvents++,
+          onContextRestored: () => restoredEvents++,
+        });
+        glass.setElements([
+          { id: 'surface', shape: 'rect', x: 60, y: 35, width: 200, height: 130 },
+        ], false);
+        glass.setBackdrop(backdrop, { update: 'static', autoStart: false });
+
+        const sample = (x, y) => {
+          const gl = glass.renderer.gl;
+          const dpr = gl.drawingBufferWidth / output.clientWidth;
+          const pixel = new Uint8Array(4);
+          gl.readPixels(
+            Math.round(x * dpr),
+            gl.drawingBufferHeight - Math.round(y * dpr) - 1,
+            1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel,
+          );
+          return Array.from(pixel);
+        };
+
+        glass.render({ force: true });
+        if (sample(160, 100)[3] === 0) throw new Error('glass did not draw before the context was lost');
+
+        const lose = glass.renderer.gl.getExtension('WEBGL_lose_context');
+        if (!lose) throw new Error('WEBGL_lose_context is unavailable, cannot test recovery');
+
+        lose.loseContext();
+        await waitFor(() => glass.contextLost, 'the context to be reported lost');
+        if (lostEvents !== 1) throw new Error(`expected one lost callback, saw ${lostEvents}`);
+        checks.push('lost');
+
+        // Every public call has to survive the gap without throwing.
+        glass.setElements([
+          { id: 'surface', shape: 'rect', x: 40, y: 30, width: 220, height: 140 },
+          { id: 'dot', shape: 'circle', x: 250, y: 40, size: 48 },
+        ]);
+        glass.setMaterial({ blurRim: 30 });
+        glass.updateBackdrop();
+        glass.render();
+        glass.resize();
+        checks.push('no-throw while lost');
+
+        lose.restoreContext();
+        await waitFor(() => !glass.contextLost, 'the context to be restored');
+        if (restoredEvents !== 1) throw new Error(`expected one restored callback, saw ${restoredEvents}`);
+
+        // The restore handler renders immediately; make sure the surface and the
+        // backdrop texture both came back.
+        glass.render({ force: true });
+        const inside = sample(160, 100);
+        const outside = sample(6, 6);
+        if (inside[3] === 0) throw new Error('the glass did not redraw after the context was restored');
+        if (inside[0] + inside[1] + inside[2] === 0) {
+          throw new Error(`the restored glass sampled an empty backdrop: ${inside}`);
+        }
+        if (outside[3] !== 0) throw new Error(`overlay lost its transparency after restore: ${outside}`);
+        checks.push('restored');
+
+        glass.destroy();
+        checks.push('destroy');
+        return { checks };
+      };
+    </script>
+  </body>
+</html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      html, body { margin: 0; background: #0b0d10; }
+      #output { display: block; width: 16px; height: 16px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="output"></canvas>
+    <script type="module">
+      import { LiquidGlassWebGL } from '../src/index.js';
+
+      window.runTest = async () => {
+        const output = document.querySelector('#output');
+        const source = document.createElement('canvas');
+        source.width = 16;
+        source.height = 16;
+        const context = source.getContext('2d');
+        context.fillStyle = 'rgb(128, 64, 32)';
+        context.fillRect(0, 0, 16, 16);
+
+        const glass = new LiquidGlassWebGL(output, { preserveDrawingBuffer: true });
+        glass.setBackdrop(source, { update: 'static', autoStart: false });
+        const gl = glass.renderer.gl;
+
+        const pixel = new Uint8Array(4);
+        gl.readPixels(
+          Math.floor(gl.drawingBufferWidth / 2),
+          Math.floor(gl.drawingBufferHeight / 2),
+          1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel,
+        );
+        const expected = [128, 64, 32];
+        if (expected.some((value, index) => Math.abs(pixel[index] - value) > 3)) {
+          throw new Error(`sRGB round trip changed the backdrop colour: ${pixel}`);
+        }
+
+        // A 50/50 black-white image averages to 0.5 in linear light, which
+        // encodes to about 188 in sRGB. Gamma-space averaging would be ~128.
+        context.fillStyle = '#000';
+        context.fillRect(0, 0, 8, 16);
+        context.fillStyle = '#fff';
+        context.fillRect(8, 0, 8, 16);
+        glass.updateBackdrop(false).render();
+
+        const last = glass.renderer.mipLevels - 1;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, glass.renderer.fbos[last]);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        if (pixel[0] < 170 || pixel[0] > 205) {
+          throw new Error(`mip chain did not average in linear light: ${pixel}`);
+        }
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+        glass.destroy();
+        return { checks: [`round-trip=${expected.join('/')}`, `linear-average=${pixel[0]}`] };
+      };
+    </script>
+  </body>
+</html>

@@ -24,13 +24,18 @@
 
       const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
-      window.runLiveBackdropTest = async () => {
+      window.runTest = async () => {
         const source = document.createElement('canvas');
         source.width = 320;
         source.height = 200;
         const sourceContext = source.getContext('2d');
         const output = document.querySelector('#output');
-        const glass = new LiquidGlassWebGL(output, { compositeMode: 'overlay' });
+        // Reading pixels back after the compositor has run requires the drawing
+        // buffer to survive the frame.
+        const glass = new LiquidGlassWebGL(output, {
+          compositeMode: 'overlay',
+          preserveDrawingBuffer: true,
+        });
         glass.setElements([
           { id: 'surface', shape: 'rect', x: 60, y: 35, width: 200, height: 130 },
         ], false);
@@ -73,17 +78,24 @@
         const staticAfterRefresh = sample(160, 100);
         glass.destroy();
 
-        return {
-          liveBefore,
-          liveAfter,
-          transparentOutside,
-          staticBefore,
-          staticWithoutRefresh,
-          staticAfterRefresh,
-          liveDistance: distance(liveBefore, liveAfter),
-          staticDistance: distance(staticBefore, staticWithoutRefresh),
-          manualDistance: distance(staticBefore, staticAfterRefresh),
-        };
+        const liveDistance = distance(liveBefore, liveAfter);
+        const staticDistance = distance(staticBefore, staticWithoutRefresh);
+        const manualDistance = distance(staticBefore, staticAfterRefresh);
+
+        if (transparentOutside[3] !== 0) {
+          throw new Error(`overlay framebuffer is not transparent outside the glass: ${transparentOutside}`);
+        }
+        if (liveDistance < 80) {
+          throw new Error(`live canvas changes did not reach the glass: ${liveDistance}`);
+        }
+        if (staticDistance > 8) {
+          throw new Error(`static backdrop changed without an explicit refresh: ${staticDistance}`);
+        }
+        if (manualDistance < 80) {
+          throw new Error(`manual backdrop refresh did not update the texture: ${manualDistance}`);
+        }
+
+        return { checks: ['live', 'static', 'manual refresh', 'overlay alpha'] };
       };
     </script>
   </body>

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      html, body { margin: 0; background: #0b0d10; }
+      #output { display: block; width: 320px; height: 200px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="output"></canvas>
+    <script type="module">
+      import { LiquidGlassWebGL } from '../src/index.js';
+
+      window.runTest = async () => {
+        const checks = [];
+        const output = document.querySelector('#output');
+        const backdrop = document.createElement('canvas');
+        backdrop.width = 320;
+        backdrop.height = 200;
+        backdrop.getContext('2d').fillRect(0, 0, 320, 200);
+
+        const glass = new LiquidGlassWebGL(output, { fusion: true });
+        glass.setElements([
+          { id: 'a', shape: 'rect', x: 40, y: 40, width: 120, height: 90 },
+          { id: 'b', shape: 'circle', x: 200, y: 60, size: 70 },
+        ], false);
+        glass.setBackdrop(backdrop, { update: 'static', autoStart: false, shouldRender: false });
+
+        const gl = glass.renderer.gl;
+        let draws = 0;
+        let backdropBuilds = 0;
+        const drawArrays = gl.drawArrays.bind(gl);
+        gl.drawArrays = (...args) => { draws++; return drawArrays(...args); };
+        const buildBackdrop = glass.renderer.buildBackdrop.bind(glass.renderer);
+        glass.renderer.buildBackdrop = (...args) => {
+          backdropBuilds++;
+          return buildBackdrop(...args);
+        };
+        const since = (label, fn) => {
+          const before = draws;
+          fn();
+          const count = draws - before;
+          checks.push(`${label}=${count}`);
+          return count;
+        };
+
+        if (since('first', () => glass.render()) === 0) {
+          throw new Error('the first render drew nothing');
+        }
+        if (backdropBuilds !== 1) throw new Error(`expected one initial backdrop build, saw ${backdropBuilds}`);
+        if (since('clean', () => glass.render()) !== 0) {
+          throw new Error('an unchanged static scene still hit the GPU');
+        }
+        if (since('forced', () => glass.render({ force: true })) === 0) {
+          throw new Error('render({ force: true }) skipped the frame');
+        }
+        if (backdropBuilds !== 1) throw new Error('a forced output redraw rebuilt a static backdrop');
+        if (since('material', () => glass.setMaterial({ blurRim: 24 })) === 0) {
+          throw new Error('a material change did not schedule a frame');
+        }
+        if (backdropBuilds !== 1) throw new Error('a material change rebuilt the backdrop mip chain');
+        if (since('move', () => glass.updateElement('b', { x: 210 })) === 0) {
+          throw new Error('moving an element did not schedule a frame');
+        }
+        if (backdropBuilds !== 1) throw new Error('moving an element rebuilt the backdrop mip chain');
+        if (since('clean-again', () => glass.render()) !== 0) {
+          throw new Error('the scene stayed dirty after a completed frame');
+        }
+
+        // A CSS resize has to be picked up even though nothing else changed.
+        output.style.width = '360px';
+        if (since('resize', () => glass.render()) === 0) {
+          throw new Error('a resized canvas was not redrawn');
+        }
+        if (backdropBuilds !== 2) throw new Error('a resize did not rebuild the backdrop mip chain');
+        output.style.width = '320px';
+        glass.render();
+
+        // Live backdrops opt out of dirty tracking: the source can change at
+        // any time without telling us.
+        glass.setBackdrop(backdrop, { update: 'live', autoStart: false, shouldRender: true });
+        const beforeLive = backdropBuilds;
+        if (since('live', () => glass.render()) === 0) {
+          throw new Error('a live backdrop was skipped by dirty tracking');
+        }
+        if (backdropBuilds !== beforeLive + 1) throw new Error('a live backdrop did not rebuild each frame');
+
+        glass.destroy();
+        return { checks };
+      };
+    </script>
+  </body>
+</html>

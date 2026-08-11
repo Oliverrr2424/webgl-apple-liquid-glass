@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      html, body { margin: 0; background: #0b0d10; }
+      #output { display: block; width: 320px; height: 200px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="output"></canvas>
+    <script type="module">
+      import { LiquidGlassWebGL, REDUCED_TRANSPARENCY_MATERIAL } from '../src/index.js';
+
+      window.runTest = async () => {
+        const checks = [];
+        const backdrop = document.createElement('canvas');
+        backdrop.width = 320;
+        backdrop.height = 200;
+        const context = backdrop.getContext('2d');
+        // A hard edge: half dark, half saturated. A translucent material lets it
+        // through, a reduced-transparency material must not.
+        context.fillStyle = '#08090c';
+        context.fillRect(0, 0, 160, 200);
+        context.fillStyle = '#e0402a';
+        context.fillRect(160, 0, 160, 200);
+
+        const output = document.querySelector('#output');
+        const glass = new LiquidGlassWebGL(output, {
+          compositeMode: 'overlay',
+          preserveDrawingBuffer: true,
+        });
+        glass.setElements([
+          { id: 'surface', shape: 'rect', x: 40, y: 30, width: 240, height: 140 },
+        ], false);
+        glass.setBackdrop(backdrop, { update: 'static', autoStart: false });
+
+        const sample = (x, y) => {
+          const gl = glass.renderer.gl;
+          const dpr = gl.drawingBufferWidth / output.clientWidth;
+          const pixel = new Uint8Array(4);
+          gl.readPixels(
+            Math.round(x * dpr),
+            gl.drawingBufferHeight - Math.round(y * dpr) - 1,
+            1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel,
+          );
+          return Array.from(pixel);
+        };
+        const spread = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+        if (glass.reducedTransparency) throw new Error('the test environment already reduces transparency');
+        if (glass.effectiveMaterial.refractScale !== glass.material.refractScale) {
+          throw new Error('the effective material was altered without the media query matching');
+        }
+        checks.push('pass-through');
+
+        glass.render({ force: true });
+        const darkSide = sample(90, 100);
+        const brightSide = sample(230, 100);
+        const contrast = spread(darkSide, brightSide);
+        if (contrast < 40) {
+          throw new Error(`the translucent material did not transmit the backdrop edge: ${contrast}`);
+        }
+        checks.push(`transmitted=${Math.round(contrast)}`);
+
+        // The media query cannot be forced from inside the page, so the resolved
+        // query is stubbed. Everything downstream of it is the real path.
+        glass.reducedTransparencyQuery = { matches: true };
+        if (glass.effectiveMaterial.refractScale !== REDUCED_TRANSPARENCY_MATERIAL.refractScale) {
+          throw new Error('the reduced-transparency overrides were not applied');
+        }
+        glass.markDirty().render({ force: true });
+
+        const reducedDark = sample(90, 100);
+        const reducedBright = sample(230, 100);
+        const reducedContrast = spread(reducedDark, reducedBright);
+        if (reducedContrast > contrast / 2) {
+          throw new Error(`reduced transparency still transmits the backdrop: ${reducedContrast} vs ${contrast}`);
+        }
+        if (Math.min(...reducedDark.slice(0, 3)) < 120) {
+          throw new Error(`the reduced material is not close to opaque: ${reducedDark}`);
+        }
+        // The surface must still be there, and still transparent outside.
+        if (reducedDark[3] === 0) throw new Error('the reduced material stopped drawing');
+        if (sample(6, 6)[3] !== 0) throw new Error('the overlay lost its transparency outside the glass');
+        checks.push(`reduced=${Math.round(reducedContrast)}`);
+
+        glass.destroy();
+        return { checks };
+      };
+    </script>
+  </body>
+</html>

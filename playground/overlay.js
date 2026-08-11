@@ -94,6 +94,37 @@ export function drawLabel(ctx, f) {
   ctx.restore();
 }
 
+export const HANDLE_SIZE = 11;
+
+/** The four corner handles of an element, in stage coordinates. */
+export function handlesOf(f) {
+  return [
+    { id: 'nw', x: f.x, y: f.y },
+    { id: 'ne', x: f.x + f.w, y: f.y },
+    { id: 'sw', x: f.x, y: f.y + f.h },
+    { id: 'se', x: f.x + f.w, y: f.y + f.h },
+  ];
+}
+
+/** Selection outline plus resize handles for the element being edited. */
+export function drawSelection(ctx, f) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(154,186,255,0.95)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 4]);
+  ctx.strokeRect(f.x - 0.5, f.y - 0.5, f.w + 1, f.h + 1);
+  ctx.setLineDash([]);
+  for (const handle of handlesOf(f)) {
+    ctx.beginPath();
+    ctx.rect(handle.x - HANDLE_SIZE / 2, handle.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
+    ctx.fillStyle = '#0d1017';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(154,186,255,0.95)';
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 export function drawBadge(ctx, f) {
   if (!f.badge) return;
   const text = f.badge;

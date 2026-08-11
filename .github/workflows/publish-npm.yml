@@ -9,8 +9,17 @@ permissions:
   contents: read
 
 jobs:
+  # A release that was never tested is not a release.
+  test:
+    uses: ./.github/workflows/ci.yml
+
   publish:
+    needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for npm provenance attestation.
+      id-token: write
 
     steps:
       - name: Check out repository
@@ -37,5 +46,5 @@ jobs:
           if [ "$package_version" = "$published_version" ]; then
             echo "$package_name@$package_version is already published; skipping."
           else
-            npm publish --access public
+            npm publish --access public --provenance
           fi

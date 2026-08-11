@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  # Called by the publish workflow so a release cannot skip the gate.
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Browser tests
+        run: npm run test:browser
+
+      # The visual runner forces SwiftShader so local and CI captures use one
+      # deterministic renderer. Missing baselines fail just like pixel diffs.
+      - name: Visual regression
+        run: npm run test:visual
+
+      - name: Verify the published file list
+        run: npm run pack:check
+
+      - name: Upload rejected frames
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rejected-frames
+          path: shots/tmp-*.png
+          if-no-files-found: ignore

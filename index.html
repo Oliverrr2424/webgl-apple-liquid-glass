@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Liquid Glass — Playground</title>
+<link rel="preload" as="image" href="./assets/wallpapers/natural-lake.webp">
 <style>
   * { box-sizing: border-box; }
   :root {
@@ -22,15 +23,21 @@
     font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
   #app { display: grid; grid-template-columns: minmax(0, 1fr) 364px; height: 100%; }
   #stage { position: relative; min-width: 0; overflow: hidden; background: #0b0c0f; }
-  #gl, #ui { position: absolute; inset: 0; display: block; }
-  #ui { touch-action: none; cursor: grab; }
-  #ui:active { cursor: grabbing; }
+  #content, #gl, #ui { position: absolute; inset: 0; display: block; }
+  #ui { touch-action: none; cursor: default; }
+  #ui:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   #stageHud { position: absolute; left: 24px; bottom: 22px; pointer-events: none; text-shadow: 0 2px 16px rgba(0,0,0,.48); }
   #stageHud .eyebrow { color: rgba(255,255,255,.68); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
   #stageHud strong { display: block; margin-top: 4px; font-size: 21px; letter-spacing: -.03em; }
   #stageHud span { color: rgba(255,255,255,.72); font-size: 11px; }
   #loadState { position: absolute; top: 18px; left: 20px; padding: 6px 9px; color: rgba(255,255,255,.75); font-size: 10px; border: 1px solid rgba(255,255,255,.16); background: rgba(9,11,16,.40); border-radius: 999px; backdrop-filter: blur(10px); transition: opacity .3s ease; }
   body.wallpapers-ready #loadState { opacity: 0; }
+  #unsupported { position: absolute; inset: 0; z-index: 5; display: grid; place-content: center; gap: 8px; padding: 40px; text-align: center; background: #0b0d10; }
+  /* An id selector outranks the user agent's [hidden] rule, so say it here. */
+  #unsupported[hidden] { display: none; }
+  #unsupported h2 { font-size: 16px; }
+  #unsupported p { max-width: 42ch; margin: 0 auto; color: var(--muted); font-size: 12px; }
+  body.unsupported #panel { opacity: .35; pointer-events: none; }
   #showPanel { position: absolute; z-index: 4; top: 18px; right: 20px; display: none; min-height: 32px; padding: 0 12px; color: var(--text); border-color: rgba(255,255,255,.24); background: rgba(12,15,20,.62); backdrop-filter: blur(14px); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
   body.hide-panel #showPanel { display: inline-flex; align-items: center; justify-content: center; }
   #panel { width: auto; height: 100%; overflow-y: auto; padding: 22px 20px 26px; background: var(--panel); border-left: 1px solid var(--line); }
@@ -43,21 +50,20 @@
   h2 { font-size: 12px; line-height: 1; margin: 0; color: var(--text); font-weight: 600; letter-spacing: -.01em; }
   .kicker { color: var(--accent); font-size: 10px; text-transform: uppercase; letter-spacing: .18em; margin-bottom: 7px; }
   .subhead { color: var(--muted); font-size: 11px; margin: 7px 0 0; }
-  .status { color: var(--success); font-size: 11px; white-space: nowrap; }
-  .status::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 5px; background: currentColor; border-radius: 50%; vertical-align: 1px; }
   .toolbar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 16px; }
   button { min-height: 32px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); font: inherit; font-size: 11px; cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
   button:hover { background: var(--surface-raised); border-color: var(--line-strong); }
   button:active { transform: translateY(1px) scale(.99); }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button.active { background: rgba(154,186,255,.16); border-color: rgba(154,186,255,.55); color: #d9e6ff; }
+  select { min-height: 30px; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 11px; }
   .section { padding-top: 20px; }
   .sectionHeader { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
   .sectionMeta { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
   .sceneGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
   .sceneCard { position: relative; min-height: 68px; overflow: hidden; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; text-align: left; isolation: isolate; border-color: rgba(255,255,255,.12); }
   .sceneCard::before, .sceneCard::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
-  .sceneCard::before { z-index: -2; background-image: var(--scene-image); background-size: cover; background-position: center; transition: transform .3s ease; }
+  .sceneCard::before { z-index: -2; background-color: var(--scene-tint, #1d2430); background-image: var(--scene-image, none); background-size: cover; background-position: center; transition: transform .3s ease; }
   .sceneCard::after { z-index: -1; background: linear-gradient(180deg, rgba(0,0,0,.02), rgba(0,0,0,.72)); }
   .sceneCard:hover::before { transform: scale(1.06); }
   .sceneCard span, .sceneCard small { position: relative; z-index: 1; }
@@ -70,10 +76,20 @@
   .uploadButton span { color: var(--accent); font-size: 14px; line-height: 1; }
   #customSceneStatus { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
   .segmented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.025); }
+  .segmented + .segmented { margin-top: 6px; }
   .segmented button { min-height: 30px; border: 0; background: transparent; color: var(--muted); }
   .segmented button.active { background: var(--surface-raised); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.22); }
   .debugGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .debugGrid button { padding: 0 4px; font-size: 10px; }
+  .statGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .stat { padding: 8px 9px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255,255,255,.02); }
+  .stat dt { color: var(--muted); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+  .stat dd { margin: 3px 0 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .componentRow { display: grid; grid-template-columns: minmax(0, 1fr) 88px 30px; gap: 6px; margin-bottom: 6px; }
+  .componentName { overflow: hidden; text-align: left; padding: 0 9px; text-overflow: ellipsis; white-space: nowrap; }
+  .componentRow.active .componentName { background: rgba(154,186,255,.16); border-color: rgba(154,186,255,.55); color: #d9e6ff; }
+  .componentRemove { font-size: 15px; line-height: 1; }
+  .componentAdd { display: grid; grid-template-columns: minmax(0, 1fr) 88px; gap: 6px; margin-top: 8px; }
   #sliders { display: grid; gap: 6px; }
   .sliderGroup { border-top: 1px solid var(--line); padding-top: 9px; }
   .sliderGroup summary { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; cursor: pointer; list-style: none; }
@@ -81,18 +97,23 @@
   .sliderGroup summary span::after { content: '+'; color: var(--muted); font-size: 14px; line-height: 1; }
   .sliderGroup[open] summary span::after { content: '−'; }
   .sliderRows { display: grid; gap: 6px; padding-top: 9px; }
-  .row { display: grid; grid-template-columns: 116px minmax(0, 1fr) 42px; align-items: center; gap: 8px; }
-  .row span { overflow: hidden; color: #aeb7c8; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-  .row b { color: #dce3f2; font-size: 10px; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+  .row { display: grid; grid-template-columns: 116px minmax(0, 1fr) 56px; align-items: center; gap: 8px; }
+  .rowLabel { overflow: hidden; min-height: 20px; padding: 0; border: 0; background: none; color: #aeb7c8; font-size: 10px; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .rowLabel:hover { background: none; color: var(--text); }
+  .row.modified .rowLabel { color: var(--accent); }
+  .row.modified .rowLabel::after { content: '•'; margin-left: 4px; }
   input[type=range] { width: 100%; height: 14px; accent-color: var(--accent); }
+  input[type=number] { width: 100%; min-height: 24px; padding: 0 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: #dce3f2; font: inherit; font-size: 10px; font-variant-numeric: tabular-nums; }
+  input[type=number]:focus-visible { outline: 1px solid var(--accent); }
   .tip { margin-top: 17px; padding: 10px 11px; border-left: 2px solid var(--accent); background: rgba(154,186,255,.06); color: #b7c5dd; font-size: 10px; }
+  .tip kbd { padding: 1px 4px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); font: inherit; font-size: 9px; }
   .note { color: #737e91; font-size: 10px; margin-top: 14px; }
-  .note code { color: #a9c4f7; }
   .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
   @media (max-width: 900px) {
     html, body { overflow: auto; }
-    #app { min-height: 100dvh; height: auto; grid-template-columns: 1fr; grid-template-rows: minmax(480px, 68dvh) auto; }
+    #app { min-height: 100dvh; height: auto; grid-template-columns: 1fr; grid-template-rows: minmax(420px, 60dvh) auto; }
     #panel { height: auto; max-height: none; border-top: 1px solid var(--line); border-left: 0; }
+    .row { grid-template-columns: 96px minmax(0, 1fr) 52px; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
@@ -102,21 +123,47 @@
 <body>
 <div id="app">
   <div id="stage">
-    <canvas id="gl"></canvas>
-    <canvas id="ui"></canvas>
+    <canvas id="content" aria-hidden="true"></canvas>
+    <canvas id="gl" aria-hidden="true"></canvas>
+    <canvas id="ui" tabindex="0" role="application"
+      aria-label="Liquid glass stage. Drag a component, or select one and move it with the arrow keys."></canvas>
     <button id="showPanel" type="button" aria-label="Show inspector" title="Show inspector">Inspector</button>
     <div id="loadState">Loading source imagery</div>
-    <div id="stageHud"><div class="eyebrow">LIQUID GLASS / SMOOTH UNION</div><strong id="hudScene">Alpine Lake</strong><span id="hudKind">Natural landscape / drag the shapes together and apart</span></div>
+    <div id="stageHud"><div class="eyebrow">LIQUID GLASS / SMOOTH UNION</div><strong id="hudScene">Alpine Lake</strong><span id="hudKind">Natural landscape</span></div>
+    <div id="unsupported" hidden>
+      <h2>WebGL2 is unavailable</h2>
+      <p>This playground needs a WebGL2 context. The material cannot be rendered here, but
+        <code>LiquidGlassWebGL.isSupported()</code> reports the same thing in your own app so you
+        can fall back to a CSS surface.</p>
+    </div>
   </div>
   <div id="panel">
     <div class="panelHead"><div><div class="kicker">Material lab</div><h1>Liquid Glass</h1><p class="subhead">A small physics playground for translucent surfaces.</p></div><button id="togglePanel" class="iconButton" type="button" aria-label="Hide inspector" title="Hide inspector"><span aria-hidden="true">×</span></button></div>
     <div class="toolbar">
-      <button data-preset="regular">Regular</button>
-      <button data-preset="clear">Clear</button>
-      <button data-preset="lens">Lens</button>
+      <button type="button" data-preset="regular">Regular</button>
+      <button type="button" data-preset="clear">Clear</button>
+      <button type="button" data-preset="lens">Lens</button>
+    </div>
+    <div class="toolbar">
+      <button type="button" id="copyLink" title="Copy a link that reproduces this exact material">Copy link</button>
+      <button type="button" id="copyCode" title="Copy the code that reproduces this material">Copy code</button>
+      <button type="button" id="resetMaterial" title="Back to the package defaults">Reset all</button>
     </div>
     <div class="section">
-      <div class="sectionHeader"><h2>Scene</h2><span class="sectionMeta" id="sceneCount">01 / 04</span></div>
+      <div class="sectionHeader"><h2>Performance</h2><span class="sectionMeta">this frame</span></div>
+      <dl class="statGrid" id="stats">
+        <div class="stat"><dt>Frame rate</dt><dd data-stat="fps">idle</dd></div>
+        <div class="stat"><dt>CPU per frame</dt><dd data-stat="cpu">—</dd></div>
+        <div class="stat"><dt>Drawing buffer</dt><dd data-stat="size">—</dd></div>
+        <div class="stat"><dt>Device ratio</dt><dd data-stat="dpr">—</dd></div>
+        <div class="stat"><dt>Components</dt><dd data-stat="shapes">—</dd></div>
+        <div class="stat"><dt>Backdrop</dt><dd data-stat="backdrop">—</dd></div>
+      </dl>
+      <p class="note">A static scene reports <code>idle</code>: dirty tracking skips the GPU entirely
+        until something actually changes.</p>
+    </div>
+    <div class="section">
+      <div class="sectionHeader"><h2>Scene</h2><span class="sectionMeta" id="sceneCount">01 / 08</span></div>
       <select class="srOnly" id="scene" aria-label="Scene"></select>
       <div class="sceneGrid" id="scenePicker"></div>
       <div class="sceneUpload">
@@ -126,16 +173,29 @@
       </div>
     </div>
     <div class="section">
+      <div class="sectionHeader"><h2>Components</h2><span class="sectionMeta">select, then arrow keys</span></div>
+      <div id="componentList"></div>
+      <div class="componentAdd">
+        <button type="button" id="addComponent">Add component</button>
+        <select id="addComponentShape" aria-label="Shape of the component to add">
+          <option value="folder">folder</option>
+          <option value="rect">rect</option>
+          <option value="pill">pill</option>
+          <option value="circle">circle</option>
+        </select>
+      </div>
+    </div>
+    <div class="section">
       <div class="sectionHeader"><h2>View</h2><span class="sectionMeta" id="sceneKind">Natural landscape</span></div>
       <div class="segmented">
         <button type="button" data-fusion-mode="on">Smooth union</button>
         <button type="button" data-fusion-mode="off">Separate layers</button>
       </div>
-      <div class="segmented" style="margin-top: 6px">
+      <div class="segmented">
         <button type="button" data-icon-mode="on">With icons</button>
         <button type="button" data-icon-mode="off">Glass only</button>
       </div>
-      <div class="segmented" style="margin-top: 6px">
+      <div class="segmented">
         <button type="button" data-label-mode="on">Show labels</button>
         <button type="button" data-label-mode="off">Clean stage</button>
       </div>
@@ -151,14 +211,21 @@
     </div>
     <div class="section">
       <div class="sectionHeader"><h2>Material</h2><span class="sectionMeta">live controls</span></div>
-    <div id="sliders"></div>
+      <div id="sliders"></div>
     </div>
-    <div class="tip">Drag components together. Inside the fusion distance they form one surface, so the silhouette, refraction and highlight flow through a shared bridge.</div>
+    <div class="tip">
+      Drag components together: inside the fusion distance they form one surface, so the silhouette,
+      refraction and highlight flow through a shared bridge. A gap only closes while it is narrower
+      than about half the fusion distance.
+    </div>
     <div class="note">
-      Nearby shapes are smoothly unioned before shading. Upload a local image or looping video to test the material against your own scene.
+      Keyboard: <kbd>Tab</kbd> to the stage, <kbd>[</kbd> <kbd>]</kbd> to cycle components,
+      arrows to move, <kbd>Shift</kbd> for ten pixels, <kbd>Alt</kbd> to resize,
+      <kbd>Delete</kbd> to remove. Double click a parameter name to reset just that one.
     </div>
   </div>
 </div>
-<script type="module" src="./src/app.js"></script>
+<div id="announcer" class="srOnly" role="status" aria-live="polite"></div>
+<script type="module" src="./playground/main.js"></script>
 </body>
 </html>

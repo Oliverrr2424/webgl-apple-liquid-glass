@@ -32,6 +32,8 @@ await page.waitForFunction('window.__lg !== undefined');
 if (noPanel) { await page.click('#togglePanel'); await page.waitForTimeout(100); }
 if (clean) await page.addStyleTag({ content: '#stageHud, #loadState { display: none !important; }' });
 await page.evaluate((s) => window.__lg.setScene(s), scene);
+// Wallpapers are loaded on demand now, so wait for the scene to be ready.
+await page.waitForFunction('window.__lg.ready()');
 if (set) {
   const patch = {};
   for (const kv of String(set).split(',')) {

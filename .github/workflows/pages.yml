@@ -1,0 +1,49 @@
+name: Deploy playground to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# A newer commit should cancel an in-flight deploy, not queue behind it.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      # The playground is plain ES modules and static assets, so the repository
+      # is the site. Only the parts the page actually loads are uploaded.
+      - name: Stage the site
+        run: |
+          set -eu
+          mkdir -p site
+          cp index.html site/
+          cp -r src playground assets site/
+          rm -rf site/assets/readme
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

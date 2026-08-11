@@ -1,6 +1,6 @@
 {
   "name": "apple-liquid-glass-webgl",
-  "version": "0.1.11",
+  "version": "1.0.0",
   "description": "Reusable WebGL2 liquid glass surfaces for folders, rectangles, pills, and circles.",
   "keywords": [
     "webgl2",
@@ -14,20 +14,44 @@
   ],
   "private": false,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Oliverrr2424/webgl-apple-liquid-glass.git"
+  },
+  "homepage": "https://oliverrr2424.github.io/webgl-apple-liquid-glass/",
+  "bugs": {
+    "url": "https://github.com/Oliverrr2424/webgl-apple-liquid-glass/issues"
+  },
   "type": "module",
+  "sideEffects": false,
   "main": "./src/index.js",
   "module": "./src/index.js",
   "types": "./src/index.d.ts",
   "exports": {
-    ".": "./src/index.js"
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "files": [
-    "src",
-    "assets/readme",
-    "assets/wallpapers/abstract-lines.png"
+    "src/index.js",
+    "src/index.d.ts",
+    "src/renderer.js",
+    "src/shaders.js",
+    "src/material.js",
+    "src/geometry.js",
+    "assets/wallpapers/abstract-lines.webp"
   ],
   "scripts": {
-    "test": "node tools/test-live-backdrop.mjs",
+    "test": "npm run test:unit && npm run test:browser",
+    "test:unit": "node --test \"tests/*.test.mjs\"",
+    "test:browser": "node tools/browser-tests.mjs",
+    "test:visual": "node tools/visual.mjs",
+    "test:visual:update": "node tools/visual.mjs --update",
     "serve": "python3 -m http.server 8765",
     "shot": "node tools/shot.mjs",
     "pack:check": "npm pack --dry-run"
