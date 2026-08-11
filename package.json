@@ -1,6 +1,6 @@
 {
   "name": "apple-liquid-glass-webgl",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Reusable WebGL2 liquid glass surfaces for folders, rectangles, pills, and circles.",
   "keywords": [
     "webgl2",
@@ -27,6 +27,7 @@
     "assets/wallpapers/abstract-lines.png"
   ],
   "scripts": {
+    "test": "node tools/test-live-backdrop.mjs",
     "serve": "python3 -m http.server 8765",
     "shot": "node tools/shot.mjs",
     "pack:check": "npm pack --dry-run"

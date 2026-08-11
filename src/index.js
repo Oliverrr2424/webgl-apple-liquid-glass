@@ -8,6 +8,41 @@ export const SHAPES = Object.freeze({
   CIRCLE: 'circle',
 });
 
+export const COMPOSITE_MODES = Object.freeze({
+  REPLACE: 'replace',
+  OVERLAY: 'overlay',
+});
+
+export const BACKDROP_UPDATES = Object.freeze({
+  AUTO: 'auto',
+  STATIC: 'static',
+  LIVE: 'live',
+});
+
+function normalizeCompositeMode(mode) {
+  if (!Object.values(COMPOSITE_MODES).includes(mode)) {
+    throw new TypeError(`Unknown liquid glass composite mode: ${mode}`);
+  }
+  return mode;
+}
+
+function isLiveBackdropSource(source) {
+  const tagName = source?.tagName?.toUpperCase();
+  return tagName === 'CANVAS'
+    || tagName === 'VIDEO'
+    || source?.constructor?.name === 'OffscreenCanvas'
+    || source?.constructor?.name === 'VideoFrame';
+}
+
+function resolveBackdropUpdate(source, update = BACKDROP_UPDATES.AUTO) {
+  if (!Object.values(BACKDROP_UPDATES).includes(update)) {
+    throw new TypeError(`Unknown liquid glass backdrop update mode: ${update}`);
+  }
+  return update === BACKDROP_UPDATES.AUTO
+    ? (isLiveBackdropSource(source) ? BACKDROP_UPDATES.LIVE : BACKDROP_UPDATES.STATIC)
+    : update;
+}
+
 function normalizeShape(shape) {
   const normalized = shape === 'folderRect' ? SHAPES.RECT : shape;
   if (!Object.values(SHAPES).includes(normalized)) {
@@ -53,7 +88,10 @@ export class LiquidGlassWebGL {
       throw new TypeError('LiquidGlassWebGL needs an HTMLCanvasElement.');
     }
     this.canvas = canvas;
-    this.renderer = new GlassRenderer(canvas);
+    this.compositeMode = normalizeCompositeMode(options.compositeMode ?? COMPOSITE_MODES.REPLACE);
+    this.renderer = new GlassRenderer(canvas, {
+      alpha: this.compositeMode === COMPOSITE_MODES.OVERLAY,
+    });
     this.material = typeof options.material === 'string'
       ? makeMaterial(options.material)
       : { ...makeMaterial('regular'), ...(options.material || {}) };
@@ -61,8 +99,17 @@ export class LiquidGlassWebGL {
     this.fusion = Boolean(options.fusion ?? false);
     this.wallpaperIndex = 0;
     this.wallpaperZoom = options.wallpaperZoom ?? 1;
+    this.running = false;
+    this.animationFrame = 0;
     if (options.elements) this.setElements(options.elements, false);
     if (options.wallpapers) this.setWallpapers(options.wallpapers, false);
+    if (options.backdrop) {
+      this.setBackdrop(options.backdrop, {
+        update: options.backdropUpdate,
+        autoStart: options.autoStart,
+        shouldRender: false,
+      });
+    }
   }
 
   setElements(elements, shouldRender = true) {
@@ -108,7 +155,37 @@ export class LiquidGlassWebGL {
   }
 
   setWallpapers(images, shouldRender = true) {
-    this.renderer.setWallpapers(images);
+    this.renderer.setWallpapers(images, { update: BACKDROP_UPDATES.STATIC });
+    if (shouldRender) this.render();
+    return this;
+  }
+
+  /**
+   * Use an image, canvas, video, ImageBitmap, or OffscreenCanvas as the
+   * backdrop sampled by the glass. Canvas/video sources default to live mode.
+   */
+  setBackdrop(source, options = {}) {
+    if (!source || typeof source === 'string') {
+      throw new TypeError('setBackdrop needs a CanvasImageSource. Use loadBackdrop for a URL.');
+    }
+    const update = resolveBackdropUpdate(source, options.update);
+    this.renderer.setWallpapers([source], { update });
+    this.wallpaperIndex = 0;
+    if (options.autoStart ?? update === BACKDROP_UPDATES.LIVE) this.start();
+    if (options.shouldRender ?? true) this.render();
+    return this;
+  }
+
+  async loadBackdrop(source, options = {}) {
+    const image = await resolveImage(source);
+    return this.setBackdrop(image, {
+      ...options,
+      update: options.update ?? BACKDROP_UPDATES.STATIC,
+    });
+  }
+
+  updateBackdrop(shouldRender = true) {
+    this.renderer.refreshWallpapers(true);
     if (shouldRender) this.render();
     return this;
   }
@@ -128,6 +205,30 @@ export class LiquidGlassWebGL {
     return this;
   }
 
+  start() {
+    if (this.running) return this;
+    if (typeof globalThis.requestAnimationFrame !== 'function') {
+      throw new Error('LiquidGlassWebGL.start() requires requestAnimationFrame.');
+    }
+    this.running = true;
+    const tick = () => {
+      if (!this.running) return;
+      this.render();
+      this.animationFrame = globalThis.requestAnimationFrame(tick);
+    };
+    this.animationFrame = globalThis.requestAnimationFrame(tick);
+    return this;
+  }
+
+  stop() {
+    this.running = false;
+    if (this.animationFrame && typeof globalThis.cancelAnimationFrame === 'function') {
+      globalThis.cancelAnimationFrame(this.animationFrame);
+    }
+    this.animationFrame = 0;
+    return this;
+  }
+
   resize(width = this.canvas.clientWidth || this.canvas.width || 1,
          height = this.canvas.clientHeight || this.canvas.height || 1,
          dpr = Math.min(globalThis.devicePixelRatio || 1, 2)) {
@@ -140,7 +241,11 @@ export class LiquidGlassWebGL {
     const height = this.canvas.clientHeight || this.canvas.height || 1;
     const { dpr } = this.resize(width, height);
     this.renderer.buildBackdrop(this.wallpaperIndex, this.wallpaperZoom);
-    this.renderer.drawBackdrop();
+    if (this.compositeMode === COMPOSITE_MODES.OVERLAY) {
+      this.renderer.clearOutput();
+    } else {
+      this.renderer.drawBackdrop();
+    }
     if (this.fusion) {
       this.renderer.drawGlassGroup(this.elements, this.material, dpr);
     } else {
@@ -152,6 +257,7 @@ export class LiquidGlassWebGL {
   }
 
   destroy() {
+    this.stop();
     this.renderer.destroy();
     this.elements = [];
   }

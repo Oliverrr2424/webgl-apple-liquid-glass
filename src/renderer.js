@@ -33,9 +33,9 @@ export const MIPS = 7;
 export const MAX_GLASS_SHAPES = 16;
 
 export class GlassRenderer {
-  constructor(canvas) {
+  constructor(canvas, options = {}) {
     const gl = canvas.getContext('webgl2', {
-      alpha: false, antialias: false, premultipliedAlpha: true,
+      alpha: Boolean(options.alpha), antialias: false, premultipliedAlpha: true,
       preserveDrawingBuffer: true,
     });
     if (!gl) throw new Error('WebGL2 unavailable');
@@ -62,6 +62,32 @@ export class GlassRenderer {
     this.fbos = [];
     this.w = 0;
     this.h = 0;
+  }
+
+  sourceSize(source) {
+    return [
+      Number(source?.videoWidth || source?.naturalWidth || source?.width || 0),
+      Number(source?.videoHeight || source?.naturalHeight || source?.height || 0),
+    ];
+  }
+
+  uploadWallpaper(entry, forceAllocation = false) {
+    const [width, height] = this.sourceSize(entry.source);
+    if (!(width > 0) || !(height > 0)) return false;
+
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, entry.texture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    if (!forceAllocation && entry.ready && entry.width === width && entry.height === height) {
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, entry.source);
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, entry.source);
+    }
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    entry.width = width;
+    entry.height = height;
+    entry.ready = true;
+    return true;
   }
 
   resize(w, h) {
@@ -91,22 +117,36 @@ export class GlassRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
-  setWallpapers(images) {
+  setWallpapers(images, options = {}) {
     const gl = this.gl;
-    this.wallpapers.forEach((texture) => gl.deleteTexture(texture));
-    this.wallpapers = images.map((image) => {
+    const update = options.update === 'live' ? 'live' : 'static';
+    this.wallpapers.forEach((entry) => gl.deleteTexture(entry.texture));
+    this.wallpapers = images.map((source) => {
       const texture = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      return texture;
+      const entry = {
+        texture,
+        source,
+        update,
+        ready: false,
+        width: 0,
+        height: 0,
+      };
+      this.uploadWallpaper(entry, true);
+      return entry;
     });
     gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  refreshWallpapers(force = false) {
+    for (const entry of this.wallpapers) {
+      if (force || entry.update === 'live') this.uploadWallpaper(entry);
+    }
+    this.gl.bindTexture(this.gl.TEXTURE_2D, null);
   }
 
   mipSize(level) {
@@ -116,6 +156,7 @@ export class GlassRenderer {
   // Renders the backdrop into mip 0 and builds the progressively blurred chain.
   buildBackdrop(scene, zoom = 1) {
     const gl = this.gl;
+    this.refreshWallpapers();
     gl.bindVertexArray(this.quad);
     gl.disable(gl.BLEND);
 
@@ -125,10 +166,11 @@ export class GlassRenderer {
     gl.uniform2f(this.progWall.loc.uRes, this.w, this.h);
     gl.uniform1i(this.progWall.loc.uScene, scene);
     gl.uniform1f(this.progWall.loc.uZoom, zoom);
+    const wallpaper = this.wallpapers[scene];
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.wallpapers[scene] || this.tex);
+    gl.bindTexture(gl.TEXTURE_2D, wallpaper?.ready ? wallpaper.texture : this.tex);
     gl.uniform1i(this.progWall.loc.uWallpaper, 1);
-    gl.uniform1i(this.progWall.loc.uUseImage, this.wallpapers[scene] ? 1 : 0);
+    gl.uniform1i(this.progWall.loc.uUseImage, wallpaper?.ready ? 1 : 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     gl.useProgram(this.progDown.p);
@@ -161,6 +203,17 @@ export class GlassRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this.tex);
     gl.uniform1i(this.progBlit.loc.uTex, 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  // Clears the visible framebuffer while preserving the offscreen backdrop
+  // texture. Used when the canvas overlays an existing DOM/canvas backdrop.
+  clearOutput() {
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.w, this.h);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
   }
 
   // elements: {x, y, w, h, shape} in CSS pixels, y measured from the TOP.
@@ -262,7 +315,7 @@ export class GlassRenderer {
   destroy() {
     const gl = this.gl;
     if (this.tex) gl.deleteTexture(this.tex);
-    this.wallpapers.forEach((texture) => gl.deleteTexture(texture));
+    this.wallpapers.forEach((entry) => gl.deleteTexture(entry.texture));
     this.fbos.forEach((framebuffer) => gl.deleteFramebuffer(framebuffer));
     this.tex = null;
     this.wallpapers = [];

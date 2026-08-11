@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      html, body { margin: 0; background: rgb(12, 180, 70); }
+      #output { display: block; width: 320px; height: 200px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="output"></canvas>
+    <script type="module">
+      import { LiquidGlassWebGL } from '../src/index.js';
+
+      const nextFrames = (count = 3) => new Promise((resolve) => {
+        const step = () => count-- > 0 ? requestAnimationFrame(step) : resolve();
+        requestAnimationFrame(step);
+      });
+
+      const fill = (context, color) => {
+        context.fillStyle = color;
+        context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+      };
+
+      const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+      window.runLiveBackdropTest = async () => {
+        const source = document.createElement('canvas');
+        source.width = 320;
+        source.height = 200;
+        const sourceContext = source.getContext('2d');
+        const output = document.querySelector('#output');
+        const glass = new LiquidGlassWebGL(output, { compositeMode: 'overlay' });
+        glass.setElements([
+          { id: 'surface', shape: 'rect', x: 60, y: 35, width: 200, height: 130 },
+        ], false);
+
+        const sample = (x, y) => {
+          const gl = glass.renderer.gl;
+          const dpr = gl.drawingBufferWidth / output.clientWidth;
+          const pixel = new Uint8Array(4);
+          gl.readPixels(
+            Math.round(x * dpr),
+            gl.drawingBufferHeight - Math.round(y * dpr) - 1,
+            1,
+            1,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            pixel,
+          );
+          return Array.from(pixel);
+        };
+
+        fill(sourceContext, '#d02020');
+        glass.setBackdrop(source);
+        await nextFrames();
+        const liveBefore = sample(160, 100);
+        const transparentOutside = sample(10, 10);
+
+        fill(sourceContext, '#2040d0');
+        await nextFrames();
+        const liveAfter = sample(160, 100);
+        glass.stop();
+
+        fill(sourceContext, '#24b04a');
+        glass.setBackdrop(source, { update: 'static', autoStart: false, shouldRender: false });
+        glass.render();
+        const staticBefore = sample(160, 100);
+        fill(sourceContext, '#d0b020');
+        glass.render();
+        const staticWithoutRefresh = sample(160, 100);
+        glass.updateBackdrop(false).render();
+        const staticAfterRefresh = sample(160, 100);
+        glass.destroy();
+
+        return {
+          liveBefore,
+          liveAfter,
+          transparentOutside,
+          staticBefore,
+          staticWithoutRefresh,
+          staticAfterRefresh,
+          liveDistance: distance(liveBefore, liveAfter),
+          staticDistance: distance(staticBefore, staticWithoutRefresh),
+          manualDistance: distance(staticBefore, staticAfterRefresh),
+        };
+      };
+    </script>
+  </body>
+</html>

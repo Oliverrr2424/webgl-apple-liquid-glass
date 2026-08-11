@@ -85,6 +85,44 @@ const glass = new LiquidGlassWebGL(canvas, { material });
 
 The returned object also includes `tintColor: [1, 1, 1]` and `debug: 0`. Parameter names use the JavaScript API names; for example, `highlightAdapt` is the “Light adaptation” control and `edgeLine` is the “Edge highlight” control.
 
+## Live backdrops and overlay mode
+
+Use `compositeMode: 'overlay'` when the original backdrop remains visible underneath the WebGL canvas. Pixels outside the glass stay transparent, while the supplied backdrop source is sampled for refraction and blur.
+
+```js
+const glass = new LiquidGlassWebGL(canvas, {
+  compositeMode: 'overlay',
+  elements: [
+    { id: 'panel', shape: 'rect', x: 80, y: 80, width: 520, height: 360 },
+  ],
+});
+
+// Canvas, OffscreenCanvas, and video sources are detected as live. The
+// renderer starts automatically and uploads their latest frame before drawing.
+glass.setBackdrop(animatedCanvas);
+
+// Stop the render loop when the view is hidden or unmounted.
+glass.stop();
+```
+
+Static image sources upload once:
+
+```js
+await glass.loadBackdrop('/images/wallpaper.jpg');
+```
+
+The update behavior can be selected explicitly:
+
+```js
+glass.setBackdrop(source, { update: 'live' });
+glass.setBackdrop(source, { update: 'static', autoStart: false });
+glass.updateBackdrop(); // manually upload the latest static-source pixels
+glass.start();
+glass.stop();
+```
+
+The default `compositeMode: 'replace'` preserves the original behavior and draws the supplied backdrop across the full WebGL canvas. Browsers do not expose arbitrary composited DOM/CSS pixels to WebGL, so the backdrop must be supplied explicitly as an image, canvas, video, ImageBitmap, or OffscreenCanvas. Cross-origin sources must permit CORS access.
+
 ## Visual preview
 
 These screenshots are captured from the playground with the inspector hidden. Each scene uses the same folder, rect, pill, and circle surfaces:
@@ -110,6 +148,10 @@ Nearby components can share one continuous distance field, so the silhouette, re
 ```js
 glass.setMaterial('clear');
 glass.setMaterial({ blurPlateau: 4, edgeLine: 0.2 });
+glass.setBackdrop(animatedCanvas, { update: 'live' });
+glass.updateBackdrop();
+glass.start();
+glass.stop();
 glass.setFusion(true, 52); // smooth-union distance in CSS pixels
 glass.setWallpaperIndex(0);
 glass.addElement({ id: 'new-folder', shape: 'folder', x: 20, y: 20, size: 180 });

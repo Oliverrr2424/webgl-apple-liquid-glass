@@ -1,5 +1,13 @@
 export type LiquidGlassShape = 'folder' | 'rect' | 'pill' | 'circle';
 export type LiquidGlassPreset = 'regular' | 'clear' | 'lens';
+export type LiquidGlassCompositeMode = 'replace' | 'overlay';
+export type LiquidGlassBackdropUpdate = 'auto' | 'static' | 'live';
+
+export interface LiquidGlassBackdropOptions {
+  update?: LiquidGlassBackdropUpdate;
+  autoStart?: boolean;
+  shouldRender?: boolean;
+}
 
 export interface LiquidGlassMaterial {
   radius: number;
@@ -55,6 +63,10 @@ export interface LiquidGlassOptions {
   fusion?: boolean;
   wallpaperZoom?: number;
   wallpapers?: Array<CanvasImageSource>;
+  backdrop?: CanvasImageSource;
+  backdropUpdate?: LiquidGlassBackdropUpdate;
+  compositeMode?: LiquidGlassCompositeMode;
+  autoStart?: boolean;
   elements?: LiquidGlassElement[];
 }
 
@@ -65,6 +77,17 @@ export declare const SHAPES: {
   readonly CIRCLE: 'circle';
 };
 
+export declare const COMPOSITE_MODES: {
+  readonly REPLACE: 'replace';
+  readonly OVERLAY: 'overlay';
+};
+
+export declare const BACKDROP_UPDATES: {
+  readonly AUTO: 'auto';
+  readonly STATIC: 'static';
+  readonly LIVE: 'live';
+};
+
 export declare const DEFAULT_MATERIAL: Readonly<LiquidGlassMaterial>;
 export declare const PRESETS: Record<LiquidGlassPreset, Partial<LiquidGlassMaterial>>;
 export declare function getDefaultMaterial(): LiquidGlassMaterial;
@@ -72,17 +95,24 @@ export declare function makeMaterial(preset?: LiquidGlassPreset): LiquidGlassMat
 
 export declare class LiquidGlassWebGL {
   constructor(canvas: HTMLCanvasElement, options?: LiquidGlassOptions);
+  compositeMode: LiquidGlassCompositeMode;
+  running: boolean;
   elements: LiquidGlassElement[];
-  setElements(elements: LiquidGlassElement[]): this;
-  addElement(element: LiquidGlassElement): string;
-  updateElement(id: string, patch: LiquidGlassElement): this;
-  removeElement(id: string): this;
-  setMaterial(materialOrPreset: LiquidGlassPreset | Partial<LiquidGlassMaterial>): this;
-  setFusion(enabled: boolean, mergeRadius?: number): this;
-  setWallpapers(images: CanvasImageSource[]): this;
-  loadWallpapers(sources: Array<string | CanvasImageSource>): Promise<this>;
-  setWallpaper(source: string | CanvasImageSource): Promise<this>;
-  setWallpaperIndex(index: number): this;
+  setElements(elements: LiquidGlassElement[], shouldRender?: boolean): this;
+  addElement(element: LiquidGlassElement, shouldRender?: boolean): string;
+  updateElement(id: string, patch: LiquidGlassElement, shouldRender?: boolean): this;
+  removeElement(id: string, shouldRender?: boolean): this;
+  setMaterial(materialOrPreset: LiquidGlassPreset | Partial<LiquidGlassMaterial>, shouldRender?: boolean): this;
+  setFusion(enabled: boolean, mergeRadius?: number, shouldRender?: boolean): this;
+  setWallpapers(images: CanvasImageSource[], shouldRender?: boolean): this;
+  loadWallpapers(sources: Array<string | CanvasImageSource>, shouldRender?: boolean): Promise<this>;
+  setWallpaper(source: string | CanvasImageSource, shouldRender?: boolean): Promise<this>;
+  setBackdrop(source: CanvasImageSource, options?: LiquidGlassBackdropOptions): this;
+  loadBackdrop(source: string | CanvasImageSource, options?: LiquidGlassBackdropOptions): Promise<this>;
+  updateBackdrop(shouldRender?: boolean): this;
+  setWallpaperIndex(index: number, shouldRender?: boolean): this;
+  start(): this;
+  stop(): this;
   resize(width?: number, height?: number, dpr?: number): { width: number; height: number; dpr: number };
   render(): this;
   destroy(): void;
