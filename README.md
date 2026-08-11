@@ -35,6 +35,56 @@ glass.render();
 
 The component accepts CSS-pixel coordinates. Content such as app icons, labels, or buttons can be drawn in a separate canvas layer above the WebGL canvas.
 
+## Default material parameters
+
+`getDefaultMaterial()` returns a fresh copy of the package's default material parameters on every call. This makes it safe to customize the result without mutating the package defaults.
+
+```js
+import { getDefaultMaterial, LiquidGlassWebGL } from 'apple-liquid-glass-webgl';
+
+const material = getDefaultMaterial();
+material.blurRim = 32;
+
+const glass = new LiquidGlassWebGL(canvas, { material });
+```
+
+`makeMaterial()` with no argument is also equivalent to `getDefaultMaterial()`. The exported `DEFAULT_MATERIAL` constant contains the same values for read-only inspection.
+
+| Group | Parameter | Default |
+| --- | --- | ---: |
+| Shape | `radius` | `64.00` |
+| Shape | `squircle` | `2.00` |
+| Shape | `mergeRadius` | `52.00` |
+| Shape | `bevel` | `34.00` |
+| Shape | `height` | `21.00` |
+| Optics | `ior` | `2.00` |
+| Optics | `dispersion` | `0.06` |
+| Optics | `refractScale` | `3.00` |
+| Optics | `meniscus` | `1.00` |
+| Optics | `blurPlateau` | `8.00` |
+| Optics | `blurRim` | `48.00` |
+| Optics | `opticalDensity` | `1.80` |
+| Lighting | `specular` | `0.89` |
+| Lighting | `specPower` | `11.50` |
+| Lighting | `highlightAdapt` | `0.83` |
+| Lighting | `highlightWidth` | `0.76` |
+| Lighting | `highlightSharpness` | `0.55` |
+| Lighting | `highlightBase` | `0.30` |
+| Lighting | `fresnel` | `0.65` |
+| Lighting | `saturation` | `1.35` |
+| Lighting | `brightness` | `0.00` |
+| Lighting | `tintAmount` | `0.08` |
+| Edge | `shadow` | `0.09` |
+| Edge | `shadowSize` | `4.00` |
+| Edge | `shadowOffset` | `0.00` |
+| Edge | `lightX` | `-0.18` |
+| Edge | `lightY` | `0.08` |
+| Edge | `edgeLine` | `0.30` |
+| Edge | `edgeWidth` | `1.10` |
+| Edge | `edgeDark` | `0.11` |
+
+The returned object also includes `tintColor: [1, 1, 1]` and `debug: 0`. Parameter names use the JavaScript API names; for example, `highlightAdapt` is the “Light adaptation” control and `edgeLine` is the “Edge highlight” control.
+
 ## Visual preview
 
 These screenshots are captured from the playground with the inspector hidden. Each scene uses the same folder, rect, pill, and circle surfaces:
@@ -88,6 +138,12 @@ Open [http://localhost:8765](http://localhost:8765). The inspector includes scen
 npm run shot /tmp/liquid-glass.png -- --scene 0 --size 1200x720 --no-panel
 npm run pack:check
 ```
+
+## Automated npm publishing
+
+Every push to `main` runs [`.github/workflows/publish-npm.yml`](.github/workflows/publish-npm.yml). The workflow publishes the package when the version in `package.json` is newer than the version already on npm.
+
+To enable publishing, add a repository secret named `NPM_TOKEN` containing an npm token with permission to publish `apple-liquid-glass-webgl`. Bump the package version before pushing a release to `main`.
 
 ## License
 

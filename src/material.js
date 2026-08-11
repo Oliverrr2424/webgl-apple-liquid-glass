@@ -51,8 +51,25 @@ export const PRESETS = {
   },
 };
 
+function cloneMaterial(material) {
+  return {
+    ...material,
+    tintColor: [...material.tintColor],
+  };
+}
+
+/**
+ * Return a fresh copy of the package's default material parameters.
+ *
+ * A fresh object (and tintColor array) is returned on every call so callers
+ * can safely adjust the result without changing the package defaults.
+ */
+export function getDefaultMaterial() {
+  return cloneMaterial(DEFAULT_MATERIAL);
+}
+
 export function makeMaterial(preset = 'regular') {
-  return { ...DEFAULT_MATERIAL, ...(PRESETS[preset] || {}) };
+  return { ...getDefaultMaterial(), ...(PRESETS[preset] || {}) };
 }
 
 export const SLIDERS = [

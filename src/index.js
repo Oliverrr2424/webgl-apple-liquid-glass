@@ -1,5 +1,5 @@
 import { GlassRenderer } from './renderer.js';
-import { DEFAULT_MATERIAL, PRESETS, makeMaterial } from './material.js';
+import { DEFAULT_MATERIAL, PRESETS, getDefaultMaterial, makeMaterial } from './material.js';
 
 export const SHAPES = Object.freeze({
   FOLDER: 'folder',
@@ -157,4 +157,4 @@ export class LiquidGlassWebGL {
   }
 }
 
-export { DEFAULT_MATERIAL, PRESETS, makeMaterial };
+export { DEFAULT_MATERIAL, PRESETS, getDefaultMaterial, makeMaterial };

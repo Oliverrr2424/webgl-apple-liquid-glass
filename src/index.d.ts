@@ -1,6 +1,42 @@
 export type LiquidGlassShape = 'folder' | 'rect' | 'pill' | 'circle';
 export type LiquidGlassPreset = 'regular' | 'clear' | 'lens';
 
+export interface LiquidGlassMaterial {
+  radius: number;
+  squircle: number;
+  mergeRadius: number;
+  bevel: number;
+  height: number;
+  ior: number;
+  dispersion: number;
+  refractScale: number;
+  meniscus: number;
+  blurPlateau: number;
+  blurRim: number;
+  opticalDensity: number;
+  specular: number;
+  specPower: number;
+  lightX: number;
+  lightY: number;
+  highlightAdapt: number;
+  highlightWidth: number;
+  highlightSharpness: number;
+  highlightBase: number;
+  fresnel: number;
+  saturation: number;
+  brightness: number;
+  tintAmount: number;
+  tintColor: [number, number, number];
+  shadow: number;
+  shadowSize: number;
+  shadowOffset: number;
+  edgeLine: number;
+  edgeWidth: number;
+  edgeDark: number;
+  debug: number;
+  [key: string]: unknown;
+}
+
 export interface LiquidGlassElement {
   id?: string;
   shape?: LiquidGlassShape;
@@ -15,7 +51,7 @@ export interface LiquidGlassElement {
 }
 
 export interface LiquidGlassOptions {
-  material?: LiquidGlassPreset | Record<string, unknown>;
+  material?: LiquidGlassPreset | Partial<LiquidGlassMaterial>;
   fusion?: boolean;
   wallpaperZoom?: number;
   wallpapers?: Array<CanvasImageSource>;
@@ -29,9 +65,10 @@ export declare const SHAPES: {
   readonly CIRCLE: 'circle';
 };
 
-export declare const DEFAULT_MATERIAL: Record<string, unknown>;
-export declare const PRESETS: Record<LiquidGlassPreset, Record<string, unknown>>;
-export declare function makeMaterial(preset?: LiquidGlassPreset): Record<string, unknown>;
+export declare const DEFAULT_MATERIAL: Readonly<LiquidGlassMaterial>;
+export declare const PRESETS: Record<LiquidGlassPreset, Partial<LiquidGlassMaterial>>;
+export declare function getDefaultMaterial(): LiquidGlassMaterial;
+export declare function makeMaterial(preset?: LiquidGlassPreset): LiquidGlassMaterial;
 
 export declare class LiquidGlassWebGL {
   constructor(canvas: HTMLCanvasElement, options?: LiquidGlassOptions);
@@ -40,7 +77,7 @@ export declare class LiquidGlassWebGL {
   addElement(element: LiquidGlassElement): string;
   updateElement(id: string, patch: LiquidGlassElement): this;
   removeElement(id: string): this;
-  setMaterial(materialOrPreset: LiquidGlassPreset | Record<string, unknown>): this;
+  setMaterial(materialOrPreset: LiquidGlassPreset | Partial<LiquidGlassMaterial>): this;
   setFusion(enabled: boolean, mergeRadius?: number): this;
   setWallpapers(images: CanvasImageSource[]): this;
   loadWallpapers(sources: Array<string | CanvasImageSource>): Promise<this>;
