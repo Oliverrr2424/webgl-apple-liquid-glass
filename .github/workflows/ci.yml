@@ -1,9 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
   # Called by the publish workflow so a release cannot skip the gate.
   workflow_call:
