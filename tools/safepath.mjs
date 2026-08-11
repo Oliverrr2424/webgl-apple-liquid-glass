@@ -1,17 +1,39 @@
-import { resolve, dirname, sep, basename } from 'path';
+import { resolve, dirname, sep, basename, join } from 'path';
 import { fileURLToPath } from 'url';
-import { realpathSync, mkdirSync } from 'fs';
+import { realpathSync, mkdirSync, lstatSync } from 'fs';
 
 export const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
+function reject(filePath) {
+  console.error(`Output path must be inside the project directory: ${filePath}`);
+  process.exit(1);
+}
+
 export function assertSafePath(filePath) {
   const abs = resolve(filePath);
-  const parent = dirname(abs);
-  mkdirSync(parent, { recursive: true });
-  const realParent = realpathSync(parent);
-  const realOut = resolve(realParent, basename(abs));
-  if (!realOut.startsWith(PROJECT_ROOT + sep)) {
-    console.error(`Output path must be inside the project directory: ${filePath}`);
-    process.exit(1);
+
+  // Walk up to the nearest existing ancestor without creating anything
+  let ancestor = dirname(abs);
+  const suffix = [basename(abs)];
+  while (true) {
+    try { realpathSync(ancestor); break; } catch (_) {}
+    const parent = dirname(ancestor);
+    if (parent === ancestor) break; // reached filesystem root
+    suffix.unshift(basename(ancestor));
+    ancestor = parent;
   }
+  const realOut = join(realpathSync(ancestor), ...suffix);
+
+  // Containment check before any mutation
+  if (!realOut.startsWith(PROJECT_ROOT + sep)) reject(filePath);
+
+  // Reject an existing output file that is itself a symlink
+  try {
+    if (lstatSync(abs).isSymbolicLink()) reject(filePath);
+  } catch (e) {
+    if (e.code !== 'ENOENT') throw e; // file doesn't exist yet — fine; rethrow anything else
+  }
+
+  // Safe to create parent directories now
+  mkdirSync(dirname(abs), { recursive: true });
 }
