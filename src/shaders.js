@@ -242,7 +242,9 @@ void main() {
 // ---------------------------------------------------------------------------
 // The material itself.
 //
-// 1. shape          : square/rect folder / exact capsule / exact circle SDF
+// 1. shape          : square/rect folder / exact capsule / exact circle SDF,
+//                     smooth-unioned, then eikonal-corrected to d/|grad d| so
+//                     the field is metric again across a fusion bridge
 // 2. thickness      : t = clamp(-d / bevel), height h(t) = a convex bevel
 //                     profile -> flat plateau in the middle, steep rim
 // 3. normal         : n = normalize(vec3(s * H/bevel * dh/dt * grad(d), 1))
@@ -349,6 +351,11 @@ float sdAppleShape(vec2 px) {
   // polynomial unions are only C1 and become order-dependent with 3+ shapes;
   // their curvature boundaries show up as diagonal tears under sharp glass
   // highlights. 0.36 matches the polynomial union's depth at equal distances.
+  //
+  // Smoothness is not metricity: the result below is a bound, not a distance,
+  // and |grad| falls well under 1 wherever the blend is active. Callers that
+  // measure screen-space widths off this field must divide by |grad| first --
+  // see the eikonal step in FS_GLASS.
   float scale = max(uMergeRadius * 0.36, 0.01);
   float sum = 0.0;
   for (int i = 0; i < MAX_SHAPES; i++) {
@@ -490,7 +497,6 @@ void main() {
   vec2 px = vUV * uRes;
 
   float d = sdAppleShape(px);
-  float aa = smoothstep(0.8, -0.8, d);
 
   // ---- gradient of the SDF = outward direction of the surface -------------
   float k = max(1.0, 0.06 * uBevel);
@@ -498,10 +504,33 @@ void main() {
              sdAppleShape(px - vec2(k, 0.0));
   float dy = sdAppleShape(px + vec2(0.0, k)) -
              sdAppleShape(px - vec2(0.0, k));
-  vec2 g = normalize(vec2(dx, dy) + 1e-6);
+  vec2 rawGrad = vec2(dx, dy) / (2.0 * k);
+  float gradLen = length(rawGrad);
+  vec2 g = rawGrad / max(gradLen, 1e-5);
+
+  // ---- eikonal re-normalisation ------------------------------------------
+  // The smooth union is C-infinity, but it is NOT a metric distance. Its
+  // gradient is the blend-weighted average of the member gradients, so wherever
+  // two members disagree in direction the magnitude collapses: measured 0.87
+  // through a fused body and 0.00 on a bridge's medial axis, against exactly
+  // 1.0 for a lone shape.
+  //
+  // Every feature below -- bevel, specular band, contour, edge line -- is an
+  // iso-band of d, so on an uncorrected field each one stretches by 1/|grad d|
+  // in screen space. The 34px bevel measured 52px across a bridge versus 25px
+  // elsewhere, and the sub-pixel edge line fattened by the same factor. That
+  // widening, right where two components meet, is the bright seam.
+  //
+  // d / |grad d| is the standard first-order distance to the zero level set and
+  // restores a constant screen-space width. It is a no-op on unfused geometry
+  // (|grad d| == 1 there), so it costs nothing in fidelity. The floor bounds the
+  // correction at 5x and is only reached deep inside the plateau, past the end
+  // of every band.
+  float dMetric = d / max(gradLen, 0.20);
+  float aa = smoothstep(0.8, -0.8, dMetric);
 
   // ---- thickness field / bevel profile -----------------------------------
-  float t  = clamp(-d / uBevel, 0.0, 1.0);   // 0 at the edge, 1 on the plateau
+  float t  = clamp(-dMetric / uBevel, 0.0, 1.0); // 0 at the edge, 1 = plateau
   float ct = 1.0 - t;
   float h  = sqrt(max(1.0 - ct * ct, 0.0));  // convex (circular) bevel
   float dhdt = ct / max(h, 0.10);            // slope, clamped at the silhouette
@@ -509,6 +538,11 @@ void main() {
 
   // 0 = convex lens, 1 = the default Apple-like concave rim. Values above 1
   // deliberately exaggerate the inward normal for exploratory tuning.
+  // With dMetric eikonal, grad(H) = height * dh/dt * grad(t) has magnitude
+  // exactly "slope" along g, so the unit gradient is the correct height-field
+  // normal here. Feeding the raw union gradient instead would understate the
+  // tilt by |grad d|, and normalising without rescaling d -- what this shader
+  // used to do -- overstates it by 1/|grad d| and spikes the Schlick term.
   float curveSign = 1.0 - 2.0 * uMeniscus;
   vec3 n = normalize(vec3(curveSign * g * slope, 1.0));
   vec3 I = vec3(0.0, 0.0, -1.0);
@@ -599,7 +633,12 @@ void main() {
   vec3 envY = mix(envB, envT, wy);
   vec3 ringEnv = (envX * abs(nn.x) + envY * abs(nn.y)) /
                  max(abs(nn.x) + abs(nn.y), 1e-3);
-  vec3 localEnv = sampleBg(px + g * max(0.55 * uBevel, 6.0),
+  // On a bridge's medial axis the gradient direction is undefined, so fade the
+  // probe offset out with the gradient magnitude instead of letting a ~19px
+  // probe flip sides across the ridge. Saturates to 1 for any |grad d| >= 0.35,
+  // which covers every rim on both fused and lone shapes.
+  float gradTrust = smoothstep(0.05, 0.35, gradLen);
+  vec3 localEnv = sampleBg(px + g * gradTrust * max(0.55 * uBevel, 6.0),
                            min(2.0, uMips - 1.0)).rgb;
   vec3 env = mix(ringEnv, localEnv, 0.58);
   float envLum = luminance(env);
@@ -630,12 +669,14 @@ void main() {
 
   // Dark contour right at the silhouette: at grazing angles the rim reflects
   // the surroundings instead of transmitting, so real glass edges read dark.
+  // Both of these are sub-pixel iso-bands, so they are the features the
+  // non-metric field distorted most; they track dMetric for that reason.
   float w = max(uEdgeWidth, 0.5);
-  float contour = smoothstep(w, 0.0, abs(d + 0.55 * w));
+  float contour = smoothstep(w, 0.0, abs(dMetric + 0.55 * w));
   col *= 1.0 - uEdgeDark * contour;
 
   // Crisp inner highlight line; direction and colour follow the local probe.
-  float line = smoothstep(1.35 * w, 0.0, abs(d + 2.2 * w));
+  float line = smoothstep(1.35 * w, 0.0, abs(dMetric + 2.2 * w));
   float lit = 0.26 + 0.74 * max(dot(g, lightDir), 0.0);
   vec3 stableEnv = (adaptL + adaptR + adaptB + adaptT) * 0.25;
   float stableEnvLum = max(luminance(stableEnv), 0.12);
