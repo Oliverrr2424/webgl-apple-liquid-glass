@@ -32,7 +32,7 @@
       </header>
       <section class="frame">
         <canvas id="stage" aria-label="Liquid glass component preview"></canvas>
-        <span class="caption">folder / rect / pill / circle</span>
+        <span class="caption">folder + rect + pill + circle / smooth union</span>
       </section>
       <p class="note">This page imports the package through the local <code>node_modules</code> folder created by <code>npm install</code>.</p>
     </main>
@@ -44,19 +44,19 @@
 
       const canvas = document.querySelector('#stage');
       const status = document.querySelector('[data-status]');
-      const glass = new LiquidGlassWebGL(canvas, { material: 'regular' });
+      const glass = new LiquidGlassWebGL(canvas, { material: 'regular', fusion: true });
 
-      await glass.setWallpaper('/node_modules/apple-liquid-glass-webgl/assets/readme/abstract-lines.png', false);
+      await glass.setWallpaper('/node_modules/apple-liquid-glass-webgl/assets/wallpapers/abstract-lines.png', false);
 
       function layout() {
         const width = canvas.clientWidth;
         const compact = width < 720;
         const scale = compact ? width / 720 : 1;
         glass.setElements([
-          { id: 'folder', shape: 'folder', x: 72 * scale, y: 134, width: 220 * scale, height: 220 * scale },
-          { id: 'rect', shape: 'rect', x: 350 * scale, y: 100, width: 270 * scale, height: 180 },
-          { id: 'pill', shape: 'pill', x: 192 * scale, y: 406, width: 250 * scale, height: 88 },
-          { id: 'circle', shape: 'circle', x: 522 * scale, y: 370, size: 128 * scale },
+          { id: 'folder', shape: 'folder', x: 92 * scale, y: 148, width: 250 * scale, height: 220 * scale },
+          { id: 'rect', shape: 'rect', x: 324 * scale, y: 188, width: 278 * scale, height: 184 },
+          { id: 'pill', shape: 'pill', x: 238 * scale, y: 348, width: 254 * scale, height: 92 },
+          { id: 'circle', shape: 'circle', x: 566 * scale, y: 146, size: 140 * scale },
         ], false);
         glass.render();
       }
