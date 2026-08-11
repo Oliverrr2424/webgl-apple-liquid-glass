@@ -1,9 +1,13 @@
 // Screenshot helper: node tools/shot.mjs <out.png> [--scene N] [--focus i,zoom]
 //                    [--set key=val,key=val] [--size WxH] [--no-panel]
+import { resolve, sep } from 'path';
 import { chromium } from 'playwright';
 
 const args = process.argv.slice(2);
-const out = args[0] || 'shots/out.png';
+const out = resolve(args[0] || 'shots/out.png');
+if (!out.startsWith(resolve('.') + sep)) {
+  console.error('Error: output path must be within the project directory'); process.exit(1);
+}
 const flag = (name, def = null) => {
   const i = args.indexOf('--' + name);
   return i === -1 ? def : (args[i + 1] ?? true);
