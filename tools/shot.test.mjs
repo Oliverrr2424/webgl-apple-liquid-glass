@@ -1,9 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'crypto';
-import { symlinkSync, unlinkSync } from 'fs';
-import { join } from 'path';
-import { assertSafePath, PROJECT_ROOT } from './safepath.mjs';
+import {
+  symlinkSync,
+  unlinkSync,
+  linkSync,
+  writeFileSync,
+  readFileSync,
+  mkdtempSync,
+  rmSync,
+} from 'fs';
+import { dirname, join } from 'path';
+import { assertSafePath, writeSafeFile, PROJECT_ROOT } from './safepath.mjs';
 
 function withExitIntercept(fn) {
   const orig = process.exit;
@@ -52,5 +60,25 @@ test('output file that is a symlink is rejected', () => {
     );
   } finally {
     if (created) try { unlinkSync(symlinkPath); } catch (_) {}
+  }
+});
+
+test('hard-linked output does not overwrite the other link', () => {
+  const name = `out-hardlink-${randomUUID()}.png`;
+  const outputPath = join(PROJECT_ROOT, 'shots', name);
+  const outsideDir = mkdtempSync(join(dirname(PROJECT_ROOT), 'shot-outside-'));
+  const outsidePath = join(outsideDir, 'target.png');
+
+  try {
+    writeFileSync(outsidePath, 'original');
+    linkSync(outsidePath, outputPath);
+
+    writeSafeFile(outputPath, 'screenshot');
+
+    assert.equal(readFileSync(outsidePath, 'utf8'), 'original');
+    assert.equal(readFileSync(outputPath, 'utf8'), 'screenshot');
+  } finally {
+    try { unlinkSync(outputPath); } catch (_) {}
+    rmSync(outsideDir, { recursive: true, force: true });
   }
 });

@@ -1,7 +1,7 @@
 // Screenshot helper: node tools/shot.mjs <out.png> [--scene N] [--focus i,zoom]
 //                    [--set key=val,key=val] [--size WxH] [--no-panel]
 import { chromium } from 'playwright';
-import { assertSafePath } from './safepath.mjs';
+import { assertSafePath, writeSafeFile } from './safepath.mjs';
 
 const args = process.argv.slice(2);
 const out = args[0] || 'shots/out.png';
@@ -49,6 +49,7 @@ if (focus) {
   await page.evaluate(([i, z]) => window.__lg.focus(i, z || 2), [i, z]);
 }
 await page.waitForTimeout(180);
-await page.locator('#stage').screenshot({ path: out });
+const image = await page.locator('#stage').screenshot();
+writeSafeFile(out, image);
 await browser.close();
 console.log('wrote', out);
