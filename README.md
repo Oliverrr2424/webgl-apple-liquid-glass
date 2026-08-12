@@ -255,7 +255,7 @@ Open [http://localhost:8765](http://localhost:8765). It drives the published com
 npm test                     # unit tests, then the browser test pages
 npm run test:visual          # golden image comparison
 npm run test:visual:update   # record a baseline for this renderer
-npm run shot /tmp/liquid-glass.png -- --scene 0 --size 1200x720 --no-panel
+npm run shot shots/liquid-glass.png -- --scene 0 --size 1200x720 --no-panel
 npm run pack:check
 ```
 
