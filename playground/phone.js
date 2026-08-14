@@ -6,6 +6,57 @@
 export const PHONE_SCREEN_WIDTH = 393;
 export const PHONE_SCREEN_HEIGHT = 852;
 
+const PHONE_ICONS = {
+  wifi: './assets/icons/system/wifi.svg',
+  plane: './assets/icons/system/plane.svg',
+  bluetooth: './assets/icons/system/bluetooth.svg',
+  antenna: './assets/icons/system/antenna.svg',
+  rotation: './assets/icons/system/rotate-ccw-key.svg',
+  mirroring: './assets/icons/system/screen-share.svg',
+  flashlight: './assets/icons/system/flashlight.svg',
+  camera: './assets/icons/system/camera.svg',
+  calculator: './assets/icons/system/calculator.svg',
+  voice: './assets/icons/system/audio-lines.svg',
+  record: './assets/icons/system/circle-power.svg',
+  battery: './assets/icons/system/battery-low.svg',
+  moon: './assets/icons/system/moon.svg',
+  sun: './assets/icons/system/sun.svg',
+  volume: './assets/icons/system/volume-2.svg',
+};
+
+const phoneIconImages = new Map();
+let tintCanvas = null;
+
+export const PHONE_ICON_SOURCES = Object.freeze(Object.values(PHONE_ICONS));
+
+export function attachPhoneIconImages(images) {
+  for (const [name, src] of Object.entries(PHONE_ICONS)) phoneIconImages.set(name, images.get(src) ?? null);
+}
+
+/** Draw a vendored SVG symbol; optional tinting is isolated in a tiny buffer. */
+export function drawPhoneIcon(ctx, name, x, y, width, height = width, color = '#fff') {
+  const icon = phoneIconImages.get(name);
+  if (!icon?.complete) return;
+  if (color === '#fff' || color === 'white') {
+    ctx.drawImage(icon, x, y, width, height);
+    return;
+  }
+  if (typeof document === 'undefined') return;
+  if (!tintCanvas) tintCanvas = document.createElement('canvas');
+  const pixelWidth = Math.max(1, Math.ceil(width * 2));
+  const pixelHeight = Math.max(1, Math.ceil(height * 2));
+  tintCanvas.width = pixelWidth;
+  tintCanvas.height = pixelHeight;
+  const tintContext = tintCanvas.getContext('2d');
+  tintContext.clearRect(0, 0, pixelWidth, pixelHeight);
+  tintContext.drawImage(icon, 0, 0, pixelWidth, pixelHeight);
+  tintContext.globalCompositeOperation = 'source-in';
+  tintContext.fillStyle = color;
+  tintContext.fillRect(0, 0, pixelWidth, pixelHeight);
+  tintContext.globalCompositeOperation = 'source-over';
+  ctx.drawImage(tintCanvas, x, y, width, height);
+}
+
 export function phoneFrame(width, height) {
   const outerAspect = 413 / 880;
   const availableWidth = Math.max(180, width - 56);
@@ -194,34 +245,24 @@ export function drawPhoneChrome(ctx, frame, { darkStatus = false } = {}) {
   ctx.textBaseline = 'middle';
   ctx.fillText('9:41', screen.x + 27 * scale, screen.y + 34 * scale);
 
-  const right = screen.x + screen.w - 24 * scale;
+  const right = screen.x + screen.w;
   const cy = screen.y + 34 * scale;
   ctx.strokeStyle = fg;
   ctx.fillStyle = fg;
   ctx.lineWidth = Math.max(1.3, 2.1 * scale);
-  // cellular bars
+  // cellular bars use the same optical weight as the vendored status glyphs.
   for (let index = 0; index < 4; index++) {
     const barH = (4 + index * 3) * scale;
     ctx.beginPath();
-    ctx.roundRect(right - 77 * scale + index * 7 * scale, cy - barH / 2, 4 * scale, barH, 2 * scale);
+    ctx.roundRect(right - 94 * scale + index * 6 * scale, cy + 6 * scale - barH, 3.6 * scale, barH, 2 * scale);
     ctx.fill();
   }
-  // Wi-Fi arcs
+  drawPhoneIcon(ctx, 'wifi', right - 65 * scale, cy - 11 * scale, 23 * scale, 23 * scale, fg);
+  drawPhoneIcon(ctx, 'battery', right - 36 * scale, cy - 12 * scale, 27 * scale, 24 * scale, fg);
   ctx.beginPath();
-  ctx.arc(right - 36 * scale, cy + 5 * scale, 15 * scale, Math.PI * 1.18, Math.PI * 1.82);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(right - 36 * scale, cy + 5 * scale, 9 * scale, Math.PI * 1.18, Math.PI * 1.82);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(right - 36 * scale, cy + 3 * scale, 1.7 * scale, 0, Math.PI * 2);
+  ctx.roundRect(right - 30.5 * scale, cy - 4 * scale, 13.5 * scale, 8 * scale, 2 * scale);
+  ctx.fillStyle = fg;
   ctx.fill();
-  // Battery body and cap
-  ctx.beginPath();
-  ctx.roundRect(right - 14 * scale, cy - 6 * scale, 23 * scale, 12 * scale, 3 * scale);
-  ctx.stroke();
-  ctx.fillRect(right + 11 * scale, cy - 2 * scale, 2 * scale, 4 * scale);
-  ctx.fillRect(right - 11 * scale, cy - 3.5 * scale, 15 * scale, 7 * scale);
 
   // Dynamic Island is drawn last so nothing visually crosses the hardware cutout.
   const island = phoneRect(frame, 132, 11, 129, 36);

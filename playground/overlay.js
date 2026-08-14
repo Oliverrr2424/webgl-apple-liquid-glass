@@ -1,6 +1,6 @@
 // Everything that sits ON TOP of the glass: app icons, folder label, badge.
 
-import { drawPhoneChrome, phoneFrame } from './phone.js';
+import { drawPhoneChrome, drawPhoneIcon, phoneFrame } from './phone.js?phone-scenes=2';
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -174,77 +174,13 @@ function phoneText(ctx, text, x, y, size, options = {}) {
   ctx.restore();
 }
 
-function drawLineIcon(ctx, element, kind) {
+function drawSystemIcon(ctx, element, kind, scale = 0.46, color = '#fff') {
   const unit = Math.min(element.w, element.h);
-  const cx = element.x + element.w / 2;
-  const cy = element.y + element.h / 2;
-  ctx.save();
-  ctx.strokeStyle = '#fff';
-  ctx.fillStyle = '#fff';
-  ctx.lineWidth = Math.max(1.5, unit * 0.055);
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  if (kind === 'flashlight' || kind === 'torch') {
-    ctx.beginPath();
-    ctx.moveTo(cx - unit * 0.14, cy - unit * 0.2);
-    ctx.lineTo(cx + unit * 0.14, cy - unit * 0.2);
-    ctx.lineTo(cx + unit * 0.08, cy - unit * 0.04);
-    ctx.lineTo(cx + unit * 0.08, cy + unit * 0.22);
-    ctx.lineTo(cx - unit * 0.08, cy + unit * 0.22);
-    ctx.lineTo(cx - unit * 0.08, cy - unit * 0.04);
-    ctx.closePath();
-    ctx.stroke();
-  } else if (kind === 'camera') {
-    ctx.beginPath();
-    ctx.roundRect(cx - unit * 0.25, cy - unit * 0.16, unit * 0.5, unit * 0.34, unit * 0.06);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(cx, cy + unit * 0.01, unit * 0.1, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx - unit * 0.12, cy - unit * 0.16);
-    ctx.lineTo(cx - unit * 0.06, cy - unit * 0.24);
-    ctx.lineTo(cx + unit * 0.07, cy - unit * 0.24);
-    ctx.lineTo(cx + unit * 0.13, cy - unit * 0.16);
-    ctx.stroke();
-  } else if (kind === 'mirroring') {
-    ctx.strokeRect(cx - unit * 0.22, cy - unit * 0.14, unit * 0.31, unit * 0.24);
-    ctx.strokeRect(cx - unit * 0.07, cy - unit * 0.02, unit * 0.31, unit * 0.24);
-  } else if (kind === 'rotation') {
-    ctx.beginPath();
-    ctx.arc(cx, cy, unit * 0.22, -Math.PI * 0.3, Math.PI * 1.25);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx - unit * 0.22, cy - unit * 0.05);
-    ctx.lineTo(cx - unit * 0.22, cy - unit * 0.2);
-    ctx.lineTo(cx - unit * 0.08, cy - unit * 0.16);
-    ctx.stroke();
-    ctx.strokeRect(cx - unit * 0.06, cy - unit * 0.08, unit * 0.12, unit * 0.17);
-  } else if (kind === 'calculator') {
-    ctx.strokeRect(cx - unit * 0.17, cy - unit * 0.23, unit * 0.34, unit * 0.46);
-    ctx.strokeRect(cx - unit * 0.1, cy - unit * 0.15, unit * 0.2, unit * 0.09);
-    for (let x = -1; x <= 1; x++) for (let y = 0; y < 2; y++) {
-      ctx.beginPath();
-      ctx.arc(cx + x * unit * 0.09, cy + (y * 0.1 + 0.06) * unit, unit * 0.018, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  } else if (kind === 'voice') {
-    for (let index = -3; index <= 3; index++) {
-      const height = unit * (0.12 + (3 - Math.abs(index)) * 0.045);
-      ctx.beginPath();
-      ctx.moveTo(cx + index * unit * 0.08, cy - height);
-      ctx.lineTo(cx + index * unit * 0.08, cy + height);
-      ctx.stroke();
-    }
-  } else if (kind === 'record') {
-    ctx.beginPath();
-    ctx.arc(cx, cy, unit * 0.21, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(cx, cy, unit * 0.105, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
+  const size = unit * scale;
+  drawPhoneIcon(ctx, kind === 'torch' ? 'flashlight' : kind,
+    element.x + (element.w - size) / 2,
+    element.y + (element.h - size) / 2,
+    size, size, color);
 }
 
 function drawHomeOverlay(ctx, frame, elements) {
@@ -286,37 +222,31 @@ function drawNotificationOverlay(ctx, frame, elements) {
   notificationCard(ctx, byId.get('headline'), 'CS2', 'LVG win 2–0 · next round confirmed', '3m ago', '#172034');
   notificationCard(ctx, byId.get('building'), 'Five Condos', 'Elevator #4 is back in service', '24m ago', '#32b6ff');
   notificationCard(ctx, byId.get('message'), 'Oliverrr', 'I just saved so much time using one AI.', '27m ago', '#ff4b8b');
-  drawLineIcon(ctx, byId.get('flashlight'), 'flashlight');
-  drawLineIcon(ctx, byId.get('camera'), 'camera');
+  drawSystemIcon(ctx, byId.get('flashlight'), 'flashlight');
+  drawSystemIcon(ctx, byId.get('camera'), 'camera');
 }
 
 function drawConnectivity(ctx, element) {
-  const points = [
-    [0.31, 0.31, '#9aa1ad'], [0.69, 0.31, '#0a9fff'], [0.31, 0.69, '#0a9fff'],
-    [0.65, 0.63, '#32d06b'], [0.79, 0.62, '#168cff'], [0.65, 0.78, '#6d737f'], [0.79, 0.78, '#168cff'],
+  const buttons = [
+    [0.29, 0.29, 0.165, '#8d939d', 'plane'],
+    [0.71, 0.29, 0.165, '#0a9fff', 'wifi'],
+    [0.29, 0.71, 0.165, '#0a9fff', 'antenna'],
+    [0.63, 0.64, 0.09, '#32d06b', 'antenna'],
+    [0.82, 0.64, 0.09, '#168cff', 'bluetooth'],
+    [0.63, 0.82, 0.09, '#6d737f', 'antenna'],
+    [0.82, 0.82, 0.09, '#168cff', 'wifi'],
   ];
-  for (const [px, py, color] of points) {
-    const radius = element.w * (px < 0.5 && py < 0.5 || px > 0.5 && py < 0.5 || px < 0.5 && py > 0.5 ? 0.16 : 0.09);
+  for (const [px, py, radiusRatio, color, icon] of buttons) {
+    const radius = element.w * radiusRatio;
+    const cx = element.x + element.w * px;
+    const cy = element.y + element.h * py;
     ctx.beginPath();
-    ctx.arc(element.x + element.w * px, element.y + element.h * py, radius, 0, Math.PI * 2);
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
+    const iconSize = radius * 1.12;
+    drawPhoneIcon(ctx, icon, cx - iconSize / 2, cy - iconSize / 2, iconSize);
   }
-  const cx = element.x + element.w * 0.31;
-  const cy = element.y + element.h * 0.31;
-  ctx.save();
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = Math.max(1.5, element.w * 0.025);
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(cx - element.w * 0.08, cy);
-  ctx.lineTo(cx + element.w * 0.1, cy);
-  ctx.moveTo(cx, cy);
-  ctx.lineTo(cx - element.w * 0.03, cy - element.w * 0.09);
-  ctx.moveTo(cx + element.w * 0.02, cy);
-  ctx.lineTo(cx - element.w * 0.02, cy + element.w * 0.07);
-  ctx.stroke();
-  ctx.restore();
 }
 
 function drawControlOverlay(ctx, frame, elements) {
@@ -325,51 +255,33 @@ function drawControlOverlay(ctx, frame, elements) {
   for (const id of ['bluetooth', 'hotspot', 'focus', 'torch', 'low-power']) {
     const element = byId.get(id);
     const title = { bluetooth: 'Bluetooth', hotspot: 'Personal Hotspot', focus: 'Focus', torch: 'Flashlight', 'low-power': 'Low Power Mode' }[id];
-    phoneText(ctx, title, element.x + element.w * 0.5, element.y + element.h * 0.46, Math.min(element.h * 0.21, 14 * frame.scale), { align: 'center', weight: 600 });
-    if (id !== 'focus') phoneText(ctx, id === 'bluetooth' ? 'On' : 'Off', element.x + element.w * 0.5, element.y + element.h * 0.7, Math.min(element.h * 0.16, 11 * frame.scale), { align: 'center', alpha: 0.62 });
+    const iconName = { bluetooth: 'bluetooth', hotspot: 'antenna', focus: 'moon', torch: 'flashlight', 'low-power': 'battery' }[id];
+    const iconSize = 24 * frame.scale;
+    drawPhoneIcon(ctx, iconName, element.x + 14 * frame.scale,
+      element.y + (element.h - iconSize) / 2, iconSize);
+    phoneText(ctx, title, element.x + 48 * frame.scale, element.y + element.h * 0.46, Math.min(element.h * 0.21, 14 * frame.scale), { weight: 600 });
+    if (id !== 'focus') phoneText(ctx, id === 'bluetooth' ? 'On' : 'Off', element.x + 48 * frame.scale, element.y + element.h * 0.7, Math.min(element.h * 0.16, 11 * frame.scale), { alpha: 0.62 });
   }
-  for (const id of ['rotation', 'mirroring', 'camera', 'calculator', 'voice', 'record']) drawLineIcon(ctx, byId.get(id), id);
+  for (const id of ['rotation', 'mirroring', 'camera', 'calculator', 'voice', 'record']) drawSystemIcon(ctx, byId.get(id), id);
 
   const brightness = byId.get('brightness');
   const volume = byId.get('volume');
   for (const [element, level] of [[brightness, 0.42], [volume, 0.3]]) {
+    const inset = 8 * frame.scale;
+    const fillHeight = Math.max(element.w - inset * 2, (element.h - inset * 2) * level);
+    const fillY = element.y + element.h - inset - fillHeight;
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(element.x + 3 * frame.scale, element.y + element.h * (1 - level), element.w - 6 * frame.scale, element.h * level - 3 * frame.scale, element.w / 2);
+    ctx.roundRect(element.x + inset, fillY, element.w - inset * 2, fillHeight,
+      Math.min(element.w - inset * 2, fillHeight) / 2);
     ctx.fillStyle = 'rgba(255,255,255,.9)';
     ctx.fill();
     ctx.restore();
   }
-  const sunX = brightness.x + brightness.w / 2;
-  const sunY = brightness.y + brightness.h * 0.79;
-  ctx.save();
-  ctx.strokeStyle = '#f4c11b';
-  ctx.fillStyle = '#f4c11b';
-  ctx.lineWidth = Math.max(1.5, brightness.w * 0.035);
-  ctx.beginPath();
-  ctx.arc(sunX, sunY, brightness.w * 0.08, 0, Math.PI * 2);
-  ctx.fill();
-  for (let index = 0; index < 8; index++) {
-    const angle = index * Math.PI / 4;
-    ctx.beginPath();
-    ctx.moveTo(sunX + Math.cos(angle) * brightness.w * 0.14, sunY + Math.sin(angle) * brightness.w * 0.14);
-    ctx.lineTo(sunX + Math.cos(angle) * brightness.w * 0.21, sunY + Math.sin(angle) * brightness.w * 0.21);
-    ctx.stroke();
-  }
-  const speakerX = volume.x + volume.w / 2;
-  const speakerY = volume.y + volume.h * 0.8;
-  ctx.strokeStyle = '#12a4d8';
-  ctx.fillStyle = '#12a4d8';
-  ctx.beginPath();
-  ctx.moveTo(speakerX - volume.w * 0.18, speakerY - volume.w * 0.08);
-  ctx.lineTo(speakerX - volume.w * 0.06, speakerY - volume.w * 0.08);
-  ctx.lineTo(speakerX + volume.w * 0.08, speakerY - volume.w * 0.2);
-  ctx.lineTo(speakerX + volume.w * 0.08, speakerY + volume.w * 0.2);
-  ctx.lineTo(speakerX - volume.w * 0.06, speakerY + volume.w * 0.08);
-  ctx.lineTo(speakerX - volume.w * 0.18, speakerY + volume.w * 0.08);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
+  drawPhoneIcon(ctx, 'sun', brightness.x + brightness.w * 0.33,
+    brightness.y + brightness.h * 0.74, brightness.w * 0.34, brightness.w * 0.34, '#f4c11b');
+  drawPhoneIcon(ctx, 'volume', volume.x + volume.w * 0.31,
+    volume.y + volume.h * 0.75, volume.w * 0.38, volume.w * 0.38, '#12a4d8');
 }
 
 /** Draw fixed iOS UI above the glass, including status glyphs and hardware. */

@@ -4,12 +4,12 @@ import {
   cornerRadiusV2, hitTestElementsV2, sdElementV2, shapeTypeOfV2,
 } from '../src/v2-geometry.js';
 
-const material = { roundness: 0.5 };
+const material = { roundness: 0.47 };
 
-test('V2 keeps all four shader shape ids distinct', () => {
+test('V2 uses the same public shape silhouettes as V1', () => {
   assert.deepEqual(
     ['rect', 'folder', 'pill', 'circle'].map(shapeTypeOfV2),
-    [0, 1, 2, 3],
+    [0, 0, 1, 2],
   );
 });
 
@@ -18,13 +18,13 @@ test('V2 roundness is a short-half ratio, not the V1 pixel radius', () => {
   assert.equal(cornerRadiusV2({ w: 200, h: 100 }, 0.2), 10);
 });
 
-test('V2 folder has a tab while V2 rect does not', () => {
+test('V2 folder is the same rounded square as V1 instead of a tabbed silhouette', () => {
   const rect = { shape: 'rect', x: 0, y: 0, w: 200, h: 160 };
   const folder = { ...rect, shape: 'folder' };
-  // Near the upper-left tab the folder is inside while the more deeply
-  // rounded rectangle corner is outside.
-  assert.ok(sdElementV2(8, 8, rect, material) > 0);
-  assert.ok(sdElementV2(40, 8, folder, material) < 0);
+  for (const [x, y] of [[8, 8], [40, 8], [100, 80], [196, 156]]) {
+    assert.equal(sdElementV2(x, y, folder, material), sdElementV2(x, y, rect, material));
+  }
+  assert.equal(cornerRadiusV2({ w: 100, h: 100 }), 23.5);
 });
 
 test('V2 hit testing follows shape geometry and topmost overlap', () => {

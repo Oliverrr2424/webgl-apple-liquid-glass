@@ -8,14 +8,15 @@ import {
   LiquidGlassWebGL, LiquidGlassWebGLV2, connectedElementGroups,
   getDefaultMaterialV2, makeMaterial,
 } from '../src/index.js';
-import { SCENES, ICON_SOURCES, attachIconImages, isAnimated, sceneById } from './scenes.js?phone-scenes=1';
-import { drawSceneBackdrop } from './content.js?phone-scenes=1';
-import { drawGlassContents, drawLabel, drawBadge, drawSelection, drawPhoneSceneOverlay } from './overlay.js?phone-scenes=1';
+import { SCENES, ICON_SOURCES, attachIconImages, isAnimated, sceneById } from './scenes.js?phone-scenes=2';
+import { drawSceneBackdrop } from './content.js?phone-scenes=2';
+import { drawGlassContents, drawLabel, drawBadge, drawSelection, drawPhoneSceneOverlay } from './overlay.js?phone-scenes=2';
 import { createInspector } from './inspector.js';
-import { createComponentEditor } from './components.js?phone-scenes=1';
-import { attachStageInteractions } from './interactions.js?phone-scenes=1';
+import { createComponentEditor } from './components.js?phone-scenes=2';
+import { attachStageInteractions } from './interactions.js?phone-scenes=2';
 import { createStats } from './stats.js';
 import { decodeState, toCode, writeHash } from './permalink.js';
+import { PHONE_ICON_SOURCES, attachPhoneIconImages } from './phone.js?phone-scenes=2';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -676,13 +677,15 @@ window.addEventListener('beforeunload', () => {
 });
 
 // ----------------------------------------------------------------- bootstrap
-Promise.all(ICON_SOURCES.map((src) => new Promise((resolve) => {
+Promise.all([...ICON_SOURCES, ...PHONE_ICON_SOURCES].map((src) => new Promise((resolve) => {
   const image = new Image();
   image.onload = () => resolve([src, image]);
   image.onerror = () => resolve([src, null]);
   image.src = src;
 }))).then((entries) => {
-  attachIconImages(new Map(entries.filter(([, image]) => image)));
+  const decodedImages = new Map(entries.filter(([, image]) => image));
+  attachIconImages(decodedImages);
+  attachPhoneIconImages(decodedImages);
   invalidate();
 });
 

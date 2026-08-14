@@ -529,10 +529,10 @@ export class GlassRenderer {
     this.drawGlassGroup([element], m, dpr, 0);
   }
 
-  // V2 surfaces share the backdrop/mip pipeline with V1, but nothing from the
-  // material calculation. In particular, similarly named uniforms are filled
-  // using V2's own units: edgeWidth is a fraction, dispersion is a pixel split,
-  // and roundness is a short-half ratio.
+  // V2 surfaces share V1's public silhouettes and backdrop/mip pipeline, but
+  // nothing from the material calculation. In particular, similarly named
+  // uniforms are filled using V2's own units: edgeWidth is a fraction,
+  // dispersion is a pixel split, and roundness is a short-half ratio.
   drawGlassV2Group(elements, m, dpr, lightDirections = []) {
     if (!elements.length || this.lost || !this.tex) return;
 
@@ -558,9 +558,8 @@ export class GlassRenderer {
       halves[i * 2] = element.w / 2 * dpr;
       halves[i * 2 + 1] = element.h / 2 * dpr;
       radii[i] = short * 0.5 * m.roundness * dpr;
-      types[i] = element.shape === 'folder' ? 1
-        : element.shape === 'pill' ? 2
-          : element.shape === 'circle' ? 3 : 0;
+      types[i] = element.shape === 'pill' ? 1
+        : element.shape === 'circle' ? 2 : 0;
       const direction = lightDirections[i] ?? [Math.SQRT1_2, Math.SQRT1_2];
       lights[i * 2] = direction[0];
       lights[i * 2 + 1] = direction[1];

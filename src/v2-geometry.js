@@ -1,8 +1,8 @@
-// CPU mirror of the V2 transparent shader's geometry. V2 intentionally does
-// not reuse the V1 squircle/fusion helpers: folders have a real tab, rounded
-// rectangles use a ratio, and surfaces remain separate instead of merging.
+// CPU mirror of the V2 transparent shader's geometry. V2 keeps its independent
+// optical material and non-fusing passes, but uses the same three visual
+// primitives as V1: folder/rect, capsule and circle.
 
-export const SHAPE_TYPES_V2 = Object.freeze({ rect: 0, folder: 1, pill: 2, circle: 3 });
+export const SHAPE_TYPES_V2 = Object.freeze({ rect: 0, folder: 0, pill: 1, circle: 2 });
 
 export function shapeTypeOfV2(shape) {
   return SHAPE_TYPES_V2[shape] ?? 0;
@@ -21,7 +21,7 @@ export function smoothUnionV2(d1, d2, radius) {
   return d2 * (1 - h) + d1 * h - radius * h * (1 - h);
 }
 
-export function cornerRadiusV2(element, roundness = 0.5) {
+export function cornerRadiusV2(element, roundness = 0.47) {
   const width = Number(element.w ?? element.width ?? element.size ?? 0);
   const height = Number(element.h ?? element.height ?? element.size ?? width);
   return Math.min(width, height) * 0.5 * roundness;
@@ -35,23 +35,10 @@ export function sdElementV2(x, y, element, material = {}) {
   const px = x - Number(element.x ?? 0) - halfX;
   const py = y - Number(element.y ?? 0) - halfY;
   const kind = shapeTypeOfV2(element.shape);
-  const radius = cornerRadiusV2({ ...element, w: width, h: height }, material.roundness ?? 0.5);
+  const radius = cornerRadiusV2({ ...element, w: width, h: height }, material.roundness ?? 0.47);
 
-  if (kind === 1) {
-    // The shader works bottom-up. These centres are flipped into the public
-    // API's top-down CSS coordinate system.
-    const body = sdRoundBoxV2(px, py - halfY * 0.11, halfX, halfY * 0.78, radius);
-    const tab = sdRoundBoxV2(
-      px + halfX * 0.37,
-      py + halfY * 0.60,
-      halfX * 0.47,
-      halfY * 0.33,
-      radius * 0.72,
-    );
-    return smoothUnionV2(body, tab, Math.min(halfX, halfY) * 0.15);
-  }
-  if (kind === 2) return sdRoundBoxV2(px, py, halfX, halfY, Math.min(halfX, halfY));
-  if (kind === 3) return Math.hypot(px, py) - Math.min(halfX, halfY);
+  if (kind === 1) return sdRoundBoxV2(px, py, halfX, halfY, Math.min(halfX, halfY));
+  if (kind === 2) return Math.hypot(px, py) - Math.min(halfX, halfY);
   return sdRoundBoxV2(px, py, halfX, halfY, radius);
 }
 

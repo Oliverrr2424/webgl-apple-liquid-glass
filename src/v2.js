@@ -71,8 +71,9 @@ function matchMediaSafe(query) {
  * Clear optical Liquid Glass V2.
  *
  * This is a separate public class, not a mode on LiquidGlassWebGL. Its material
- * values are never converted from V1 and its folder geometry, refraction field,
- * chromatic split, tint and interface lighting follow the V2 equations.
+ * values are never converted from V1. It intentionally shares V1's public
+ * shape silhouettes while refraction, chromatic split, tint and interface
+ * lighting continue to follow the independent V2 equations.
  */
 export class LiquidGlassWebGLV2 {
   static isSupported() {
@@ -115,6 +116,9 @@ export class LiquidGlassWebGLV2 {
     this.lightCanvas = null;
     this.lightPixels = null;
     this.lightSampleSize = 64;
+    this.smoothedLightDirections = new Map();
+    this.lastLightFieldUpdate = 0;
+    this.lastLightBlendTime = 0;
     this.onContextLost = options.onContextLost ?? null;
     this.onContextRestored = options.onContextRestored ?? null;
 
@@ -180,6 +184,8 @@ export class LiquidGlassWebGLV2 {
   markBackdropDirty() {
     this.backdropDirty = true;
     this.lightFieldDirty = true;
+    this.lastLightFieldUpdate = 0;
+    this.smoothedLightDirections.clear();
     return this.markDirty();
   }
 
@@ -391,7 +397,9 @@ export class LiquidGlassWebGLV2 {
     const autoX = -gradientX / length;
     const autoY = gradientY / length;
     const rawStrength = Math.max(0, Math.min(1, (contrast - 0.015) / 0.13));
-    const strength = rawStrength * rawStrength * (3 - 2 * rawStrength) * 0.94;
+    // Keep the environment influential without allowing a moving high-contrast
+    // edge to rotate the key light almost 180 degrees from one sample to the next.
+    const strength = rawStrength * rawStrength * (3 - 2 * rawStrength) * 0.58;
     const mixedX = fallbackX * (1 - strength) + autoX * strength;
     const mixedY = fallbackY * (1 - strength) + autoY * strength;
     const mixedLength = Math.hypot(mixedX, mixedY) || 1;
@@ -409,17 +417,44 @@ export class LiquidGlassWebGLV2 {
     if (!options.force && !this.dirty && !resized && !liveBackdrop) return this;
 
     this.resize(width, height, dpr);
+    const now = globalThis.performance?.now?.() ?? Date.now();
     if (this.backdropDirty || resized || liveBackdrop) {
       this.renderer.buildBackdrop(this.wallpaperIndex, this.wallpaperZoom);
-      if (this.lightFieldDirty || resized || liveBackdrop) this.updateLightField();
+      // The optical backdrop remains fully live, but the low-resolution light
+      // probe runs at a steadier cadence. This decouples moving content from the
+      // white key highlight and removes single-frame direction spikes.
+      const refreshLiveLight = liveBackdrop && now - this.lastLightFieldUpdate >= 84;
+      if (this.lightFieldDirty || resized || refreshLiveLight) {
+        this.updateLightField();
+        this.lastLightFieldUpdate = now;
+      }
       this.backdropDirty = false;
     }
     if (this.compositeMode === 'overlay') this.renderer.clearOutput();
     else this.renderer.drawBackdrop();
 
     const material = this.effectiveMaterial;
-    const lightDirections = this.elements.map((element) =>
-      this.lightDirection(element, width, height, material.lightAngle));
+    const elapsed = this.lastLightBlendTime ? Math.min(100, now - this.lastLightBlendTime) : 100;
+    const blend = liveBackdrop ? 1 - Math.exp(-elapsed / 280) : 1;
+    const activeLightIds = new Set(this.elements.map((element) => element.id));
+    for (const id of this.smoothedLightDirections.keys()) {
+      if (!activeLightIds.has(id)) this.smoothedLightDirections.delete(id);
+    }
+    const lightDirections = this.elements.map((element) => {
+      const target = this.lightDirection(element, width, height, material.lightAngle);
+      const previous = this.smoothedLightDirections.get(element.id);
+      if (!previous || blend >= 1) {
+        this.smoothedLightDirections.set(element.id, target);
+        return target;
+      }
+      const mixedX = previous[0] * (1 - blend) + target[0] * blend;
+      const mixedY = previous[1] * (1 - blend) + target[1] * blend;
+      const length = Math.hypot(mixedX, mixedY) || 1;
+      const direction = [mixedX / length, mixedY / length];
+      this.smoothedLightDirections.set(element.id, direction);
+      return direction;
+    });
+    this.lastLightBlendTime = now;
     if (this.elements.length > MAX_GLASS_SHAPES && !this.warnedShapeLimit) {
       this.warnedShapeLimit = true;
       console.warn(`LiquidGlassWebGLV2: more than ${MAX_GLASS_SHAPES} shapes require multiple passes; overlapping shapes across a pass boundary may composite differently.`);
@@ -450,6 +485,7 @@ export class LiquidGlassWebGLV2 {
     this.backdrops = [];
     this.lightPixels = null;
     this.lightCanvas = null;
+    this.smoothedLightDirections.clear();
   }
 }
 

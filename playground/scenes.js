@@ -5,7 +5,7 @@
 // fixed surfaces into real iPhone contexts, while the scrolling feed stresses
 // the material in ways a still folder never will.
 
-import { phoneFrame, phoneRect } from './phone.js';
+import { phoneFrame, phoneRect } from './phone.js?phone-scenes=2';
 
 const ICONS = {
   youtube: { name: 'YouTube', src: './assets/icons/youtube.svg', c0: '#f7f8fb', c1: '#d9dde7' },

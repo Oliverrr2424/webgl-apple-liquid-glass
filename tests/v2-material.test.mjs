@@ -4,6 +4,7 @@ import {
   DEFAULT_MATERIAL_V2, REDUCED_TRANSPARENCY_MATERIAL_V2, SLIDERS_V2,
   getDefaultMaterialV2, makeMaterialV2,
 } from '../src/v2-material.js';
+import { getDefaultMaterial } from '../src/material.js';
 
 test('V2 materials are independent copies with their own parameter ranges', () => {
   const a = getDefaultMaterialV2();
@@ -22,6 +23,25 @@ test('V2 materials are independent copies with their own parameter ranges', () =
     assert.ok(DEFAULT_MATERIAL_V2[key] >= min && DEFAULT_MATERIAL_V2[key] <= max);
     assert.ok(step > 0);
   }
+});
+
+test('V1 and V2 material state cannot mutate each other', () => {
+  const v1 = getDefaultMaterial();
+  const v2 = getDefaultMaterialV2();
+  const originalV1Dispersion = v1.dispersion;
+  const originalV2Dispersion = v2.dispersion;
+
+  v1.dispersion = 0.12;
+  v1.edgeWidth = 4;
+  assert.equal(v2.dispersion, originalV2Dispersion);
+  assert.equal(v2.edgeWidth, DEFAULT_MATERIAL_V2.edgeWidth);
+
+  v2.dispersion = 5;
+  v2.edgeWidth = 0.5;
+  assert.equal(getDefaultMaterial().dispersion, originalV1Dispersion);
+  assert.equal(v1.edgeWidth, 4);
+  assert.equal(v1.blurRim, 11);
+  assert.equal(v2.blurRim, undefined);
 });
 
 test('V2 reduced transparency only overrides V2 parameters', () => {

@@ -11,14 +11,14 @@ export const DEFAULT_MATERIAL_V2 = Object.freeze({
   body: 0.72,
   absorption: 0.58,
   tint: 0,
-  rim: 0.82,
-  reflection: 0.94,
-  highlight: 0.72,
+  rim: 0.72,
+  reflection: 0.68,
+  highlight: 0.38,
   lightAngle: 136,
-  echo: 0.55,
+  echo: 0.28,
   hairline: 0.92,
   hairWidth: 0.52,
-  roundness: 0.5,
+  roundness: 0.47,
 });
 
 export const REDUCED_TRANSPARENCY_MATERIAL_V2 = Object.freeze({

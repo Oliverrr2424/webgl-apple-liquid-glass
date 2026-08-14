@@ -55,14 +55,7 @@ float shapeSdf(int index, vec2 point) {
   int kind = uShapeTypes[index];
   float radius = min(uShapeRadii[index], min(halfSize.x, halfSize.y));
   if (kind == 0) return sdRoundBox(p, halfSize, radius);
-  if (kind == 1) {
-    float body = sdRoundBox(p - vec2(0.0, -halfSize.y * 0.11),
-                            vec2(halfSize.x, halfSize.y * 0.78), radius);
-    float tab = sdRoundBox(p - vec2(-halfSize.x * 0.37, halfSize.y * 0.60),
-                           vec2(halfSize.x * 0.47, halfSize.y * 0.33), radius * 0.72);
-    return smoothUnion(body, tab, min(halfSize.x, halfSize.y) * 0.15);
-  }
-  if (kind == 2) return sdRoundBox(p, halfSize, min(halfSize.x, halfSize.y));
+  if (kind == 1) return sdRoundBox(p, halfSize, min(halfSize.x, halfSize.y));
   return length(p) - min(halfSize.x, halfSize.y);
 }
 
@@ -79,8 +72,7 @@ vec2 opticalNormal(int index, vec2 point, vec2 sdfNormal) {
                   sign(q.y) * pow(abs(q.y), 5.0) / halfSize.y);
     return normalize(g + sdfNormal * 0.0001);
   }
-  if (kind == 1) return sdfNormal;
-  if (kind == 2) {
+  if (kind == 1) {
     vec2 closest;
     if (halfSize.x >= halfSize.y) {
       float segment = max(halfSize.x - halfSize.y, 0.0);
@@ -209,7 +201,9 @@ void main() {
   float thinRim = exp(-pow((chosenD + 0.65) / 1.4, 2.0));
   float innerRim = exp(-pow((chosenD + 6.2) / 3.8, 2.0));
   float fresnel = pow(clamp(edgeCurve, 0.0, 1.0), 0.72);
-  vec3 reflected = backdrop((point + normal * (8.0 + uRefraction * 0.17)) / uRes);
+  // A softened environment probe keeps moving video/feed edges from turning
+  // into one-frame white flashes while preserving the local colour response.
+  vec3 reflected = softBackdrop((point + normal * (8.0 + uRefraction * 0.17)) / uRes, 5.2);
   vec3 adaptiveRim = reflected * 1.45 + vec3(0.06, 0.035, 0.08);
   adaptiveRim = mix(adaptiveRim, vec3(0.96, 0.97, 1.0), 0.24);
   adaptiveRim = mix(adaptiveRim, vec3(0.035, 0.025, 0.045),

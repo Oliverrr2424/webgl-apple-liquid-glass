@@ -84,18 +84,25 @@ import { LiquidGlassWebGLV2, getDefaultMaterialV2 } from 'apple-liquid-glass-web
 ```
 
 The two material contracts are intentionally not interchangeable. V2 rejects V1 preset names
-and unknown V2 material keys instead of silently applying a value with the wrong unit.
+and unknown V2 material keys instead of silently applying a value with the wrong unit. Element
+position, size and shape can be shared between renderers, but every material value is stored and
+evaluated independently.
 
 | Similar concept | V1 calculation | V2 calculation |
 | --- | --- | --- |
 | `dispersion` | Spread around the refractive index, used in three Snell-law evaluations | Direct display-space RGB sample split in pixels |
 | `edgeWidth` | CSS-pixel contour/highlight line width | Fraction of the short half-side used by the edge capture field |
-| Corner control | `radius` is a CSS-pixel radius capped by the shape size | `roundness` is a ratio of the short half-side |
+| Corner control | `radius` is a CSS-pixel radius capped by the shape size | `roundness` is a ratio of the short half-side; its default matches V1's 23.5% cap |
 | Refraction | `ior × height × refractScale` through a bevel height field | `refraction` plus independent `edgeReach × edgePull` capture distance |
 | Tint | Fixed/adaptive `tintColor` mixed by `tintAmount` | Local light/dark material selected by `tint` opacity |
 
 V2 surfaces remain separate and resolve overlap in element order; V1's `fusion` and
 `mergeRadius` smooth-union controls do not apply to V2.
+
+Both versions use the same visible shape contract: `folder` and `rect` are rounded boxes,
+`pill` is a capsule, and `circle` uses the short half-side. In particular, V2 `folder` has no
+special tab or cut-out. This keeps shared layouts pixel-aligned while the two optical models
+remain independent.
 
 ### V2 default material parameters
 
@@ -110,14 +117,19 @@ V2 surfaces remain separate and resolve overlap in element order; V1's `fusion` 
 | Transmission | `body` | `0.72` |
 | Transmission | `absorption` | `0.58` |
 | Transmission | `tint` | `0.00` |
-| Reflection | `rim` | `0.82` |
-| Reflection | `reflection` | `0.94` |
-| Reflection | `highlight` | `0.72` |
+| Reflection | `rim` | `0.72` |
+| Reflection | `reflection` | `0.68` |
+| Reflection | `highlight` | `0.38` |
 | Reflection | `lightAngle` | `136.00` |
-| Reflection | `echo` | `0.55` |
+| Reflection | `echo` | `0.28` |
 | Interface | `hairline` | `0.92` |
 | Interface | `hairWidth` | `0.52` |
-| Shape | `roundness` | `0.50` |
+| Shape | `roundness` | `0.47` |
+
+For live backdrops, V2 updates its optical transmission every frame but rate-limits the
+low-resolution light probe and eases the detected highlight direction over roughly 280 ms.
+Reflection also samples a softened backdrop. These safeguards reduce highlight flashing on
+moving high-contrast content without freezing refraction or changing the parameter contract.
 
 ## V1 default material parameters
 
@@ -146,13 +158,13 @@ const glass = new LiquidGlassWebGL(canvas, { material });
 | Optics | `dispersion` | `0.06` |
 | Optics | `refractScale` | `3.00` |
 | Optics | `meniscus` | `1.00` |
-| Optics | `blurPlateau` | `8.00` |
-| Optics | `blurRim` | `48.00` |
-| Optics | `opticalDensity` | `0.65` |
+| Optics | `blurPlateau` | `4.50` |
+| Optics | `blurRim` | `11.00` |
+| Optics | `opticalDensity` | `0.40` |
 | Lighting | `specular` | `0.89` |
-| Lighting | `specPower` | `11.50` |
-| Lighting | `highlightAdapt` | `0.83` |
-| Lighting | `highlightWidth` | `0.76` |
+| Lighting | `specPower` | `29.50` |
+| Lighting | `highlightAdapt` | `0.91` |
+| Lighting | `highlightWidth` | `0.87` |
 | Lighting | `highlightSharpness` | `0.55` |
 | Lighting | `highlightBase` | `0.30` |
 | Lighting | `fresnel` | `0.65` |
