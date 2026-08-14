@@ -195,3 +195,14 @@ export declare class LiquidGlassWebGL {
   render(options?: { force?: boolean }): this;
   destroy(): void;
 }
+
+export {
+  LiquidGlassWebGLV2, DEFAULT_MATERIAL_V2, REDUCED_TRANSPARENCY_MATERIAL_V2,
+  SLIDERS_V2, getDefaultMaterialV2, makeMaterialV2,
+  distanceToElementsV2, hitTestElementsV2,
+} from './v2.js';
+export type {
+  LiquidGlassV2Shape, LiquidGlassV2CompositeMode, LiquidGlassV2BackdropUpdate,
+  LiquidGlassV2Material, LiquidGlassV2Element, ResolvedLiquidGlassV2Element,
+  LiquidGlassV2BackdropOptions, LiquidGlassV2Options,
+} from './v2.js';

@@ -1,6 +1,7 @@
 # apple-liquid-glass-webgl
 
-Reusable WebGL2 liquid glass surfaces for folders, rectangles, pills, and circles.
+Reusable WebGL2 liquid glass surfaces for folders, rectangles, pills, and circles, with the
+original frosted V1 renderer and the clear optical V2 renderer available side by side.
 
 This package is framework-free and renders Apple-inspired translucent surfaces with screen-space refraction, variable blur, Fresnel reflection, chromatic dispersion, edge highlights, and contact shadows.
 
@@ -45,7 +46,80 @@ glass.render();
 
 The component accepts CSS-pixel coordinates. Content such as app icons, labels, or buttons can be drawn in a separate canvas layer above the WebGL canvas.
 
-## Default material parameters
+## V1 and V2 can be used together
+
+`LiquidGlassWebGL` remains the original V1 API. `LiquidGlassWebGLV2` is the transparent/clear
+optical model. They are separate classes with separate material objects, so an application can
+render both versions at once without a global mode or an implicit parameter conversion.
+
+```js
+import {
+  LiquidGlassWebGL,
+  LiquidGlassWebGLV2,
+  getDefaultMaterial,
+  getDefaultMaterialV2,
+} from 'apple-liquid-glass-webgl';
+
+const v1 = new LiquidGlassWebGL(document.querySelector('#frosted'), {
+  material: getDefaultMaterial(),
+  fusion: true,
+});
+const v2 = new LiquidGlassWebGLV2(document.querySelector('#transparent'), {
+  material: getDefaultMaterialV2(),
+});
+
+for (const glass of [v1, v2]) {
+  glass.setElements([
+    { id: 'panel', shape: 'rect', x: 40, y: 40, width: 320, height: 180 },
+  ], false);
+  await glass.loadBackdrop('/images/wallpaper.jpg', { shouldRender: false });
+  glass.render();
+}
+```
+
+V2 can also be imported from the explicit subpath:
+
+```js
+import { LiquidGlassWebGLV2, getDefaultMaterialV2 } from 'apple-liquid-glass-webgl/v2';
+```
+
+The two material contracts are intentionally not interchangeable. V2 rejects V1 preset names
+and unknown V2 material keys instead of silently applying a value with the wrong unit.
+
+| Similar concept | V1 calculation | V2 calculation |
+| --- | --- | --- |
+| `dispersion` | Spread around the refractive index, used in three Snell-law evaluations | Direct display-space RGB sample split in pixels |
+| `edgeWidth` | CSS-pixel contour/highlight line width | Fraction of the short half-side used by the edge capture field |
+| Corner control | `radius` is a CSS-pixel radius capped by the shape size | `roundness` is a ratio of the short half-side |
+| Refraction | `ior × height × refractScale` through a bevel height field | `refraction` plus independent `edgeReach × edgePull` capture distance |
+| Tint | Fixed/adaptive `tintColor` mixed by `tintAmount` | Local light/dark material selected by `tint` opacity |
+
+V2 surfaces remain separate and resolve overlap in element order; V1's `fusion` and
+`mergeRadius` smooth-union controls do not apply to V2.
+
+### V2 default material parameters
+
+| Group | Parameter | Default |
+| --- | --- | ---: |
+| Transmission | `refraction` | `9.00` |
+| Transmission | `edgePull` | `1.24` |
+| Transmission | `edgeReach` | `62.00` |
+| Transmission | `edgeWidth` | `0.25` |
+| Transmission | `dispersion` | `0.70` |
+| Transmission | `frost` | `0.18` |
+| Transmission | `body` | `0.72` |
+| Transmission | `absorption` | `0.58` |
+| Transmission | `tint` | `0.00` |
+| Reflection | `rim` | `0.82` |
+| Reflection | `reflection` | `0.94` |
+| Reflection | `highlight` | `0.72` |
+| Reflection | `lightAngle` | `136.00` |
+| Reflection | `echo` | `0.55` |
+| Interface | `hairline` | `0.92` |
+| Interface | `hairWidth` | `0.52` |
+| Shape | `roundness` | `0.50` |
+
+## V1 default material parameters
 
 `getDefaultMaterial()` returns a fresh copy of the package's default material parameters on every call. This makes it safe to customize the result without mutating the package defaults.
 
@@ -230,6 +304,10 @@ The shader carries 16 shapes per pass. Elements too far apart to influence each 
 
 The geometry helpers behind all of this are exported for use without a canvas — `sdGroup`, `hitTestElements`, `connectedElementGroups` and `groupElements`.
 
+V2 mirrors the backdrop, element, lifecycle, resize and hit-test methods used above through
+`LiquidGlassWebGLV2`. It additionally exports `getDefaultMaterialV2()`, `makeMaterialV2()`,
+`distanceToElementsV2()` and `hitTestElementsV2()`. It deliberately has no `setFusion()` method.
+
 ## Playground
 
 The interactive demo used to develop the material is deployed at
@@ -245,6 +323,7 @@ Open [http://localhost:8765](http://localhost:8765). It drives the published com
 - Eight scenes: four wallpapers, plus a tab bar over app content, a notification, a control-centre grid, and a scrolling feed that exercises the live backdrop path.
 - Component editing: add, retype, resize and delete surfaces; drag them, or select one and use the arrow keys (`Shift` for ten pixels, `Alt` to resize, `[` and `]` to cycle, `Delete` to remove).
 - Every material parameter as both a slider and a typed value. Double click a parameter name to reset just that one; modified parameters are marked.
+- A V1 Original / V2 Transparent switch. Each version retains its own tuned material while you compare them, and shared links record which renderer and parameter contract they use.
 - **Copy link** puts the whole session in the URL, **Copy code** emits the snippet that reproduces it.
 - A frame-rate, CPU-per-frame, drawing-buffer and pass-count readout. A static scene reports `idle`, because dirty tracking skips the GPU entirely.
 - Local image or looping-video uploads, and the thickness, normals and dispersion debug outputs.

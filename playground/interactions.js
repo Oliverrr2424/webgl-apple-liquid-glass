@@ -33,11 +33,12 @@ function resize(element, handle, x, y) {
   if (element.shape === 'circle') element.h = element.w;
 }
 
-export function attachStageInteractions({ canvas, glass, store, onChange, announce }) {
+export function attachStageInteractions({ canvas, glass, getGlass, store, onChange, announce }) {
   let drag = null;
 
+  const activeGlass = () => getGlass?.() ?? glass;
   const selected = () => store.elements.find((element) => element.id === store.selectedId) ?? null;
-  const positionOf = (event) => glass.pointerPosition(event);
+  const positionOf = (event) => activeGlass().pointerPosition(event);
 
   canvas.addEventListener('pointerdown', (event) => {
     const { x, y } = positionOf(event);
@@ -48,7 +49,7 @@ export function attachStageInteractions({ canvas, glass, store, onChange, announ
       return;
     }
 
-    const hit = glass.hitTestEvent(event);
+    const hit = activeGlass().hitTestEvent(event);
     const element = hit ? store.elements.find((entry) => entry.id === hit.id) : null;
     if (!element) {
       if (store.selectedId !== null) {
@@ -68,7 +69,7 @@ export function attachStageInteractions({ canvas, glass, store, onChange, announ
     const { x, y } = positionOf(event);
     if (!drag) {
       const handle = handleUnder(selected(), x, y);
-      const hovering = handle || glass.hitTest(x, y);
+      const hovering = handle || activeGlass().hitTest(x, y);
       canvas.style.cursor = handle
         ? (handle.id === 'nw' || handle.id === 'se' ? 'nwse-resize' : 'nesw-resize')
         : (hovering ? 'grab' : 'default');

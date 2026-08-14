@@ -51,6 +51,7 @@
   .kicker { color: var(--accent); font-size: 10px; text-transform: uppercase; letter-spacing: .18em; margin-bottom: 7px; }
   .subhead { color: var(--muted); font-size: 11px; margin: 7px 0 0; }
   .toolbar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 16px; }
+  .toolbar[hidden], .segmented[hidden], .section[hidden] { display: none; }
   button { min-height: 32px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); font: inherit; font-size: 11px; cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
   button:hover { background: var(--surface-raised); border-color: var(--line-strong); }
   button:active { transform: translateY(1px) scale(.99); }
@@ -79,6 +80,7 @@
   .segmented + .segmented { margin-top: 6px; }
   .segmented button { min-height: 30px; border: 0; background: transparent; color: var(--muted); }
   .segmented button.active { background: var(--surface-raised); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.22); }
+  .versionNote { min-height: 30px; margin: 8px 1px 0; color: var(--muted); font-size: 10px; }
   .debugGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .debugGrid button { padding: 0 4px; font-size: 10px; }
   .statGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
@@ -129,17 +131,26 @@
       aria-label="Liquid glass stage. Drag a component, or select one and move it with the arrow keys."></canvas>
     <button id="showPanel" type="button" aria-label="Show inspector" title="Show inspector">Inspector</button>
     <div id="loadState">Loading source imagery</div>
-    <div id="stageHud"><div class="eyebrow">LIQUID GLASS / SMOOTH UNION</div><strong id="hudScene">Alpine Lake</strong><span id="hudKind">Natural landscape</span></div>
+    <div id="stageHud"><div class="eyebrow" id="hudVersion">LIQUID GLASS / V1</div><strong id="hudScene">Alpine Lake</strong><span id="hudKind">Natural landscape</span></div>
     <div id="unsupported" hidden>
       <h2>WebGL2 is unavailable</h2>
       <p>This playground needs a WebGL2 context. The material cannot be rendered here, but
-        <code>LiquidGlassWebGL.isSupported()</code> reports the same thing in your own app so you
+        <code>LiquidGlassWebGL.isSupported()</code> and <code>LiquidGlassWebGLV2.isSupported()</code>
+        report the same thing in your own app so you
         can fall back to a CSS surface.</p>
     </div>
   </div>
   <div id="panel">
     <div class="panelHead"><div><div class="kicker">Material lab</div><h1>Liquid Glass</h1><p class="subhead">A small physics playground for translucent surfaces.</p></div><button id="togglePanel" class="iconButton" type="button" aria-label="Hide inspector" title="Hide inspector"><span aria-hidden="true">×</span></button></div>
-    <div class="toolbar">
+    <div class="section">
+      <div class="sectionHeader"><h2>Renderer</h2><span class="sectionMeta" id="rendererVersion">V1 original</span></div>
+      <div class="segmented">
+        <button type="button" data-renderer-version="v1">V1 Original</button>
+        <button type="button" data-renderer-version="v2">V2 Transparent</button>
+      </div>
+      <p class="versionNote" id="versionNote">The original frosted material with smooth-union fusion.</p>
+    </div>
+    <div class="toolbar" id="presetToolbar">
       <button type="button" data-preset="regular">Regular</button>
       <button type="button" data-preset="clear">Clear</button>
       <button type="button" data-preset="lens">Lens</button>
@@ -187,7 +198,7 @@
     </div>
     <div class="section">
       <div class="sectionHeader"><h2>View</h2><span class="sectionMeta" id="sceneKind">Natural landscape</span></div>
-      <div class="segmented">
+      <div class="segmented" id="fusionControl">
         <button type="button" data-fusion-mode="on">Smooth union</button>
         <button type="button" data-fusion-mode="off">Separate layers</button>
       </div>
@@ -200,7 +211,7 @@
         <button type="button" data-label-mode="off">Clean stage</button>
       </div>
     </div>
-    <div class="section">
+    <div class="section" id="debugSection">
       <div class="sectionHeader"><h2>Debug view</h2><span class="sectionMeta">shader output</span></div>
       <div class="segmented debugGrid">
         <button type="button" data-debug="0">Final</button>
@@ -210,10 +221,10 @@
       </div>
     </div>
     <div class="section">
-      <div class="sectionHeader"><h2>Material</h2><span class="sectionMeta">live controls</span></div>
+      <div class="sectionHeader"><h2>Material</h2><span class="sectionMeta" id="materialVersion">V1 parameters</span></div>
       <div id="sliders"></div>
     </div>
-    <div class="tip">
+    <div class="tip" id="materialTip">
       Drag components together: inside the fusion distance they form one surface, so the silhouette,
       refraction and highlight flow through a shared bridge. A gap only closes while it is narrower
       than about half the fusion distance.

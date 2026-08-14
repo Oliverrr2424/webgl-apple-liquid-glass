@@ -4,7 +4,10 @@
 // `LiquidGlassWebGL` an app would import - instead of reaching into the
 // renderer. Anything awkward here is awkward for everyone, which is the point.
 
-import { LiquidGlassWebGL, connectedElementGroups, makeMaterial } from '../src/index.js';
+import {
+  LiquidGlassWebGL, LiquidGlassWebGLV2, connectedElementGroups,
+  getDefaultMaterialV2, makeMaterial,
+} from '../src/index.js';
 import { SCENES, ICON_SOURCES, attachIconImages, isAnimated, sceneById } from './scenes.js';
 import { drawSceneBackdrop } from './content.js';
 import { drawGlassContents, drawLabel, drawBadge, drawSelection } from './overlay.js';
@@ -34,10 +37,17 @@ const contentContext = contentCanvas.getContext('2d');
 const uiContext = uiCanvas.getContext('2d');
 
 const shared = decodeState();
+const initialVersion = shared?.version === 'v2' ? 'v2' : 'v1';
+const materials = {
+  v1: makeMaterial('regular'),
+  v2: getDefaultMaterialV2(),
+};
 
 const store = {
+  version: initialVersion,
+  materials,
   sceneId: sceneById(shared?.sceneId ?? SCENES[0].id).id,
-  material: makeMaterial('regular'),
+  material: materials[initialVersion],
   fusion: shared?.fusion ?? true,
   showIcons: shared?.showIcons ?? false,
   showLabels: shared?.showLabels ?? false,
@@ -51,18 +61,25 @@ const store = {
 };
 Object.assign(store.material, shared?.material ?? {});
 
-const glass = new LiquidGlassWebGL(glCanvas, {
-  compositeMode: 'overlay',
-  material: store.material,
-  fusion: store.fusion,
-  // The playground owns the frame loop and the layout, and the screenshot tools
-  // read the drawing buffer back.
-  autoResize: false,
-  preserveDrawingBuffer: true,
-  onContextLost: () => announce('The GPU context was lost. Waiting for the browser to restore it.'),
-  onContextRestored: () => announce('The GPU context was restored.'),
-});
-glass.setBackdrop(contentCanvas, { update: 'static', autoStart: false, shouldRender: false });
+function createGlass() {
+  const GlassClass = store.version === 'v2' ? LiquidGlassWebGLV2 : LiquidGlassWebGL;
+  const options = {
+    compositeMode: 'overlay',
+    material: store.material,
+    // The playground owns the frame loop and the layout, and the screenshot tools
+    // read the drawing buffer back.
+    autoResize: false,
+    preserveDrawingBuffer: true,
+    onContextLost: () => announce('The GPU context was lost. Waiting for the browser to restore it.'),
+    onContextRestored: () => announce('The GPU context was restored.'),
+  };
+  if (store.version === 'v1') options.fusion = store.fusion;
+  const instance = new GlassClass(glCanvas, options);
+  instance.setBackdrop(contentCanvas, { update: 'static', autoStart: false, shouldRender: false });
+  return instance;
+}
+
+let glass = createGlass();
 
 const stats = createStats($('stats'));
 
@@ -233,9 +250,11 @@ function frame(now) {
   drawOverlayLayer(size);
   if (willDraw) stats.frame(performance.now() - started);
 
-  const groups = store.fusion
-    ? connectedElementGroups(glass.elements, glass.material.mergeRadius).length
-    : glass.elements.length;
+  const groups = store.version === 'v2'
+    ? Math.ceil(glass.elements.length / 16)
+    : store.fusion
+      ? connectedElementGroups(glass.elements, glass.material.mergeRadius).length
+      : glass.elements.length;
   stats.info({
     size: `${Math.round(size.width * size.dpr)}×${Math.round(size.height * size.dpr)}`,
     dpr: `${size.dpr}×`,
@@ -263,16 +282,21 @@ function onSceneChange(reason) {
 }
 
 // ------------------------------------------------------------------ controls
-const inspector = createInspector({
-  container: $('sliders'),
-  material: store.material,
-  onChange: () => {
-    glass.setMaterial(store.material, false);
-    syncPresetButtons(null);
-    queueHash();
-    invalidate();
-  },
-});
+let inspector;
+function rebuildInspector() {
+  inspector = createInspector({
+    container: $('sliders'),
+    material: store.material,
+    version: store.version,
+    onChange: () => {
+      glass.setMaterial(store.material, false);
+      syncPresetButtons(null);
+      queueHash();
+      invalidate();
+    },
+  });
+}
+rebuildInspector();
 
 const componentEditor = createComponentEditor({
   container: $('componentList'),
@@ -283,7 +307,13 @@ const componentEditor = createComponentEditor({
   announce,
 });
 
-attachStageInteractions({ canvas: uiCanvas, glass, store, onChange: onSceneChange, announce });
+attachStageInteractions({
+  canvas: uiCanvas,
+  getGlass: () => glass,
+  store,
+  onChange: onSceneChange,
+  announce,
+});
 
 function syncPresetButtons(active) {
   for (const button of document.querySelectorAll('[data-preset]')) {
@@ -293,6 +323,7 @@ function syncPresetButtons(active) {
 
 for (const button of document.querySelectorAll('[data-preset]')) {
   button.addEventListener('click', () => {
+    if (store.version !== 'v1') return;
     Object.assign(store.material, makeMaterial(button.dataset.preset));
     glass.setMaterial(store.material, false);
     inspector.sync();
@@ -303,14 +334,63 @@ for (const button of document.querySelectorAll('[data-preset]')) {
 }
 
 $('resetMaterial').addEventListener('click', () => {
-  Object.assign(store.material, makeMaterial('regular'));
+  const defaults = store.version === 'v2' ? getDefaultMaterialV2() : makeMaterial('regular');
+  Object.assign(store.material, defaults);
   glass.setMaterial(store.material, false);
   inspector.sync();
-  syncPresetButtons('regular');
-  announce('Material reset to the package defaults.');
+  syncPresetButtons(store.version === 'v1' ? 'regular' : null);
+  announce(`${store.version.toUpperCase()} material reset to its own package defaults.`);
   queueHash();
   invalidate();
 });
+
+function syncVersionUI() {
+  const isV2 = store.version === 'v2';
+  for (const button of document.querySelectorAll('[data-renderer-version]')) {
+    button.classList.toggle('active', button.dataset.rendererVersion === store.version);
+  }
+  $('rendererVersion').textContent = isV2 ? 'V2 transparent' : 'V1 original';
+  $('materialVersion').textContent = isV2 ? 'V2 parameters' : 'V1 parameters';
+  $('versionNote').textContent = isV2
+    ? 'Clear edge-capture optics. Its values are independent from V1, including same-named controls.'
+    : 'The original frosted material with smooth-union fusion.';
+  $('hudVersion').textContent = isV2 ? 'LIQUID GLASS / V2 TRANSPARENT' : 'LIQUID GLASS / V1 ORIGINAL';
+  $('materialTip').textContent = isV2
+    ? 'V2 keeps the centre nearly straight-through and captures nearby backdrop transitions only in the edge field. Roundness is a ratio; optical lengths are scaled independently.'
+    : 'Drag components together: inside the fusion distance they form one surface, so the silhouette, refraction and highlight flow through a shared bridge. A gap only closes while it is narrower than about half the fusion distance.';
+  $('presetToolbar').hidden = isV2;
+  $('fusionControl').hidden = isV2;
+  $('debugSection').hidden = isV2;
+}
+
+function setRendererVersion(version, { announceChange = true } = {}) {
+  if (!['v1', 'v2'].includes(version)) return;
+  if (version === store.version) {
+    syncVersionUI();
+    return;
+  }
+
+  glass.destroy();
+  store.version = version;
+  store.material = store.materials[version];
+  glass = createGlass();
+  applyElements();
+  // The new renderer starts with a static upload; force the current scene's
+  // actual live/static policy back onto it.
+  backdropMode = '';
+  syncBackdropMode();
+  rebuildInspector();
+  syncPresetButtons(version === 'v1' ? 'regular' : null);
+  syncVersionUI();
+  syncToggleButtons();
+  queueHash();
+  invalidate({ content: true });
+  if (announceChange) announce(`Switched to ${version === 'v2' ? 'V2 transparent' : 'V1 original'} renderer.`);
+}
+
+for (const button of document.querySelectorAll('[data-renderer-version]')) {
+  button.addEventListener('click', () => setRendererVersion(button.dataset.rendererVersion));
+}
 
 function syncToggleButtons() {
   const flags = {
@@ -331,6 +411,7 @@ const toCamel = (value) => value.replace(/-([a-z])/g, (_, letter) => letter.toUp
 
 for (const button of document.querySelectorAll('[data-fusion-mode]')) {
   button.addEventListener('click', () => {
+    if (store.version !== 'v1') return;
     store.fusion = button.dataset.fusionMode === 'on';
     glass.setFusion(store.fusion, undefined, false);
     syncToggleButtons();
@@ -356,6 +437,7 @@ for (const button of document.querySelectorAll('[data-label-mode]')) {
 }
 for (const button of document.querySelectorAll('[data-debug]')) {
   button.addEventListener('click', () => {
+    if (store.version !== 'v1') return;
     store.material.debug = Number(button.dataset.debug);
     glass.setMaterial(store.material, false);
     syncToggleButtons();
@@ -521,6 +603,7 @@ $('copyLink').addEventListener('click', async ({ currentTarget: button }) => {
 $('copyCode').addEventListener('click', async ({ currentTarget: button }) => {
   const scene = currentScene();
   const code = toCode({
+    version: store.version,
     material: store.material,
     fusion: store.fusion,
     elements: store.elements,
@@ -574,14 +657,15 @@ Promise.all(ICON_SOURCES.map((src) => new Promise((resolve) => {
 renderScenePicker();
 selectScene(store.sceneId, { fromShare: true });
 applyElements();
-syncPresetButtons(Object.keys(shared?.material ?? {}).length ? null : 'regular');
+syncPresetButtons(store.version === 'v1' && !Object.keys(shared?.material ?? {}).length ? 'regular' : null);
+syncVersionUI();
 inspector.sync();
 invalidate({ content: true });
 
 // Hook for the screenshot and visual regression tooling.
 window.__lg = {
   store,
-  glass,
+  get glass() { return glass; },
   render: () => { invalidate(); },
   invalidate,
   syncSliders: () => inspector.sync(),
@@ -599,6 +683,9 @@ window.__lg = {
     store.wallZoom = 1;
     if (scene) selectScene(scene.id);
   },
+  setVersion(version) {
+    setRendererVersion(version, { announceChange: false });
+  },
   /**
    * Isolates one component, centred and enlarged, for close-up comparisons.
    * Every length of the material scales with the zoom, so this is a true
@@ -615,8 +702,11 @@ window.__lg = {
     store.elements = [element];
     store.movedElements = true;
     store.wallZoom = zoom;
-    for (const key of ['radius', 'bevel', 'height', 'shadowSize', 'shadowOffset',
-                       'edgeWidth', 'blurPlateau', 'blurRim']) {
+    const scalable = store.version === 'v2'
+      ? ['refraction', 'edgeReach', 'frost']
+      : ['radius', 'bevel', 'height', 'shadowSize', 'shadowOffset',
+        'edgeWidth', 'blurPlateau', 'blurRim'];
+    for (const key of scalable) {
       store.material[key] *= zoom;
     }
     glass.setMaterial(store.material, false);

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_MATERIAL, getDefaultMaterial } from '../src/material.js';
+import { getDefaultMaterialV2 } from '../src/v2-material.js';
 import { decodeState, encodeState, toCode } from '../playground/permalink.js';
 
 const session = (overrides = {}) => ({
@@ -82,4 +83,36 @@ test('every serialised parameter name is a real material parameter', () => {
   for (const key of Object.keys(decoded.material)) {
     assert.ok(key in DEFAULT_MATERIAL, `${key} is not a material parameter`);
   }
+});
+
+test('V2 share links and code use only the V2 material contract', () => {
+  const state = session({
+    version: 'v2',
+    material: getDefaultMaterialV2(),
+  });
+  state.material.dispersion = 1.4;
+  state.material.edgeWidth = 0.31;
+  const encoded = encodeState(state);
+  assert.match(encoded, /version=v2/);
+  assert.match(encoded, /dispersion%3A1\.4/);
+  assert.doesNotMatch(encoded, /fusion=/, 'V1 fusion is not a V2 setting');
+
+  const decoded = decodeState(`#${encoded}`);
+  assert.equal(decoded.version, 'v2');
+  assert.deepEqual(decoded.material, { dispersion: 1.4, edgeWidth: 0.31 });
+
+  const code = toCode({ ...state, backdropSrc: null });
+  assert.match(code, /LiquidGlassWebGLV2, getDefaultMaterialV2/);
+  assert.match(code, /new LiquidGlassWebGLV2/);
+  assert.match(code, /material\.dispersion = 1\.4/);
+  assert.doesNotMatch(code, /fusion:/);
+  assert.doesNotMatch(code, /getDefaultMaterial\(\)/);
+});
+
+test('same-named parameters are decoded against the selected version only', () => {
+  const v2 = decodeState('#scene=tab-bar&version=v2&m=dispersion:0.7|edgeWidth:0.25|blurRim:40');
+  assert.deepEqual(v2.material, { dispersion: 0.7, edgeWidth: 0.25 });
+
+  const v1 = decodeState('#scene=tab-bar&m=dispersion:0.07|edgeWidth:2|edgeReach:80');
+  assert.deepEqual(v1.material, { dispersion: 0.07, edgeWidth: 2 });
 });

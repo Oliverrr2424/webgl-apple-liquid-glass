@@ -473,3 +473,11 @@ export {
   DEFAULT_MATERIAL, PRESETS, REDUCED_TRANSPARENCY_MATERIAL, getDefaultMaterial, makeMaterial,
   MAX_GLASS_SHAPES, MIPS, connectedElementGroups, groupElements, hitTestElements, sdGroup,
 };
+
+// V2 is additive: the original class and material above remain the stable V1
+// API, while the transparent optical model has its own class and parameters.
+export {
+  LiquidGlassWebGLV2, DEFAULT_MATERIAL_V2, REDUCED_TRANSPARENCY_MATERIAL_V2,
+  SLIDERS_V2, getDefaultMaterialV2, makeMaterialV2,
+  distanceToElementsV2, hitTestElementsV2,
+} from './v2.js';
