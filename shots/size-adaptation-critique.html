@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Critique · Adaptive small-component optics</title>
+  <style>
+    :root { color-scheme: light; --paper: #f4f1ea; --ink: #171814; --muted: #68695f;
+      --line: #d6d1c6; --accent: #e35436; --wash: #fffdfa; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.55 system-ui, sans-serif; }
+    main { width: min(1040px, calc(100% - 36px)); margin: 42px auto 72px; }
+    header { display: grid; grid-template-columns: 1fr auto; gap: 30px; align-items: end;
+      padding-bottom: 26px; border-bottom: 1px solid var(--line); }
+    .kicker { color: var(--accent); font: 700 11px/1.2 ui-monospace, monospace;
+      letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 8px 0 10px; font: 600 clamp(34px, 6vw, 70px)/.92 Georgia, serif; letter-spacing: -.045em; }
+    .verdict { max-width: 64ch; margin: 0; color: var(--muted); }
+    .meta { color: var(--muted); font: 12px/1.6 ui-monospace, monospace; text-align: right; }
+    .overview { display: grid; grid-template-columns: 330px 1fr; gap: 34px; margin: 34px 0; }
+    .radar, .card, .actions { border: 1px solid var(--line); border-radius: 18px; background: var(--wash); }
+    .radar { display: grid; place-items: center; min-height: 330px; padding: 20px; }
+    .summary { display: grid; align-content: center; gap: 18px; }
+    .metric { display: grid; grid-template-columns: 60px 1fr; gap: 14px; align-items: center; }
+    .metric strong { font: 600 26px/1 Georgia, serif; }
+    .metric span { color: var(--muted); }
+    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card { padding: 22px; }
+    .card:last-child { grid-column: 1 / -1; }
+    .card h2, .actions h2 { margin: 0 0 10px; font: 600 21px/1.15 Georgia, serif; }
+    .score { float: right; color: var(--accent); font: 700 13px/1 ui-monospace, monospace; }
+    .card p { margin: 0 0 14px; color: #44453e; }
+    .tag { color: var(--muted); font: 12px/1.5 ui-monospace, monospace; }
+    .action-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+    .actions { padding: 22px; }
+    ul { margin: 0; padding-left: 18px; }
+    li + li { margin-top: 8px; }
+    code { padding: 1px 5px; border-radius: 5px; background: #ece8df; font-size: .9em; }
+    @media (max-width: 760px) { header, .overview, .cards, .action-grid { grid-template-columns: 1fr; }
+      .meta { text-align: left; } .card:last-child { grid-column: auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <div class="kicker">OD · Critique skill · 2026-08-13</div>
+      <h1>Adaptive small-component optics</h1>
+      <p class="verdict">The revision preserves the large-demo material while giving 40–70px controls a readable transmitted centre, proportionate highlight, and bounded refraction footprint.</p>
+    </div>
+    <div class="meta">Artifact: WebGL liquid glass<br>Review: before / after<br>Band samples: 10 / 18 / 28 / 28px</div>
+  </header>
+
+  <section class="overview">
+    <div class="radar" aria-label="Radar chart: philosophy 8, hierarchy 8, detail 8, functionality 9, innovation 7">
+      <svg viewBox="0 0 300 300" width="290" role="img">
+        <g transform="translate(150 150)" fill="none" stroke="#d6d1c6">
+          <polygon points="0,-120 114,-37 71,97 -71,97 -114,-37"/>
+          <polygon points="0,-90 86,-28 53,73 -53,73 -86,-28"/>
+          <polygon points="0,-60 57,-19 35,49 -35,49 -57,-19"/>
+          <polygon points="0,-30 29,-9 18,24 -18,24 -29,-9"/>
+          <path d="M0-120V0M114-37L0 0M71 97L0 0M-71 97L0 0M-114-37L0 0"/>
+          <polygon points="0,-96 91,-30 57,78 -64,87 -80,-26" fill="#e3543640" stroke="#e35436" stroke-width="3"/>
+        </g>
+        <g fill="#68695f" font-family="system-ui" font-size="11" text-anchor="middle">
+          <text x="150" y="15">Philosophy</text><text x="274" y="105">Hierarchy</text>
+          <text x="230" y="285">Detail</text><text x="70" y="285">Function</text><text x="25" y="105">Innovation</text>
+        </g>
+      </svg>
+    </div>
+    <div class="summary">
+      <div class="metric"><strong>30%</strong><span>Maximum refracting rim relative to the owning component’s short side.</span></div>
+      <div class="metric"><strong>113px</strong><span>Default-material threshold; larger components retain the authored 34px bevel unchanged.</span></div>
+      <div class="metric"><strong>0→1</strong><span><code>sizeAdaptation</code> provides a continuous opt-out/blend instead of a hard behavioural fork.</span></div>
+    </div>
+  </section>
+
+  <section class="cards">
+    <article class="card"><span class="score">8 / 10 · Strong</span><h2>Philosophy consistency</h2>
+      <p>The material keeps one physical model: bevel, optical height, refraction path, blur, and environment probes all share one local scale in <code>src/shaders.js</code>. Large surfaces and the already-narrow clear preset remain visually unchanged.</p>
+      <div class="tag">Keep: one scale for the whole optical system · Fix: none · Quick win: document the threshold</div></article>
+    <article class="card"><span class="score">8 / 10 · Strong</span><h2>Visual hierarchy</h2>
+      <p>At 40px and 70px, the transmitted centre now reads before the highlight band; the previous absolute 34px bevel made the effect itself louder than the control. The 120px and 220px examples preserve the established demo hierarchy.</p>
+      <div class="tag">Keep: centre/rim separation · Fix: none · Quick win: retain the labelled comparison</div></article>
+    <article class="card"><span class="score">8 / 10 · Strong</span><h2>Detail execution</h2>
+      <p>The measured debug bands are 10/18/28/28px for 40/70/120/220px components. Fused shapes interpolate owner centre and short side with the same smooth-union weights, avoiding a size seam through bridges.</p>
+      <div class="tag">Keep: continuous fusion weighting · Fix: record Subzero baselines in Linux CI · Quick win: exact band output in tests</div></article>
+    <article class="card"><span class="score">9 / 10 · Exceptional</span><h2>Functionality</h2>
+      <p><code>tests/size-adaptation.html</code> asserts all four bands and verifies <code>sizeAdaptation=0</code> restores absolute optics. Unit, browser, package, and local SwiftShader visual suites pass.</p>
+      <div class="tag">Keep: explicit opt-out · Fix: none · Quick win: expose the control in the playground</div></article>
+    <article class="card"><span class="score">7 / 10 · Strong</span><h2>Innovation</h2>
+      <p>The notable move is parameter-relative adaptation without introducing per-breakpoint presets. It is intentionally conservative: a continuous material scalar solves real UI sizing while leaving deliberate narrow-bevel materials untouched.</p>
+      <div class="tag">Keep: parameter-aware trigger · Fix: none · Quick win: consider per-element overrides only if a real use case appears</div></article>
+  </section>
+
+  <section class="action-grid">
+    <article class="actions"><h2>Keep</h2><ul><li>30% short-side cap.</li><li>Shared scale for refraction, blur, and highlights.</li><li>Absolute-optics opt-out.</li></ul></article>
+    <article class="actions"><h2>Fix</h2><ul><li>Update Linux/Subzero golden frames in its native CI renderer after review.</li><li>Do not replace those frames with macOS LLVM output.</li></ul></article>
+    <article class="actions"><h2>Quick wins</h2><ul><li>Use the comparison image in review.</li><li>Read the exact four band widths from the browser test log.</li><li>Tune intermediate adaptation from the playground slider.</li></ul></article>
+  </section>
+</main>
+</body>
+</html>

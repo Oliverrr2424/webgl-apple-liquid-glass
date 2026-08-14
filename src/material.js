@@ -3,8 +3,9 @@ export const DEFAULT_MATERIAL = {
   radius: 64,          // corner radius (clamped to 23.5% of the side)
   squircle: 2.0,       // Folder corner exponent selected from the references
   mergeRadius: 52,     // smooth-union reach between nearby components
-  bevel: 34,           // width of the refracting rim
-  height: 21,          // optical thickness of the slab
+  bevel: 34,           // max rim width; scales down below ~113px short side
+  height: 21,          // max slab thickness; follows the small-component scale
+  sizeAdaptation: 1.0, // 0 keeps absolute lengths; 1 fits optics to small controls
   ior: 2.0,            // effective IOR after screen-space calibration
   dispersion: 0.06,    // IOR spread between R and B -> chromatic fringe
   refractScale: 3.0,   // artistic gain on the displacement
@@ -99,6 +100,7 @@ export const SLIDERS = [
   ['mergeRadius', 0, 96, 1],
   ['bevel', 2, 40, 0.5],
   ['height', 0, 48, 0.5],
+  ['sizeAdaptation', 0, 1, 0.01],
   ['ior', 1.0, 3.0, 0.01],
   ['dispersion', 0, 0.15, 0.005],
   ['refractScale', 0, 6, 0.05],

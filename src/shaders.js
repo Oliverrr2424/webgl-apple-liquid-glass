@@ -242,9 +242,7 @@ void main() {
 // ---------------------------------------------------------------------------
 // The material itself.
 //
-// 1. shape          : square/rect folder / exact capsule / exact circle SDF,
-//                     smooth-unioned, then eikonal-corrected to d/|grad d| so
-//                     the field is metric again across a fusion bridge
+// 1. shape          : square/rect folder / exact capsule / exact circle SDF
 // 2. thickness      : t = clamp(-d / bevel), height h(t) = a convex bevel
 //                     profile -> flat plateau in the middle, steep rim
 // 3. normal         : n = normalize(vec3(s * H/bevel * dh/dt * grad(d), 1))
@@ -280,8 +278,9 @@ uniform int   uShapeTypes[MAX_SHAPES]; // 0 square/rect, 1 capsule, 2 circle
 uniform float uShapeRadii[MAX_SHAPES];
 uniform float uMergeRadius;  // smooth-union reach, px
 uniform float uSquircle;     // superellipse exponent (2 = circular corners)
-uniform float uBevel;        // width of the refracting rim, px
-uniform float uHeight;       // glass height / optical thickness, px
+uniform float uBevel;        // max width of the refracting rim, px
+uniform float uHeight;       // max glass height / optical thickness, px
+uniform float uSizeAdaptation;// 0 = absolute material lengths, 1 = fit small UI
 uniform float uIOR;
 uniform float uDispersion;
 uniform float uBlurPlateau;  // blur radius in the middle, px
@@ -351,11 +350,6 @@ float sdAppleShape(vec2 px) {
   // polynomial unions are only C1 and become order-dependent with 3+ shapes;
   // their curvature boundaries show up as diagonal tears under sharp glass
   // highlights. 0.36 matches the polynomial union's depth at equal distances.
-  //
-  // Smoothness is not metricity: the result below is a bound, not a distance,
-  // and |grad| falls well under 1 wherever the blend is active. Callers that
-  // measure screen-space widths off this field must divide by |grad| first --
-  // see the eikonal step in FS_GLASS.
   float scale = max(uMergeRadius * 0.36, 0.01);
   float sum = 0.0;
   for (int i = 0; i < MAX_SHAPES; i++) {
@@ -367,6 +361,92 @@ float sdAppleShape(vec2 px) {
   return nearest - scale * log(max(sum, 1e-6));
 }
 
+// Quintic tangent transition. Besides value and slope, its second derivative
+// matches at both ends: f(0/1)=0/1, f'(0/1)=0/1, f''(0/1)=0. This lets a
+// circular corner leave a straight side with zero curvature instead of the
+// rounded-box SDF's abrupt 0 -> 1/r curvature jump.
+float tangentTransition(float u) {
+  return u * u * u * (6.0 - 8.0 * u + 3.0 * u * u);
+}
+
+vec2 primitiveOpticalGradient(vec2 p, vec2 halfSize,
+                              int shapeType, float radius) {
+  if (shapeType == 2) return normalize(p + 1e-6);
+
+  float exponent = shapeType == 1 ? 2.0 : max(uSquircle, 2.0);
+  float resolvedRadius = shapeType == 1
+                       ? min(halfSize.x, halfSize.y) : radius;
+  vec2 q = abs(p) - halfSize + resolvedRadius;
+  vec2 direction;
+
+  if (q.x > 0.0 && q.y > 0.0) {
+    // Analytic Lp-corner normal. Exponents above 2 already approach the side
+    // with zero curvature; blend out the circular-corner correction by n=3.
+    vec2 lp = normalize(pow(q, vec2(exponent - 1.0)) + 1e-6);
+    const float HALF_PI = 1.57079632679;
+    const float TRANSITION_ANGLE = 0.43633231299; // 25 degrees at each tangent
+    float angle = atan(q.y, q.x);
+    float easedAngle = angle;
+    if (angle < TRANSITION_ANGLE) {
+      easedAngle = TRANSITION_ANGLE *
+                   tangentTransition(angle / TRANSITION_ANGLE);
+    } else if (angle > HALF_PI - TRANSITION_ANGLE) {
+      float fromTop = (HALF_PI - angle) / TRANSITION_ANGLE;
+      easedAngle = HALF_PI - TRANSITION_ANGLE *
+                   tangentTransition(fromTop);
+    }
+    vec2 continuousCorner = vec2(cos(easedAngle), sin(easedAngle));
+    float circularCorner = 1.0 - smoothstep(2.0, 3.0, exponent);
+    direction = normalize(mix(lp, continuousCorner, circularCorner));
+  } else if (q.x > q.y) {
+    direction = vec2(1.0, 0.0);
+  } else {
+    direction = vec2(0.0, 1.0);
+  }
+
+  return direction * sign(p);
+}
+
+vec2 opticalGradient(vec2 px) {
+  float nearest = 1e8;
+  int nearestIndex = 0;
+  for (int i = 0; i < MAX_SHAPES; i++) {
+    if (i >= uShapeCount) break;
+    float next = sdPrimitive(px - uShapeCenters[i], uShapeHalves[i],
+                             uShapeTypes[i], uShapeRadii[i]);
+    if (next < nearest) {
+      nearest = next;
+      nearestIndex = i;
+    }
+  }
+
+  if (uMergeRadius < 0.01 || uShapeCount == 1) {
+    return primitiveOpticalGradient(
+      px - uShapeCenters[nearestIndex], uShapeHalves[nearestIndex],
+      uShapeTypes[nearestIndex], uShapeRadii[nearestIndex]
+    );
+  }
+
+  // The derivative of exponential smooth-min is the same weighted average of
+  // the primitive derivatives. Reusing those weights keeps fused normals C2
+  // through both a primitive's tangent and the union bridge.
+  float scale = max(uMergeRadius * 0.36, 0.01);
+  vec2 gradientSum = vec2(0.0);
+  float weightSum = 0.0;
+  for (int i = 0; i < MAX_SHAPES; i++) {
+    if (i >= uShapeCount) break;
+    vec2 local = px - uShapeCenters[i];
+    float next = sdPrimitive(local, uShapeHalves[i],
+                             uShapeTypes[i], uShapeRadii[i]);
+    float weight = exp(-(next - nearest) / scale);
+    gradientSum += primitiveOpticalGradient(
+      local, uShapeHalves[i], uShapeTypes[i], uShapeRadii[i]
+    ) * weight;
+    weightSum += weight;
+  }
+  return gradientSum / max(weightSum, 1e-6);
+}
+
 // Shading adaptation belongs to the primitive under this fragment, not to the
 // bounds of the whole draw group. The latter changes whenever any component in
 // a connected fusion group moves, making every highlight pulse in sympathy.
@@ -376,9 +456,11 @@ float sdAppleShape(vec2 px) {
 // primitive to the next. Contributions too weak to affect the visible bridge
 // are smoothly discarded; a nearby-but-separate component then has exactly no
 // influence on this component's highlight or light/dark tint.
-vec2 localComponentCenter(vec2 px) {
+void localComponentMetrics(vec2 px, out vec2 componentCenter,
+                           out float componentShortSide) {
   float nearest = 1e8;
   vec2 nearestCenter = uShapeCenters[0];
+  float nearestShortSide = 1.0;
   for (int i = 0; i < MAX_SHAPES; i++) {
     if (i >= uShapeCount) break;
     float next = sdPrimitive(px - uShapeCenters[i], uShapeHalves[i],
@@ -386,13 +468,17 @@ vec2 localComponentCenter(vec2 px) {
     if (next < nearest) {
       nearest = next;
       nearestCenter = uShapeCenters[i];
+      nearestShortSide = 2.0 * min(uShapeHalves[i].x, uShapeHalves[i].y);
     }
   }
 
-  if (uMergeRadius < 0.01 || uShapeCount == 1) return nearestCenter;
+  componentCenter = nearestCenter;
+  componentShortSide = nearestShortSide;
+  if (uMergeRadius < 0.01 || uShapeCount == 1) return;
 
   float scale = max(uMergeRadius * 0.36, 0.01);
   vec2 centreSum = vec2(0.0);
+  float shortSideSum = 0.0;
   float weightSum = 0.0;
   for (int i = 0; i < MAX_SHAPES; i++) {
     if (i >= uShapeCount) break;
@@ -401,9 +487,13 @@ vec2 localComponentCenter(vec2 px) {
     float weight = exp(-(next - nearest) / scale);
     weight *= smoothstep(0.04, 0.20, weight);
     centreSum += uShapeCenters[i] * weight;
+    shortSideSum += 2.0 * min(uShapeHalves[i].x, uShapeHalves[i].y) * weight;
     weightSum += weight;
   }
-  return weightSum > 0.0 ? centreSum / weightSum : nearestCenter;
+  if (weightSum > 0.0) {
+    componentCenter = centreSum / weightSum;
+    componentShortSide = shortSideSum / weightSum;
+  }
 }
 
 vec4 sampleBg(vec2 px, float lod) {
@@ -497,58 +587,38 @@ void main() {
   vec2 px = vUV * uRes;
 
   float d = sdAppleShape(px);
+  float aa = smoothstep(0.8, -0.8, d);
+  vec2 adaptCenter;
+  float localShortSide;
+  localComponentMetrics(px, adaptCenter, localShortSide);
+  // Material lengths are authored against the large demo components. Treat
+  // them as maxima and fit the complete optical system to 30% of a smaller
+  // primitive's short side. The shared metric call above also keeps this scale
+  // continuous when differently sized primitives form one fused surface.
+  float fittedScale = clamp(0.30 * localShortSide / max(uBevel, 1.0), 0.05, 1.0);
+  float opticalScale = mix(1.0, fittedScale,
+                           clamp(uSizeAdaptation, 0.0, 1.0));
+  float bevel = max(uBevel * opticalScale, 1.0);
+  float opticalHeight = uHeight * opticalScale;
 
   // ---- gradient of the SDF = outward direction of the surface -------------
-  float k = max(1.0, 0.06 * uBevel);
-  float dx = sdAppleShape(px + vec2(k, 0.0)) -
-             sdAppleShape(px - vec2(k, 0.0));
-  float dy = sdAppleShape(px + vec2(0.0, k)) -
-             sdAppleShape(px - vec2(0.0, k));
-  vec2 rawGrad = vec2(dx, dy) / (2.0 * k);
-  float gradLen = length(rawGrad);
-  vec2 g = rawGrad / max(gradLen, 1e-5);
-
-  // ---- eikonal re-normalisation ------------------------------------------
-  // The smooth union is C-infinity, but it is NOT a metric distance. Its
-  // gradient is the blend-weighted average of the member gradients, so wherever
-  // two members disagree in direction the magnitude collapses: measured 0.87
-  // through a fused body and 0.00 on a bridge's medial axis, against exactly
-  // 1.0 for a lone shape.
-  //
-  // Every feature below -- bevel, specular band, contour, edge line -- is an
-  // iso-band of d, so on an uncorrected field each one stretches by 1/|grad d|
-  // in screen space. The 34px bevel measured 52px across a bridge versus 25px
-  // elsewhere, and the sub-pixel edge line fattened by the same factor. That
-  // widening, right where two components meet, is the bright seam.
-  //
-  // d / |grad d| is the standard first-order distance to the zero level set and
-  // restores a constant screen-space width. It is a no-op on unfused geometry
-  // (|grad d| == 1 there), so it costs nothing in fidelity. The floor bounds the
-  // correction at 5x and is only reached deep inside the plateau, past the end
-  // of every band.
-  float dMetric = d / max(gradLen, 0.20);
-  float aa = smoothstep(0.8, -0.8, dMetric);
+  vec2 g = normalize(opticalGradient(px) + 1e-6);
 
   // ---- thickness field / bevel profile -----------------------------------
-  float t  = clamp(-dMetric / uBevel, 0.0, 1.0); // 0 at the edge, 1 = plateau
+  float t  = clamp(-d / bevel, 0.0, 1.0);    // 0 at the edge, 1 on the plateau
   float ct = 1.0 - t;
   float h  = sqrt(max(1.0 - ct * ct, 0.0));  // convex (circular) bevel
   float dhdt = ct / max(h, 0.10);            // slope, clamped at the silhouette
-  float slope = (uHeight / uBevel) * dhdt;
+  float slope = (opticalHeight / bevel) * dhdt;
 
   // 0 = convex lens, 1 = the default Apple-like concave rim. Values above 1
   // deliberately exaggerate the inward normal for exploratory tuning.
-  // With dMetric eikonal, grad(H) = height * dh/dt * grad(t) has magnitude
-  // exactly "slope" along g, so the unit gradient is the correct height-field
-  // normal here. Feeding the raw union gradient instead would understate the
-  // tilt by |grad d|, and normalising without rescaling d -- what this shader
-  // used to do -- overstates it by 1/|grad d| and spikes the Schlick term.
   float curveSign = 1.0 - 2.0 * uMeniscus;
   vec3 n = normalize(vec3(curveSign * g * slope, 1.0));
   vec3 I = vec3(0.0, 0.0, -1.0);
 
   // ---- refraction (Snell) + dispersion -----------------------------------
-  float path = uHeight * mix(0.25, 1.0, h) * uRefractScale;
+  float path = opticalHeight * mix(0.25, 1.0, h) * uRefractScale;
   vec2 dR, dG, dB;
   {
     float e = 1.0 / max(uIOR - uDispersion, 1.0);
@@ -567,13 +637,14 @@ void main() {
   // as triangular tearing rather than refraction. Compress only the extreme
   // tail; ordinary offsets remain almost linear while caustic spikes stay
   // within a bevel-sized optical footprint.
-  float maxDisplacement = max(1.15 * uBevel, 12.0);
+  float maxDisplacement = max(1.15 * bevel, max(12.0 * opticalScale, 3.0));
   dR = softLimitOffset(dR, maxDisplacement);
   dG = softLimitOffset(dG, maxDisplacement);
   dB = softLimitOffset(dB, maxDisplacement);
 
   // ---- scattering: rim stays readable, plateau is frosted ----------------
-  float radius = mix(uBlurRim, uBlurPlateau, smoothstep(0.0, 0.85, t));
+  float radius = mix(uBlurRim, uBlurPlateau, smoothstep(0.0, 0.85, t))
+               * opticalScale;
 
   vec3 col;
   col.r = blurBg(px + dR, radius).r;
@@ -597,14 +668,14 @@ void main() {
   // Keep the reflected environment local to the fragment. Stabilise the lobe
   // controls around the owning primitive below so hard wallpaper edges do not
   // chop one rim into unrelated bright and dark pieces.
-  float probeLod = min(3.5, uMips - 1.0);
-  float probeRadius = max(1.35 * uBevel, 18.0);
+  float probeLod = clamp(3.5 + log2(max(opticalScale, 0.05)),
+                         0.0, uMips - 1.0);
+  float probeRadius = max(1.35 * bevel, max(18.0 * opticalScale, 3.0));
   vec3 envL = sampleBg(px + vec2(-probeRadius, 0.0), probeLod).rgb;
   vec3 envR = sampleBg(px + vec2( probeRadius, 0.0), probeLod).rgb;
   vec3 envB = sampleBg(px + vec2(0.0, -probeRadius), probeLod).rgb;
   vec3 envT = sampleBg(px + vec2(0.0,  probeRadius), probeLod).rgb;
   vec2 fallbackLight = normalize(uLightDir + vec2(1e-5));
-  vec2 adaptCenter = localComponentCenter(px);
   // Highlight adaptation must be stable across one component. Driving its
   // strength and colour from each fragment's probe makes a mountain ridge or
   // tree line cut the rim into bright and dark pieces. Probe around the local
@@ -633,13 +704,11 @@ void main() {
   vec3 envY = mix(envB, envT, wy);
   vec3 ringEnv = (envX * abs(nn.x) + envY * abs(nn.y)) /
                  max(abs(nn.x) + abs(nn.y), 1e-3);
-  // On a bridge's medial axis the gradient direction is undefined, so fade the
-  // probe offset out with the gradient magnitude instead of letting a ~19px
-  // probe flip sides across the ridge. Saturates to 1 for any |grad d| >= 0.35,
-  // which covers every rim on both fused and lone shapes.
-  float gradTrust = smoothstep(0.05, 0.35, gradLen);
-  vec3 localEnv = sampleBg(px + g * gradTrust * max(0.55 * uBevel, 6.0),
-                           min(2.0, uMips - 1.0)).rgb;
+  float localProbeLod = clamp(2.0 + log2(max(opticalScale, 0.05)),
+                              0.0, uMips - 1.0);
+  vec3 localEnv = sampleBg(px + g * max(0.55 * bevel,
+                                        max(6.0 * opticalScale, 2.0)),
+                           localProbeLod).rgb;
   vec3 env = mix(ringEnv, localEnv, 0.58);
   float envLum = luminance(env);
   env = mix(env, vec3(envLum), 0.10); // retain wallpaper hue, tame neon spikes
@@ -669,14 +738,12 @@ void main() {
 
   // Dark contour right at the silhouette: at grazing angles the rim reflects
   // the surroundings instead of transmitting, so real glass edges read dark.
-  // Both of these are sub-pixel iso-bands, so they are the features the
-  // non-metric field distorted most; they track dMetric for that reason.
   float w = max(uEdgeWidth, 0.5);
-  float contour = smoothstep(w, 0.0, abs(dMetric + 0.55 * w));
+  float contour = smoothstep(w, 0.0, abs(d + 0.55 * w));
   col *= 1.0 - uEdgeDark * contour;
 
   // Crisp inner highlight line; direction and colour follow the local probe.
-  float line = smoothstep(1.35 * w, 0.0, abs(dMetric + 2.2 * w));
+  float line = smoothstep(1.35 * w, 0.0, abs(d + 2.2 * w));
   float lit = 0.26 + 0.74 * max(dot(g, lightDir), 0.0);
   vec3 stableEnv = (adaptL + adaptR + adaptB + adaptT) * 0.25;
   float stableEnvLum = max(luminance(stableEnv), 0.12);
@@ -702,8 +769,8 @@ void main() {
 
   if (uDebug == 1) col = vec3(h);
   if (uDebug == 2) col = vec3(0.5 + 0.5 * n.xy, n.z);
-  if (uDebug == 3) col = vec3(length(dG) / max(uHeight, 1.0),
-                              length(dR - dB) / max(uHeight, 1.0) * 6.0, 0.0);
+  if (uDebug == 3) col = vec3(length(dG) / max(opticalHeight, 1.0),
+                              length(dR - dB) / max(opticalHeight, 1.0) * 6.0, 0.0);
 
   // The browser drawing buffer stores display/sRGB values, unlike the explicit
   // SRGB8_ALPHA8 offscreen attachments. Encode the final linear material here,

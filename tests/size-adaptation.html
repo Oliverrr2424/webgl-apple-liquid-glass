@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      html, body { margin: 0; background: #10131a; }
+      body { position: relative; width: 760px; }
+      canvas { display: block; width: 760px; height: 600px; }
+      .comparison-label { position: absolute; left: 14px; z-index: 2; padding: 5px 8px;
+        border: 1px solid rgba(255,255,255,.28); border-radius: 999px;
+        background: rgba(10,14,24,.72); color: white; font: 11px/1 system-ui, sans-serif;
+        letter-spacing: .04em; backdrop-filter: blur(8px); }
+      .comparison-label.before { top: 14px; }
+      .comparison-label.after { top: 314px; }
+    </style>
+  </head>
+  <body>
+    <span class="comparison-label before">Absolute optics · previous behaviour</span>
+    <span class="comparison-label after">Adaptive optics · fitted to component</span>
+    <canvas id="output"></canvas>
+    <script type="module">
+      import { GlassRenderer } from '../src/renderer.js';
+      import { getDefaultMaterial } from '../src/material.js';
+
+      window.runTest = () => {
+        const canvas = document.querySelector('#output');
+        const renderer = new GlassRenderer(canvas, {
+          alpha: true,
+          preserveDrawingBuffer: true,
+        });
+        renderer.resize(760, 600);
+
+        const source = document.createElement('canvas');
+        source.width = 760;
+        source.height = 600;
+        const context = source.getContext('2d');
+        const gradient = context.createLinearGradient(0, 0, source.width, source.height);
+        gradient.addColorStop(0, '#192b75');
+        gradient.addColorStop(0.34, '#ef466f');
+        gradient.addColorStop(0.68, '#ffcb4c');
+        gradient.addColorStop(1, '#137c74');
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, source.width, source.height);
+        context.strokeStyle = 'rgba(255,255,255,.82)';
+        context.lineWidth = 5;
+        for (let x = -300; x < source.width + 300; x += 42) {
+          context.beginPath();
+          context.moveTo(x, 0);
+          context.lineTo(x + 300, source.height);
+          context.stroke();
+        }
+        renderer.setWallpapers([source]);
+        renderer.buildBackdrop(0, 1);
+
+        const sizes = [40, 70, 120, 220];
+        const expectedBands = [[9, 15], [17, 24], [23, 32], [23, 32]];
+        const measuredBands = [];
+        const gl = renderer.gl;
+        const material = { ...getDefaultMaterial(), debug: 1 };
+
+        // The opt-out preserves the package's former absolute-pixel behaviour:
+        // a 34px bevel cannot reach a plateau inside a 40px-tall component.
+        renderer.clearOutput();
+        renderer.drawGlass(
+          { id: 'absolute-40', shape: 'rect', x: 20, y: 280, w: 260, h: 40 },
+          { ...material, sizeAdaptation: 0 },
+          1,
+        );
+        const absolutePixels = new Uint8Array(130 * 4);
+        gl.readPixels(20, 300, 130, 1, gl.RGBA, gl.UNSIGNED_BYTE, absolutePixels);
+        if (absolutePixels.some((channel, index) => index % 4 === 0 && channel >= 252)) {
+          throw new Error('sizeAdaptation=0 unexpectedly fitted the 40px component');
+        }
+
+        for (let i = 0; i < sizes.length; i++) {
+          const size = sizes[i];
+          const element = {
+            id: `size-${size}`,
+            shape: 'rect',
+            x: 20,
+            y: (600 - size) / 2,
+            w: Math.max(260, size),
+            h: size,
+          };
+          renderer.clearOutput();
+          renderer.drawGlass(element, material, 1);
+
+          const pixels = new Uint8Array(Math.ceil(element.w / 2) * 4);
+          gl.readPixels(
+            element.x,
+            300,
+            Math.ceil(element.w / 2),
+            1,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            pixels,
+          );
+          let band = -1;
+          for (let x = 2; x < pixels.length / 4; x++) {
+            if (pixels[x * 4] >= 252 && pixels[x * 4 + 3] >= 250) {
+              band = x;
+              break;
+            }
+          }
+          const [minimum, maximum] = expectedBands[i];
+          measuredBands.push(band);
+          if (band < minimum || band > maximum) {
+            throw new Error(
+              `${size}px component has a ${band}px optical rim; expected ${minimum}-${maximum}px`,
+            );
+          }
+        }
+
+        // Leave an old/new size ladder on the page so this regression is also
+        // easy to inspect by eye. The backdrop's diagonal rules expose the
+        // width and strength of refraction much more clearly than a flat colour.
+        renderer.drawBackdrop();
+        const visualElements = (offset) => [
+          { id: '40', shape: 'circle', x: 28, y: offset + 130, w: 40, h: 40 },
+          { id: '70', shape: 'pill', x: 105, y: offset + 115, w: 126, h: 70 },
+          { id: '120', shape: 'rect', x: 275, y: offset + 90, w: 150, h: 120 },
+          { id: '220', shape: 'rect', x: 480, y: offset + 40, w: 240, h: 220 },
+        ];
+        for (const element of visualElements(0)) {
+          renderer.drawGlass(element, { ...getDefaultMaterial(), sizeAdaptation: 0 }, 1);
+        }
+        for (const element of visualElements(300)) {
+          renderer.drawGlass(element, getDefaultMaterial(), 1);
+        }
+
+        return {
+          checks: [`40/70/120/220px optical rims=${measuredBands.join('/')}`],
+        };
+      };
+    </script>
+  </body>
+</html>
