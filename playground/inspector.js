@@ -8,7 +8,7 @@
 import { DEFAULT_MATERIAL, SLIDERS } from '../src/material.js';
 
 const GROUPS = {
-  geometry: ['radius', 'squircle', 'mergeRadius', 'bevel', 'height'],
+  geometry: ['radius', 'squircle', 'mergeRadius', 'bevel', 'height', 'sizeAdaptation'],
   optics: ['ior', 'dispersion', 'refractScale', 'meniscus', 'blurPlateau', 'blurRim', 'opticalDensity'],
   lighting: ['specular', 'specPower', 'highlightAdapt', 'highlightWidth', 'highlightSharpness',
     'highlightBase', 'fresnel', 'saturation', 'brightness', 'tintAmount', 'tintAdapt'],
@@ -17,7 +17,7 @@ const GROUPS = {
 
 const LABELS = {
   radius: 'Corner radius', squircle: 'Corner shape', mergeRadius: 'Fusion distance',
-  bevel: 'Bevel width', height: 'Optical height',
+  bevel: 'Bevel width', height: 'Optical height', sizeAdaptation: 'Fit small controls',
   ior: 'Index of refraction', dispersion: 'Chromatic spread', refractScale: 'Refraction scale',
   meniscus: 'Meniscus curve', blurPlateau: 'Plateau blur', blurRim: 'Rim blur',
   opticalDensity: 'Optical density',

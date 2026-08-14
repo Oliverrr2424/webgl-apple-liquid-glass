@@ -488,6 +488,7 @@ export class GlassRenderer {
     gl.uniform1f(loc.uSquircle, m.squircle);
     gl.uniform1f(loc.uBevel, m.bevel * dpr);
     gl.uniform1f(loc.uHeight, m.height * dpr);
+    gl.uniform1f(loc.uSizeAdaptation, m.sizeAdaptation ?? 1);
     gl.uniform1f(loc.uIOR, m.ior);
     gl.uniform1f(loc.uDispersion, m.dispersion);
     gl.uniform1f(loc.uBlurPlateau, m.blurPlateau * dpr);

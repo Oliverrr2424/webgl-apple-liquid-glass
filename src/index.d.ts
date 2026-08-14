@@ -15,6 +15,7 @@ export interface LiquidGlassMaterial {
   mergeRadius: number;
   bevel: number;
   height: number;
+  sizeAdaptation: number;
   ior: number;
   dispersion: number;
   refractScale: number;
