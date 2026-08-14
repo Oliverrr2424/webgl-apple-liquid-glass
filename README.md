@@ -1,6 +1,7 @@
 # apple-liquid-glass-webgl
 
-Reusable WebGL2 liquid glass surfaces for folders, rectangles, pills, and circles.
+Reusable WebGL2 liquid glass surfaces for folders, rectangles, pills, and circles, with the
+original frosted V1 renderer and the clear optical V2 renderer available side by side.
 
 This package is framework-free and renders Apple-inspired translucent surfaces with screen-space refraction, variable blur, Fresnel reflection, chromatic dispersion, edge highlights, and contact shadows.
 
@@ -45,7 +46,92 @@ glass.render();
 
 The component accepts CSS-pixel coordinates. Content such as app icons, labels, or buttons can be drawn in a separate canvas layer above the WebGL canvas. Optical lengths automatically scale down when a component's short side is too small for the configured bevel: the refracting rim is capped at 30% of that side, and glass height, blur, highlights, and their backdrop probes follow the same scale. Large components and materials that already use a narrow bevel are unchanged.
 
-## Default material parameters
+## V1 and V2 can be used together
+
+`LiquidGlassWebGL` remains the original V1 API. `LiquidGlassWebGLV2` is the transparent/clear
+optical model. They are separate classes with separate material objects, so an application can
+render both versions at once without a global mode or an implicit parameter conversion.
+
+```js
+import {
+  LiquidGlassWebGL,
+  LiquidGlassWebGLV2,
+  getDefaultMaterial,
+  getDefaultMaterialV2,
+} from 'apple-liquid-glass-webgl';
+
+const v1 = new LiquidGlassWebGL(document.querySelector('#frosted'), {
+  material: getDefaultMaterial(),
+  fusion: true,
+});
+const v2 = new LiquidGlassWebGLV2(document.querySelector('#transparent'), {
+  material: getDefaultMaterialV2(),
+});
+
+for (const glass of [v1, v2]) {
+  glass.setElements([
+    { id: 'panel', shape: 'rect', x: 40, y: 40, width: 320, height: 180 },
+  ], false);
+  await glass.loadBackdrop('/images/wallpaper.jpg', { shouldRender: false });
+  glass.render();
+}
+```
+
+V2 can also be imported from the explicit subpath:
+
+```js
+import { LiquidGlassWebGLV2, getDefaultMaterialV2 } from 'apple-liquid-glass-webgl/v2';
+```
+
+The two material contracts are intentionally not interchangeable. V2 rejects V1 preset names
+and unknown V2 material keys instead of silently applying a value with the wrong unit. Element
+position, size and shape can be shared between renderers, but every material value is stored and
+evaluated independently.
+
+| Similar concept | V1 calculation | V2 calculation |
+| --- | --- | --- |
+| `dispersion` | Spread around the refractive index, used in three Snell-law evaluations | Direct display-space RGB sample split in pixels |
+| `edgeWidth` | CSS-pixel contour/highlight line width | Fraction of the short half-side used by the edge capture field |
+| Corner control | `radius` is a CSS-pixel radius capped by the shape size | `roundness` is a ratio of the short half-side; its default matches V1's 23.5% cap |
+| Refraction | `ior × height × refractScale` through a bevel height field | `refraction` plus independent `edgeReach × edgePull` capture distance |
+| Tint | Fixed/adaptive `tintColor` mixed by `tintAmount` | Local light/dark material selected by `tint` opacity |
+
+V2 surfaces remain separate and resolve overlap in element order; V1's `fusion` and
+`mergeRadius` smooth-union controls do not apply to V2.
+
+Both versions use the same visible shape contract: `folder` and `rect` are rounded boxes,
+`pill` is a capsule, and `circle` uses the short half-side. In particular, V2 `folder` has no
+special tab or cut-out. This keeps shared layouts pixel-aligned while the two optical models
+remain independent.
+
+### V2 default material parameters
+
+| Group | Parameter | Default |
+| --- | --- | ---: |
+| Transmission | `refraction` | `9.00` |
+| Transmission | `edgePull` | `1.24` |
+| Transmission | `edgeReach` | `62.00` |
+| Transmission | `edgeWidth` | `0.25` |
+| Transmission | `dispersion` | `0.70` |
+| Transmission | `frost` | `0.18` |
+| Transmission | `body` | `0.72` |
+| Transmission | `absorption` | `0.58` |
+| Transmission | `tint` | `0.00` |
+| Reflection | `rim` | `0.72` |
+| Reflection | `reflection` | `0.68` |
+| Reflection | `highlight` | `0.38` |
+| Reflection | `lightAngle` | `136.00` |
+| Reflection | `echo` | `0.28` |
+| Interface | `hairline` | `0.92` |
+| Interface | `hairWidth` | `0.52` |
+| Shape | `roundness` | `0.47` |
+
+For live backdrops, V2 updates its optical transmission every frame but rate-limits the
+low-resolution light probe and eases the detected highlight direction over roughly 280 ms.
+Reflection also samples a softened backdrop. These safeguards reduce highlight flashing on
+moving high-contrast content without freezing refraction or changing the parameter contract.
+
+## V1 default material parameters
 
 `getDefaultMaterial()` returns a fresh copy of the package's default material parameters on every call. This makes it safe to customize the result without mutating the package defaults.
 
@@ -72,13 +158,13 @@ const glass = new LiquidGlassWebGL(canvas, { material });
 | Optics | `dispersion` | `0.06` |
 | Optics | `refractScale` | `3.00` |
 | Optics | `meniscus` | `1.00` |
-| Optics | `blurPlateau` | `8.00` |
-| Optics | `blurRim` | `48.00` |
-| Optics | `opticalDensity` | `0.65` |
+| Optics | `blurPlateau` | `4.50` |
+| Optics | `blurRim` | `11.00` |
+| Optics | `opticalDensity` | `0.40` |
 | Lighting | `specular` | `0.89` |
-| Lighting | `specPower` | `11.50` |
-| Lighting | `highlightAdapt` | `0.83` |
-| Lighting | `highlightWidth` | `0.76` |
+| Lighting | `specPower` | `29.50` |
+| Lighting | `highlightAdapt` | `0.91` |
+| Lighting | `highlightWidth` | `0.87` |
 | Lighting | `highlightSharpness` | `0.55` |
 | Lighting | `highlightBase` | `0.30` |
 | Lighting | `fresnel` | `0.65` |
@@ -139,15 +225,25 @@ The default `compositeMode: 'replace'` preserves the original behavior and draws
 
 ## Visual preview
 
-These screenshots are captured from the playground with the inspector hidden. Each scene uses the same folder, rect, pill, and circle surfaces:
+These V2 screenshots are captured from the playground with the inspector hidden. The Alpine Lake scene uses the same folder, rect, pill, and circle geometry as V1, arranged on an evenly spaced 2 × 2 stage.
 
-### Smooth-union fusion
+### V2 Alpine Lake
 
-Nearby components can share one continuous distance field, so the silhouette, refraction, highlights, and shadow flow through the merged surface.
+![Liquid Glass V2 on Alpine Lake](https://unpkg.com/apple-liquid-glass-webgl@2.0.1/assets/readme/v2-alpine-lake.jpg)
+
+### V2 iPhone demos
+
+| Home Page | Control Centre |
+| --- | --- |
+| ![Liquid Glass V2 iPhone Home Page](https://unpkg.com/apple-liquid-glass-webgl@2.0.1/assets/readme/v2-home-page.jpg) | ![Liquid Glass V2 iPhone Control Centre](https://unpkg.com/apple-liquid-glass-webgl@2.0.1/assets/readme/v2-control-centre.jpg) |
+
+### V1 smooth-union fusion
+
+Nearby V1 components can share one continuous distance field, so the silhouette, refraction, highlights, and shadow flow through the merged surface.
 
 ![Smooth-union liquid glass fusion](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/smooth-union.jpg)
 
-### Individual scene previews
+### V1 wallpaper previews
 
 | Natural landscape | Abstract lines |
 | --- | --- |
@@ -231,6 +327,10 @@ The shader carries 16 shapes per pass. Elements too far apart to influence each 
 
 The geometry helpers behind all of this are exported for use without a canvas — `sdGroup`, `hitTestElements`, `connectedElementGroups` and `groupElements`.
 
+V2 mirrors the backdrop, element, lifecycle, resize and hit-test methods used above through
+`LiquidGlassWebGLV2`. It additionally exports `getDefaultMaterialV2()`, `makeMaterialV2()`,
+`distanceToElementsV2()` and `hitTestElementsV2()`. It deliberately has no `setFusion()` method.
+
 ## Playground
 
 The interactive demo used to develop the material is deployed at
@@ -243,9 +343,10 @@ npm run serve
 
 Open [http://localhost:8765](http://localhost:8765). It drives the published component through its public API, and the inspector covers:
 
-- Eight scenes: four wallpapers, plus a tab bar over app content, a notification, a control-centre grid, and a scrolling feed that exercises the live backdrop path.
+- Eight scenes: four wallpapers, plus fixed iPhone Home Page, Notification, and Control Centre references, and a scrolling feed that exercises the live backdrop path.
 - Component editing: add, retype, resize and delete surfaces; drag them, or select one and use the arrow keys (`Shift` for ten pixels, `Alt` to resize, `[` and `]` to cycle, `Delete` to remove).
 - Every material parameter as both a slider and a typed value. Double click a parameter name to reset just that one; modified parameters are marked.
+- A V1 Original / V2 Transparent switch. Each version retains its own tuned material while you compare them, and shared links record which renderer and parameter contract they use.
 - **Copy link** puts the whole session in the URL, **Copy code** emits the snippet that reproduces it.
 - A frame-rate, CPU-per-frame, drawing-buffer and pass-count readout. A static scene reports `idle`, because dirty tracking skips the GPU entirely.
 - Local image or looping-video uploads, and the thickness, normals and dispersion debug outputs.

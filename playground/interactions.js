@@ -17,7 +17,7 @@ function handleUnder(element, x, y) {
     && Math.abs(handle.y - y) <= reach) ?? null;
 }
 
-function resize(element, handle, x, y) {
+export function resizeElementFromHandle(element, handle, x, y) {
   const right = element.x + element.w;
   const bottom = element.y + element.h;
   if (handle.id.includes('e')) element.w = Math.max(MIN_SIZE, x - element.x);
@@ -30,16 +30,21 @@ function resize(element, handle, x, y) {
     element.h = Math.max(MIN_SIZE, bottom - y);
     element.y = bottom - element.h;
   }
-  if (element.shape === 'circle') element.h = element.w;
+  if (element.shape === 'circle' || element.shape === 'folder') {
+    element.h = element.w;
+    if (handle.id.includes('n')) element.y = bottom - element.h;
+  }
 }
 
-export function attachStageInteractions({ canvas, glass, store, onChange, announce }) {
+export function attachStageInteractions({ canvas, glass, getGlass, store, onChange, announce, isLocked = () => false }) {
   let drag = null;
 
+  const activeGlass = () => getGlass?.() ?? glass;
   const selected = () => store.elements.find((element) => element.id === store.selectedId) ?? null;
-  const positionOf = (event) => glass.pointerPosition(event);
+  const positionOf = (event) => activeGlass().pointerPosition(event);
 
   canvas.addEventListener('pointerdown', (event) => {
+    if (isLocked()) return;
     const { x, y } = positionOf(event);
     const handle = handleUnder(selected(), x, y);
     if (handle) {
@@ -48,7 +53,7 @@ export function attachStageInteractions({ canvas, glass, store, onChange, announ
       return;
     }
 
-    const hit = glass.hitTestEvent(event);
+    const hit = activeGlass().hitTestEvent(event);
     const element = hit ? store.elements.find((entry) => entry.id === hit.id) : null;
     if (!element) {
       if (store.selectedId !== null) {
@@ -65,16 +70,20 @@ export function attachStageInteractions({ canvas, glass, store, onChange, announ
   });
 
   canvas.addEventListener('pointermove', (event) => {
+    if (isLocked()) {
+      canvas.style.cursor = 'default';
+      return;
+    }
     const { x, y } = positionOf(event);
     if (!drag) {
       const handle = handleUnder(selected(), x, y);
-      const hovering = handle || glass.hitTest(x, y);
+      const hovering = handle || activeGlass().hitTest(x, y);
       canvas.style.cursor = handle
         ? (handle.id === 'nw' || handle.id === 'se' ? 'nwse-resize' : 'nesw-resize')
         : (hovering ? 'grab' : 'default');
       return;
     }
-    if (drag.mode === 'resize') resize(drag.element, drag.handle, x, y);
+    if (drag.mode === 'resize') resizeElementFromHandle(drag.element, drag.handle, x, y);
     else {
       drag.element.x = x - drag.dx;
       drag.element.y = y - drag.dy;
@@ -97,6 +106,7 @@ export function attachStageInteractions({ canvas, glass, store, onChange, announ
   const NUDGE = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
   canvas.addEventListener('keydown', (event) => {
+    if (isLocked()) return;
     const element = selected();
     if (event.key === 'Escape') {
       store.selectedId = null;
@@ -139,9 +149,14 @@ export function attachStageInteractions({ canvas, glass, store, onChange, announ
     const amount = event.shiftKey ? 10 : 1;
     // Alt turns the arrow keys into a resize, mirroring the corner handles.
     if (event.altKey) {
-      element.w = Math.max(MIN_SIZE, element.w + nudge[0] * amount);
-      element.h = Math.max(MIN_SIZE, element.h + nudge[1] * amount);
-      if (element.shape === 'circle') element.h = element.w;
+      if (element.shape === 'circle' || element.shape === 'folder') {
+        const delta = (nudge[0] || nudge[1]) * amount;
+        element.w = Math.max(MIN_SIZE, element.w + delta);
+        element.h = element.w;
+      } else {
+        element.w = Math.max(MIN_SIZE, element.w + nudge[0] * amount);
+        element.h = Math.max(MIN_SIZE, element.h + nudge[1] * amount);
+      }
       announce(`${element.id} is ${Math.round(element.w)} by ${Math.round(element.h)}`);
     } else {
       element.x += nudge[0] * amount;

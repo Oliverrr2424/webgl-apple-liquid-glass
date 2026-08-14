@@ -1,5 +1,7 @@
 // Everything that sits ON TOP of the glass: app icons, folder label, badge.
 
+import { drawPhoneChrome, drawPhoneIcon, phoneFrame } from './phone.js?phone-scenes=2';
+
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -47,6 +49,13 @@ function drawIcon(ctx, icon, x, y, size) {
 }
 
 export function drawGlassContents(ctx, f) {
+  if (f.shape === 'pill' && f.icons?.length) {
+    const size = Math.min(f.h * 0.64, f.w / (f.icons.length + 1));
+    const gap = (f.w - size * f.icons.length) / (f.icons.length + 1);
+    f.icons.forEach((icon, index) => drawIcon(ctx, icon,
+      f.x + gap + index * (size + gap), f.y + (f.h - size) / 2, size));
+    return;
+  }
   if (f.shape === 'pill' || f.shape === 'circle') {
     ctx.save();
     const short = Math.min(f.w, f.h);
@@ -147,5 +156,144 @@ export function drawBadge(ctx, f) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x + w / 2, y + h / 2 + fs * 0.04);
+  ctx.restore();
+}
+
+function elementMap(elements) {
+  return new Map(elements.map((element) => [element.id, element]));
+}
+
+function phoneText(ctx, text, x, y, size, options = {}) {
+  ctx.save();
+  ctx.fillStyle = options.color ?? '#fff';
+  ctx.globalAlpha = options.alpha ?? 1;
+  ctx.font = `${options.weight ?? 500} ${size}px -apple-system, "SF Pro Display", "PingFang SC", system-ui, sans-serif`;
+  ctx.textAlign = options.align ?? 'left';
+  ctx.textBaseline = options.baseline ?? 'alphabetic';
+  ctx.fillText(text, x, y, options.maxWidth);
+  ctx.restore();
+}
+
+function drawSystemIcon(ctx, element, kind, scale = 0.46, color = '#fff') {
+  const unit = Math.min(element.w, element.h);
+  const size = unit * scale;
+  drawPhoneIcon(ctx, kind === 'torch' ? 'flashlight' : kind,
+    element.x + (element.w - size) / 2,
+    element.y + (element.h - size) / 2,
+    size, size, color);
+}
+
+function drawHomeOverlay(ctx, frame, elements) {
+  for (const element of elements) {
+    drawGlassContents(ctx, element);
+    if (element.id !== 'dock') drawLabel(ctx, element);
+  }
+  const dotsY = frame.screen.y + 695 * frame.scale;
+  for (let index = 0; index < 3; index++) {
+    ctx.beginPath();
+    ctx.arc(frame.screen.x + (184 + index * 13) * frame.scale, dotsY, (index === 0 ? 3.4 : 2.8) * frame.scale, 0, Math.PI * 2);
+    ctx.fillStyle = index === 0 ? '#fff' : 'rgba(255,255,255,.45)';
+    ctx.fill();
+  }
+}
+
+function notificationCard(ctx, element, title, body, time, accent) {
+  const unit = element.w / 357;
+  const icon = { x: element.x + 13 * unit, y: element.y + 16 * unit, w: 45 * unit, h: 45 * unit };
+  roundRect(ctx, icon.x, icon.y, icon.w, icon.h, 11 * unit);
+  const gradient = ctx.createLinearGradient(icon.x, icon.y, icon.x + icon.w, icon.y + icon.h);
+  gradient.addColorStop(0, accent);
+  gradient.addColorStop(1, '#e9efff');
+  ctx.fillStyle = gradient;
+  ctx.fill();
+  phoneText(ctx, title, element.x + 70 * unit, element.y + 27 * unit, 15 * unit, { weight: 650 });
+  phoneText(ctx, time, element.x + element.w - 14 * unit, element.y + 26 * unit, 11 * unit, { align: 'right', alpha: 0.68 });
+  phoneText(ctx, body, element.x + 70 * unit, element.y + 50 * unit, 12.5 * unit, { alpha: 0.92, maxWidth: element.w - 86 * unit });
+  if (element.h > 90 * unit) phoneText(ctx, 'Please note that the service is now fully operational.', element.x + 70 * unit, element.y + 70 * unit, 11 * unit, { alpha: 0.7, maxWidth: element.w - 86 * unit });
+}
+
+function drawNotificationOverlay(ctx, frame, elements) {
+  const s = frame.scale;
+  const sx = frame.screen.x;
+  const sy = frame.screen.y;
+  phoneText(ctx, 'Friday, August 14', sx + frame.screen.w / 2, sy + 112 * s, 17 * s, { align: 'center', weight: 550 });
+  phoneText(ctx, '9:41', sx + frame.screen.w / 2, sy + 232 * s, 102 * s, { align: 'center', weight: 280 });
+  const byId = elementMap(elements);
+  notificationCard(ctx, byId.get('headline'), 'CS2', 'LVG win 2–0 · next round confirmed', '3m ago', '#172034');
+  notificationCard(ctx, byId.get('building'), 'Five Condos', 'Elevator #4 is back in service', '24m ago', '#32b6ff');
+  notificationCard(ctx, byId.get('message'), 'Oliverrr', 'I just saved so much time using one AI.', '27m ago', '#ff4b8b');
+  drawSystemIcon(ctx, byId.get('flashlight'), 'flashlight');
+  drawSystemIcon(ctx, byId.get('camera'), 'camera');
+}
+
+function drawConnectivity(ctx, element) {
+  const buttons = [
+    [0.29, 0.29, 0.165, '#8d939d', 'plane'],
+    [0.71, 0.29, 0.165, '#0a9fff', 'wifi'],
+    [0.29, 0.71, 0.165, '#0a9fff', 'antenna'],
+    [0.63, 0.64, 0.09, '#32d06b', 'antenna'],
+    [0.82, 0.64, 0.09, '#168cff', 'bluetooth'],
+    [0.63, 0.82, 0.09, '#6d737f', 'antenna'],
+    [0.82, 0.82, 0.09, '#168cff', 'wifi'],
+  ];
+  for (const [px, py, radiusRatio, color, icon] of buttons) {
+    const radius = element.w * radiusRatio;
+    const cx = element.x + element.w * px;
+    const cy = element.y + element.h * py;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    const iconSize = radius * 1.12;
+    drawPhoneIcon(ctx, icon, cx - iconSize / 2, cy - iconSize / 2, iconSize);
+  }
+}
+
+function drawControlOverlay(ctx, frame, elements) {
+  const byId = elementMap(elements);
+  drawConnectivity(ctx, byId.get('connectivity'));
+  for (const id of ['bluetooth', 'hotspot', 'focus', 'torch', 'low-power']) {
+    const element = byId.get(id);
+    const title = { bluetooth: 'Bluetooth', hotspot: 'Personal Hotspot', focus: 'Focus', torch: 'Flashlight', 'low-power': 'Low Power Mode' }[id];
+    const iconName = { bluetooth: 'bluetooth', hotspot: 'antenna', focus: 'moon', torch: 'flashlight', 'low-power': 'battery' }[id];
+    const iconSize = 24 * frame.scale;
+    drawPhoneIcon(ctx, iconName, element.x + 14 * frame.scale,
+      element.y + (element.h - iconSize) / 2, iconSize);
+    phoneText(ctx, title, element.x + 48 * frame.scale, element.y + element.h * 0.46, Math.min(element.h * 0.21, 14 * frame.scale), { weight: 600 });
+    if (id !== 'focus') phoneText(ctx, id === 'bluetooth' ? 'On' : 'Off', element.x + 48 * frame.scale, element.y + element.h * 0.7, Math.min(element.h * 0.16, 11 * frame.scale), { alpha: 0.62 });
+  }
+  for (const id of ['rotation', 'mirroring', 'camera', 'calculator', 'voice', 'record']) drawSystemIcon(ctx, byId.get(id), id);
+
+  const brightness = byId.get('brightness');
+  const volume = byId.get('volume');
+  for (const [element, level] of [[brightness, 0.42], [volume, 0.3]]) {
+    const inset = 8 * frame.scale;
+    const fillHeight = Math.max(element.w - inset * 2, (element.h - inset * 2) * level);
+    const fillY = element.y + element.h - inset - fillHeight;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(element.x + inset, fillY, element.w - inset * 2, fillHeight,
+      Math.min(element.w - inset * 2, fillHeight) / 2);
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.fill();
+    ctx.restore();
+  }
+  drawPhoneIcon(ctx, 'sun', brightness.x + brightness.w * 0.33,
+    brightness.y + brightness.h * 0.74, brightness.w * 0.34, brightness.w * 0.34, '#f4c11b');
+  drawPhoneIcon(ctx, 'volume', volume.x + volume.w * 0.31,
+    volume.y + volume.h * 0.75, volume.w * 0.38, volume.w * 0.38, '#12a4d8');
+}
+
+/** Draw fixed iOS UI above the glass, including status glyphs and hardware. */
+export function drawPhoneSceneOverlay(ctx, scene, elements, width, height) {
+  const frame = phoneFrame(width, height);
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(frame.screen.x, frame.screen.y, frame.screen.w, frame.screen.h, frame.screen.r);
+  ctx.clip();
+  if (scene.phoneView === 'home') drawHomeOverlay(ctx, frame, elements);
+  else if (scene.phoneView === 'notification') drawNotificationOverlay(ctx, frame, elements);
+  else drawControlOverlay(ctx, frame, elements);
+  drawPhoneChrome(ctx, frame);
   ctx.restore();
 }

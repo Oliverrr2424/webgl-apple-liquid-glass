@@ -2,6 +2,7 @@ import {
   VS_FULLSCREEN, VS_GLASS, FS_BLIT, FS_DOWN, FS_UP, FS_WALLPAPER, FS_GLASS,
 } from './shaders.js';
 import { MAX_GLASS_SHAPES } from './geometry.js';
+import { FS_GLASS_V2 } from './v2-shaders.js';
 
 function compile(gl, type, src) {
   const s = gl.createShader(type);
@@ -64,6 +65,7 @@ export class GlassRenderer {
     if (!gl) throw new Error('WebGL2 unavailable');
     this.gl = gl;
     this.canvas = canvas;
+    this.materialVersion = options.materialVersion === 2 ? 2 : 1;
     // Set while the GPU context is gone. Every GL call in this class is a no-op
     // until `restore()` rebuilds the resources, so a lost context degrades to a
     // frozen surface instead of an exception storm.
@@ -96,7 +98,8 @@ export class GlassRenderer {
     this.progDown = program(gl, VS_FULLSCREEN, FS_DOWN);
     this.progUp = program(gl, VS_FULLSCREEN, FS_UP);
     this.progBlit = program(gl, VS_FULLSCREEN, FS_BLIT);
-    this.progGlass = program(gl, VS_GLASS, FS_GLASS);
+    this.progGlass = program(gl, VS_GLASS,
+      this.materialVersion === 2 ? FS_GLASS_V2 : FS_GLASS);
 
     // FS_WALLPAPER always has a sampler, even for its procedural path. Binding
     // the backdrop mip texture while rendering into that same texture is an
@@ -524,6 +527,85 @@ export class GlassRenderer {
 
   drawGlass(element, m, dpr) {
     this.drawGlassGroup([element], m, dpr, 0);
+  }
+
+  // V2 surfaces share V1's public silhouettes and backdrop/mip pipeline, but
+  // nothing from the material calculation. In particular, similarly named
+  // uniforms are filled using V2's own units: edgeWidth is a fraction,
+  // dispersion is a pixel split, and roundness is a short-half ratio.
+  drawGlassV2Group(elements, m, dpr, lightDirections = []) {
+    if (!elements.length || this.lost || !this.tex) return;
+
+    const gl = this.gl;
+    const { loc, p } = this.progGlass;
+    const shapes = elements.slice(0, MAX_GLASS_SHAPES);
+    const minX = Math.min(...shapes.map((element) => element.x));
+    const minY = Math.min(...shapes.map((element) => element.y));
+    const maxX = Math.max(...shapes.map((element) => element.x + element.w));
+    const maxY = Math.max(...shapes.map((element) => element.y + element.h));
+    const groupWidth = maxX - minX;
+    const groupHeight = maxY - minY;
+
+    const centers = new Float32Array(MAX_GLASS_SHAPES * 2);
+    const halves = new Float32Array(MAX_GLASS_SHAPES * 2);
+    const radii = new Float32Array(MAX_GLASS_SHAPES);
+    const types = new Int32Array(MAX_GLASS_SHAPES);
+    const lights = new Float32Array(MAX_GLASS_SHAPES * 2);
+    shapes.forEach((element, i) => {
+      const short = Math.min(element.w, element.h);
+      centers[i * 2] = (element.x + element.w / 2) * dpr;
+      centers[i * 2 + 1] = this.h - (element.y + element.h / 2) * dpr;
+      halves[i * 2] = element.w / 2 * dpr;
+      halves[i * 2 + 1] = element.h / 2 * dpr;
+      radii[i] = short * 0.5 * m.roundness * dpr;
+      types[i] = element.shape === 'pill' ? 1
+        : element.shape === 'circle' ? 2 : 0;
+      const direction = lightDirections[i] ?? [Math.SQRT1_2, Math.SQRT1_2];
+      lights[i * 2] = direction[0];
+      lights[i * 2 + 1] = direction[1];
+    });
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.w, this.h);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.bindVertexArray(this.quad);
+    gl.useProgram(p);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.tex);
+    gl.uniform1i(loc.uSrc, 0);
+    gl.uniform2f(loc.uRes, this.w, this.h);
+    gl.uniform2f(loc.uCenter,
+      (minX + groupWidth / 2) * dpr,
+      this.h - (minY + groupHeight / 2) * dpr);
+    gl.uniform2f(loc.uHalf, groupWidth / 2 * dpr, groupHeight / 2 * dpr);
+    gl.uniform1f(loc.uPad, 4 * dpr);
+    gl.uniform1f(loc.uMips, this.mipLevels);
+    gl.uniform1i(loc.uShapeCount, shapes.length);
+    gl.uniform2fv(loc.uShapeCenters, centers);
+    gl.uniform2fv(loc.uShapeHalves, halves);
+    gl.uniform1iv(loc.uShapeTypes, types);
+    gl.uniform1fv(loc.uShapeRadii, radii);
+    gl.uniform2fv(loc.uLightDirs, lights);
+    gl.uniform1f(loc.uRefraction, m.refraction * dpr);
+    gl.uniform1f(loc.uEdgePull, m.edgePull);
+    gl.uniform1f(loc.uEdgeReach, m.edgeReach * dpr);
+    gl.uniform1f(loc.uEdgeWidth, m.edgeWidth);
+    gl.uniform1f(loc.uDispersion, m.dispersion);
+    gl.uniform1f(loc.uFrost, m.frost * dpr);
+    gl.uniform1f(loc.uBody, m.body);
+    gl.uniform1f(loc.uAbsorption, m.absorption);
+    gl.uniform1f(loc.uTint, m.tint);
+    gl.uniform1f(loc.uRim, m.rim);
+    gl.uniform1f(loc.uReflection, m.reflection);
+    gl.uniform1f(loc.uHighlight, m.highlight);
+    gl.uniform1f(loc.uEcho, m.echo);
+    gl.uniform1f(loc.uHairline, m.hairline);
+    gl.uniform1f(loc.uHairWidth, m.hairWidth);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.disable(gl.BLEND);
   }
 
   destroy() {

@@ -1,5 +1,5 @@
-// Screenshot helper: node tools/shot.mjs <out.png> [--scene N] [--focus i,zoom]
-//                    [--set key=val,key=val] [--size WxH] [--no-panel]
+// Screenshot helper: node tools/shot.mjs <out.png> [--scene N] [--version v1|v2]
+//                    [--focus i,zoom] [--set key=val,key=val] [--size WxH] [--no-panel]
 import { chromium } from 'playwright';
 import { assertSafePath, writeSafeFile } from './safepath.mjs';
 
@@ -13,6 +13,7 @@ const flag = (name, def = null) => {
 
 const [W, H] = String(flag('size', '1000x640')).split('x').map(Number);
 const scene = Number(flag('scene', 0));
+const version = String(flag('version', 'v1')) === 'v2' ? 'v2' : 'v1';
 const focus = flag('focus');
 const set = flag('set');
 const noPanel = args.includes('--no-panel');
@@ -32,7 +33,8 @@ await page.goto('http://localhost:8765/index.html', { waitUntil: 'load' });
 await page.waitForFunction('window.__lg !== undefined');
 
 if (noPanel) { await page.click('#togglePanel'); await page.waitForTimeout(100); }
-if (clean) await page.addStyleTag({ content: '#stageHud, #loadState { display: none !important; }' });
+if (clean) await page.addStyleTag({ content: '#stageHud, #loadState, #showPanel { display: none !important; }' });
+await page.evaluate((v) => window.__lg.setVersion(v), version);
 await page.evaluate((s) => window.__lg.setScene(s), scene);
 // Wallpapers are loaded on demand now, so wait for the scene to be ready.
 await page.waitForFunction('window.__lg.ready()');
@@ -49,7 +51,10 @@ if (focus) {
   await page.evaluate(([i, z]) => window.__lg.focus(i, z || 2), [i, z]);
 }
 await page.waitForTimeout(180);
-const image = await page.locator('#stage').screenshot();
+const jpeg = /\.jpe?g$/i.test(out);
+const image = await page.locator('#stage').screenshot(jpeg
+  ? { type: 'jpeg', quality: 90 }
+  : { type: 'png' });
 writeSafeFile(out, image);
 await browser.close();
 console.log('wrote', out);

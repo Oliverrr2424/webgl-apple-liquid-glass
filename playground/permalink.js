@@ -5,12 +5,16 @@
 // that reproduces it.
 
 import { DEFAULT_MATERIAL, getDefaultMaterial } from '../src/index.js';
+import { DEFAULT_MATERIAL_V2, getDefaultMaterialV2 } from '../src/v2.js';
 
 const round = (value) => Math.round(value * 1000) / 1000;
 
-function encodeMaterial(material) {
-  return Object.keys(DEFAULT_MATERIAL)
-    .filter((key) => typeof material[key] === 'number' && material[key] !== DEFAULT_MATERIAL[key])
+const versionOf = (value) => value === 'v2' ? 'v2' : 'v1';
+const defaultsFor = (version) => versionOf(version) === 'v2' ? DEFAULT_MATERIAL_V2 : DEFAULT_MATERIAL;
+
+function encodeMaterial(material, defaults) {
+  return Object.keys(defaults)
+    .filter((key) => typeof material[key] === 'number' && material[key] !== defaults[key])
     .map((key) => `${key}:${round(material[key])}`)
     .join('|');
 }
@@ -23,13 +27,16 @@ function encodeElements(elements) {
 
 /** Serialises the tuning session into a URL hash. */
 export function encodeState(state) {
+  const version = versionOf(state.version);
+  const defaults = defaultsFor(version);
   const params = new URLSearchParams();
   params.set('scene', state.sceneId);
-  params.set('fusion', state.fusion ? '1' : '0');
+  if (version === 'v2') params.set('version', 'v2');
+  else params.set('fusion', state.fusion ? '1' : '0');
   if (state.showIcons) params.set('icons', '1');
   if (state.showLabels) params.set('labels', '1');
-  if (state.material.debug) params.set('debug', String(state.material.debug));
-  const material = encodeMaterial(state.material);
+  if (version === 'v1' && state.material.debug) params.set('debug', String(state.material.debug));
+  const material = encodeMaterial(state.material, defaults);
   if (material) params.set('m', material);
   if (state.movedElements) params.set('e', encodeElements(state.elements));
   return params.toString();
@@ -40,13 +47,15 @@ export function decodeState(hash = globalThis.location?.hash ?? '') {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
   if (![...params.keys()].length) return null;
 
+  const version = versionOf(params.get('version'));
+  const defaults = defaultsFor(version);
   const material = {};
   for (const pair of (params.get('m') ?? '').split('|').filter(Boolean)) {
     const [key, value] = pair.split(':');
-    if (key in DEFAULT_MATERIAL && Number.isFinite(Number(value))) material[key] = Number(value);
+    if (key in defaults && Number.isFinite(Number(value))) material[key] = Number(value);
   }
   const debug = Number(params.get('debug'));
-  if (debug >= 1 && debug <= 3) material.debug = debug;
+  if (version === 'v1' && debug >= 1 && debug <= 3) material.debug = debug;
 
   const elements = (params.get('e') ?? '').split('|').filter(Boolean).map((entry) => {
     const [id, shape, x, y, w, h] = entry.split(':');
@@ -54,6 +63,7 @@ export function decodeState(hash = globalThis.location?.hash ?? '') {
   }).filter((element) => element.w > 0 && element.h > 0);
 
   return {
+    version,
     sceneId: params.get('scene') ?? null,
     fusion: params.get('fusion') === null ? null : params.get('fusion') === '1',
     showIcons: params.get('icons') === '1',
@@ -74,8 +84,10 @@ export function writeHash(state) {
 
 /** The code that reproduces the current session with the published package. */
 export function toCode(state) {
-  const defaults = getDefaultMaterial();
-  const overrides = Object.keys(DEFAULT_MATERIAL)
+  const version = versionOf(state.version);
+  const defaults = version === 'v2' ? getDefaultMaterialV2() : getDefaultMaterial();
+  const defaultDefinition = defaultsFor(version);
+  const overrides = Object.keys(defaultDefinition)
     .filter((key) => typeof state.material[key] === 'number'
       && state.material[key] !== defaults[key]
       && key !== 'debug')
@@ -89,16 +101,22 @@ export function toCode(state) {
     ? `await glass.loadBackdrop('${state.backdropSrc}');`
     : '// Draw your own content into a canvas and pass it to glass.setBackdrop().';
 
+  const imports = version === 'v2'
+    ? "import { LiquidGlassWebGLV2, getDefaultMaterialV2 } from 'apple-liquid-glass-webgl';"
+    : "import { LiquidGlassWebGL, getDefaultMaterial } from 'apple-liquid-glass-webgl';";
+  const getMaterial = version === 'v2' ? 'getDefaultMaterialV2' : 'getDefaultMaterial';
+  const GlassClass = version === 'v2' ? 'LiquidGlassWebGLV2' : 'LiquidGlassWebGL';
+  const options = version === 'v2' ? ['  material,'] : ['  material,', `  fusion: ${state.fusion},`];
+
   return [
-    "import { LiquidGlassWebGL, getDefaultMaterial } from 'apple-liquid-glass-webgl';",
+    imports,
     '',
-    'const material = getDefaultMaterial();',
+    `const material = ${getMaterial}();`,
     ...(overrides.length ? overrides : ['// every parameter is at its default']),
     '',
     'const canvas = document.querySelector(\'canvas\');',
-    'const glass = new LiquidGlassWebGL(canvas, {',
-    '  material,',
-    `  fusion: ${state.fusion},`,
+    `const glass = new ${GlassClass}(canvas, {`,
+    ...options,
     '});',
     '',
     backdrop,

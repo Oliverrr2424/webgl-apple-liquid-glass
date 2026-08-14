@@ -1,9 +1,11 @@
 // Scene catalogue for the playground.
 //
 // A scene is a backdrop plus a component layout. The four wallpaper scenes
-// exist to judge the material against photographic content; the UI scenes exist
-// because that is what people actually build with it, and a tab bar over a
-// scrolling feed stresses the material in ways a still folder never will.
+// exist to judge the material against photographic content; the UI scenes put
+// fixed surfaces into real iPhone contexts, while the scrolling feed stresses
+// the material in ways a still folder never will.
+
+import { phoneFrame, phoneRect } from './phone.js?phone-scenes=2';
 
 const ICONS = {
   youtube: { name: 'YouTube', src: './assets/icons/youtube.svg', c0: '#f7f8fb', c1: '#d9dde7' },
@@ -34,83 +36,90 @@ const WALLPAPERS = {
 };
 
 const thumbOf = (key) => `./assets/wallpapers/thumbs/${key}.webp`;
+const phoneThumbOf = (key) => `./assets/wallpapers/thumbs/${key}.jpg`;
 
 // The original comparison set: one of every shape, identical on every
 // wallpaper, so geometry and material stay the only variables.
 function shapeSet(w, h) {
+  const leftX = w * 0.24;
+  const rightX = w * 0.72;
+  const topY = h * 0.27;
+  const bottomY = h * 0.70;
+  const square = Math.min(w * 0.30, h * 0.35);
+  const pillWidth = Math.min(w * 0.39, h * 0.55);
+  const pillHeight = Math.min(w * 0.19, h * 0.21);
+  const rectWidth = Math.min(w * 0.40, h * 0.57);
+  const rectHeight = Math.min(w * 0.27, h * 0.30);
   return [
     {
       id: 'folder', shape: 'folder', label: 'Folder',
-      x: 0.19 * w - 0.10 * w, y: 0.49 * h - 0.10 * w, w: 0.20 * w, h: 0.20 * w,
+      x: leftX - square / 2, y: bottomY - square / 2, w: square, h: square,
       icons: iconSet('youtube', 'spotify', 'whatsapp', 'notion'),
     },
     {
       id: 'rect', shape: 'rect', label: 'Rect',
-      x: 0.47 * w - 0.12 * w, y: 0.52 * h - 0.09 * w, w: 0.24 * w, h: 0.18 * w,
+      x: rightX - rectWidth / 2, y: bottomY - rectHeight / 2,
+      w: rectWidth, h: rectHeight,
       icons: iconSet('figma', 'github', 'photos', 'spotify'),
     },
     {
       id: 'pill', shape: 'pill', label: 'Pill', content: 'Continue',
-      x: 0.68 * w - 0.11 * w, y: 0.48 * h - 0.06 * w, w: 0.22 * w, h: 0.12 * w,
+      x: rightX - pillWidth / 2, y: topY - pillHeight / 2,
+      w: pillWidth, h: pillHeight,
     },
     {
       id: 'circle', shape: 'circle', label: 'Circle', content: '+',
-      x: 0.37 * w - 0.065 * w, y: 0.37 * h - 0.065 * w, w: 0.13 * w, h: 0.13 * w,
+      x: leftX - square / 2, y: topY - square / 2, w: square, h: square,
     },
   ];
 }
 
-function tabBar(w, h) {
-  const barWidth = Math.min(430, w * 0.56);
-  const barHeight = Math.max(64, Math.min(78, w * 0.082));
-  const button = barHeight;
-  return [
-    {
-      id: 'tabbar', shape: 'pill', label: 'Tab bar',
-      x: (w - barWidth) / 2 - button * 0.62, y: h - barHeight - 34,
-      w: barWidth, h: barHeight,
-      icons: iconSet('photos', 'spotify', 'github', 'notion'),
-    },
-    {
-      id: 'compose', shape: 'circle', label: 'Compose', content: '+',
-      x: (w + barWidth) / 2 - button * 0.44, y: h - barHeight - 34,
-      w: button, h: button,
-    },
-  ];
+function inPhone(width, height, specs) {
+  const frame = phoneFrame(width, height);
+  return specs.map((spec) => ({ ...spec, ...phoneRect(frame, spec.x, spec.y, spec.w, spec.h) }));
+}
+
+function homePage(w, h) {
+  return inPhone(w, h, [
+    { id: 'clock', shape: 'folder', label: 'Clock', x: 22, y: 145, w: 166, h: 166, icons: iconSet('notion', 'github', 'photos', 'spotify') },
+    { id: 'fitness', shape: 'folder', label: 'Fitness', x: 205, y: 145, w: 166, h: 166, icons: iconSet('spotify', 'photos', 'whatsapp', 'figma') },
+    { id: 'travel', shape: 'folder', label: 'Travel', x: 22, y: 352, w: 104, h: 104, icons: iconSet('photos', 'whatsapp', 'spotify', 'notion') },
+    { id: 'games', shape: 'folder', label: 'Games', x: 145, y: 352, w: 104, h: 104, icons: iconSet('github', 'youtube', 'figma', 'spotify') },
+    { id: 'social', shape: 'folder', label: 'Social', x: 267, y: 352, w: 104, h: 104, icons: iconSet('whatsapp', 'youtube', 'figma', 'photos') },
+    { id: 'studio', shape: 'folder', label: 'Studio', x: 22, y: 510, w: 104, h: 104, icons: iconSet('figma', 'photos', 'github', 'youtube') },
+    { id: 'work', shape: 'folder', label: 'Work', x: 145, y: 510, w: 104, h: 104, icons: iconSet('notion', 'github', 'figma', 'photos') },
+    { id: 'media', shape: 'folder', label: 'Media', x: 267, y: 510, w: 104, h: 104, icons: iconSet('youtube', 'spotify', 'photos', 'whatsapp') },
+    { id: 'dock', shape: 'pill', label: 'Dock', x: 18, y: 744, w: 357, h: 76, icons: iconSet('whatsapp', 'spotify', 'photos', 'github') },
+  ]);
 }
 
 function notification(w, h) {
-  const cardWidth = Math.min(520, w * 0.62);
-  return [
-    {
-      id: 'alert', shape: 'rect', label: 'Notification',
-      x: (w - cardWidth) / 2, y: h * 0.16, w: cardWidth, h: 118,
-      icons: iconSet('whatsapp'),
-    },
-    {
-      id: 'reply', shape: 'pill', label: 'Reply', content: 'Reply',
-      x: (w - cardWidth) / 2 + cardWidth - 210, y: h * 0.16 + 150, w: 210, h: 60,
-    },
-    {
-      id: 'dismiss', shape: 'circle', label: 'Dismiss', content: '×',
-      x: (w - cardWidth) / 2, y: h * 0.16 + 150, w: 60, h: 60,
-    },
-  ];
+  return inPhone(w, h, [
+    { id: 'headline', shape: 'rect', label: 'Match result', x: 18, y: 291, w: 357, h: 78 },
+    { id: 'building', shape: 'rect', label: 'Five Condos', x: 18, y: 382, w: 357, h: 112 },
+    { id: 'message', shape: 'rect', label: 'Oliverrr', x: 18, y: 508, w: 357, h: 92 },
+    { id: 'flashlight', shape: 'circle', label: 'Flashlight', x: 42, y: 748, w: 62, h: 62 },
+    { id: 'camera', shape: 'circle', label: 'Camera', x: 289, y: 748, w: 62, h: 62 },
+  ]);
 }
 
 function controlCentre(w, h) {
-  const unit = Math.min(130, w * 0.145);
-  const gap = unit * 0.16;
-  const left = w / 2 - (unit * 2 + gap) / 2 - unit * 0.7;
-  const top = h * 0.2;
-  return [
-    { id: 'connectivity', shape: 'rect', label: 'Connectivity', x: left, y: top, w: unit * 2 + gap, h: unit * 2 + gap, icons: iconSet('spotify', 'notion', 'github', 'figma') },
-    { id: 'brightness', shape: 'rect', label: 'Brightness', x: left + unit * 2 + gap * 2, y: top, w: unit * 0.82, h: unit * 2 + gap },
-    { id: 'volume', shape: 'rect', label: 'Volume', x: left + unit * 2 + gap * 3 + unit * 0.82, y: top, w: unit * 0.82, h: unit * 2 + gap },
-    { id: 'torch', shape: 'circle', label: 'Torch', content: '☀', x: left, y: top + unit * 2 + gap * 2, w: unit * 0.86, h: unit * 0.86 },
-    { id: 'timer', shape: 'circle', label: 'Timer', content: '◔', x: left + unit * 1.02, y: top + unit * 2 + gap * 2, w: unit * 0.86, h: unit * 0.86 },
-    { id: 'now-playing', shape: 'pill', label: 'Now playing', content: 'Now playing', x: left + unit * 2.04, y: top + unit * 2 + gap * 2, w: unit * 1.7, h: unit * 0.86 },
-  ];
+  return inPhone(w, h, [
+    { id: 'connectivity', shape: 'folder', label: 'Connectivity', x: 20, y: 138, w: 166, h: 166 },
+    { id: 'bluetooth', shape: 'pill', label: 'Bluetooth', x: 203, y: 138, w: 170, h: 75 },
+    { id: 'hotspot', shape: 'pill', label: 'Hotspot', x: 203, y: 227, w: 170, h: 75 },
+    { id: 'rotation', shape: 'circle', label: 'Rotation lock', x: 20, y: 322, w: 72, h: 72 },
+    { id: 'mirroring', shape: 'circle', label: 'Screen mirroring', x: 106, y: 322, w: 72, h: 72 },
+    { id: 'brightness', shape: 'pill', label: 'Brightness', x: 203, y: 322, w: 75, h: 188 },
+    { id: 'volume', shape: 'pill', label: 'Volume', x: 298, y: 322, w: 75, h: 188 },
+    { id: 'focus', shape: 'pill', label: 'Focus', x: 20, y: 412, w: 158, h: 82 },
+    { id: 'torch', shape: 'pill', label: 'Torch', x: 20, y: 526, w: 171, h: 76 },
+    { id: 'low-power', shape: 'pill', label: 'Low power', x: 202, y: 526, w: 171, h: 76 },
+    { id: 'camera', shape: 'circle', label: 'Camera', x: 20, y: 628, w: 72, h: 72 },
+    { id: 'calculator', shape: 'circle', label: 'Calculator', x: 106, y: 628, w: 72, h: 72 },
+    { id: 'voice', shape: 'circle', label: 'Voice memo', x: 203, y: 628, w: 72, h: 72 },
+    { id: 'record', shape: 'circle', label: 'Record', x: 299, y: 628, w: 72, h: 72 },
+  ]);
 }
 
 function scrollingFeed(w) {
@@ -132,10 +141,10 @@ export const SCENES = [
   { id: 'flow-lines', name: 'Flow Lines', kind: 'Abstract lines', backdrop: { type: 'image', src: WALLPAPERS['abstract-lines'], thumb: thumbOf('abstract-lines') }, layout: shapeSet },
   { id: 'color-blocks', name: 'Color Blocks', kind: 'Hard colour edges', backdrop: { type: 'image', src: WALLPAPERS['color-blocks'], thumb: thumbOf('color-blocks') }, layout: shapeSet },
   { id: 'night-city', name: 'Rainy City', kind: 'Dark, high contrast', backdrop: { type: 'image', src: WALLPAPERS['night-city'], thumb: thumbOf('night-city') }, layout: shapeSet },
-  { id: 'tab-bar', name: 'Tab bar', kind: 'Over app content', backdrop: { type: 'app', tint: '#2b3a5c' }, layout: tabBar },
-  { id: 'notification', name: 'Notification', kind: 'Over a photo', backdrop: { type: 'image', src: WALLPAPERS['night-city'], thumb: thumbOf('night-city') }, layout: notification },
-  { id: 'control-centre', name: 'Control centre', kind: 'Dense component grid', backdrop: { type: 'image', src: WALLPAPERS['color-blocks'], thumb: thumbOf('color-blocks') }, layout: controlCentre },
-  { id: 'scrolling-feed', name: 'Scrolling feed', kind: 'Live backdrop', backdrop: { type: 'feed', tint: '#1d2430', animated: true }, layout: scrollingFeed },
+  { id: 'tab-bar', name: 'Home Page', kind: 'Fixed iPhone home screen', phoneView: 'home', lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'spectrum', tint: '#445dff', thumb: phoneThumbOf('home-page') }, layout: homePage },
+  { id: 'notification', name: 'Notification', kind: 'Fixed iPhone lock screen', phoneView: 'notification', lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'type', tint: '#b7aa93', thumb: phoneThumbOf('notification') }, layout: notification },
+  { id: 'control-centre', name: 'Control Centre', kind: 'Fixed iPhone controls', phoneView: 'control-centre', lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'neon', tint: '#9b0f71', thumb: phoneThumbOf('control-centre') }, layout: controlCentre },
+  { id: 'scrolling-feed', name: 'Scrolling feed', kind: 'Live backdrop', backdrop: { type: 'feed', tint: '#1d2430', animated: true, thumb: phoneThumbOf('scrolling-feed') }, layout: scrollingFeed },
 ];
 
 export function sceneById(id) {

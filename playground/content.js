@@ -3,6 +3,8 @@
 // also how the component is meant to be used in an app: `compositeMode:
 // 'overlay'` samples whatever you put behind it.
 
+import { drawPhoneBackdrop } from './phone.js?phone-scenes=2';
+
 const CARD_HUES = [206, 24, 152, 268, 46, 340, 190];
 
 function hash(n) {
@@ -140,6 +142,10 @@ export function drawSceneBackdrop(ctx, scene, options) {
   }
   if (scene.backdrop.type === 'feed') {
     drawFeed(ctx, width, height, scroll, scene.backdrop.tint);
+    return;
+  }
+  if (scene.backdrop.type === 'phone') {
+    drawPhoneBackdrop(ctx, scene, width, height);
     return;
   }
   if (image) {

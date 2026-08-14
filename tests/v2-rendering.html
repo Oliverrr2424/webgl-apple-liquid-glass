@@ -1,0 +1,56 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  canvas { width: 240px; height: 160px; display: block; }
+</style>
+<canvas id="backdrop"></canvas>
+<canvas id="v1"></canvas>
+<canvas id="v2"></canvas>
+<script type="module">
+  import {
+    LiquidGlassWebGL, LiquidGlassWebGLV2,
+    getDefaultMaterial, getDefaultMaterialV2,
+  } from '../src/index.js';
+
+  const backdrop = document.querySelector('#backdrop');
+  backdrop.width = 480;
+  backdrop.height = 320;
+  const context = backdrop.getContext('2d');
+  const gradient = context.createLinearGradient(0, 0, backdrop.width, backdrop.height);
+  gradient.addColorStop(0, '#f43f5e');
+  gradient.addColorStop(0.5, '#2563eb');
+  gradient.addColorStop(1, '#10131b');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, backdrop.width, backdrop.height);
+
+  const element = { id: 'surface', shape: 'folder', x: 60, y: 38, width: 120, height: 84 };
+  const v1 = new LiquidGlassWebGL(document.querySelector('#v1'), {
+    compositeMode: 'overlay', preserveDrawingBuffer: true, autoResize: false,
+    material: getDefaultMaterial(), elements: [element],
+  });
+  v1.setBackdrop(backdrop, { update: 'static', autoStart: false, shouldRender: false });
+
+  const v2 = new LiquidGlassWebGLV2(document.querySelector('#v2'), {
+    compositeMode: 'overlay', preserveDrawingBuffer: true, autoResize: false,
+    material: getDefaultMaterialV2(), elements: [element],
+  });
+  v2.setBackdrop(backdrop, { update: 'static', autoStart: false, shouldRender: false });
+
+  window.runTest = () => {
+    v1.render({ force: true });
+    v2.render({ force: true });
+    const gl = document.querySelector('#v2').getContext('webgl2');
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const outside = new Uint8Array(4);
+    const inside = new Uint8Array(4);
+    gl.readPixels(4 * dpr, 4 * dpr, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, outside);
+    gl.readPixels(120 * dpr, 80 * dpr, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, inside);
+    if (outside[3] !== 0) throw new Error(`V2 overlay leaked outside its shape: alpha ${outside[3]}`);
+    if (inside[3] < 220) throw new Error(`V2 shape did not render opaquely enough: alpha ${inside[3]}`);
+    if ('edgeReach' in v1.material) throw new Error('V2 parameters leaked into the V1 material');
+    if ('blurRim' in v2.material) throw new Error('V1 parameters leaked into the V2 material');
+    v1.destroy();
+    v2.destroy();
+    return { checks: ['V1 and V2 coexist', 'V2 shader compiled', 'V2 overlay alpha'] };
+  };
+</script>

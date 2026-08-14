@@ -11,11 +11,11 @@ export const DEFAULT_MATERIAL = {
   refractScale: 3.0,   // artistic gain on the displacement
   meniscus: 1.0,       // 1 = concave (liquid) rim -> surroundings squeeze into
                        // the rim (Apple);  0 = convex lens rim (magnifier)
-  blurPlateau: 8,      // blur radius in the middle, CSS px (frosted)
-  blurRim: 48,         // wide rim scattering, CSS px
-  opticalDensity: 0.65,// artistic dark-detail weight; linear-light blur needs less compensation
+  blurPlateau: 4.5,    // blur radius in the middle, CSS px (frosted)
+  blurRim: 11,         // wide rim scattering, CSS px
+  opticalDensity: 0.4, // artistic dark-detail weight; linear-light blur needs less compensation
   specular: 0.89,
-  specPower: 11.5,
+  specPower: 29.5,
   fresnel: 0.65,       // multiplier on the Schlick term (1 = physical)
   saturation: 1.35,    // boost on the transmitted backdrop, like iOS materials
   brightness: 0.0,
@@ -27,8 +27,8 @@ export const DEFAULT_MATERIAL = {
   shadowOffset: 0,
   lightX: -0.18,
   lightY: 0.08,
-  highlightAdapt: 0.83,// how strongly backdrop gradient steers the highlight
-  highlightWidth: 0.76,// specular band width as a fraction of the bevel
+  highlightAdapt: 0.91,// how strongly backdrop gradient steers the highlight
+  highlightWidth: 0.87,// specular band width as a fraction of the bevel
   highlightSharpness: 0.55, // multiplier on specPower
   highlightBase: 0.30, // fallback intensity on a flat backdrop
   edgeLine: 0.30,
