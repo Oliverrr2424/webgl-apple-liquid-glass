@@ -44,7 +44,7 @@ glass.setElements([
 glass.render();
 ```
 
-The component accepts CSS-pixel coordinates. Content such as app icons, labels, or buttons can be drawn in a separate canvas layer above the WebGL canvas.
+The component accepts CSS-pixel coordinates. Content such as app icons, labels, or buttons can be drawn in a separate canvas layer above the WebGL canvas. Optical lengths automatically scale down when a component's short side is too small for the configured bevel: the refracting rim is capped at 30% of that side, and glass height, blur, highlights, and their backdrop probes follow the same scale. Large components and materials that already use a narrow bevel are unchanged.
 
 ## V1 and V2 can be used together
 
@@ -141,6 +141,7 @@ const glass = new LiquidGlassWebGL(canvas, { material });
 | Shape | `mergeRadius` | `52.00` |
 | Shape | `bevel` | `34.00` |
 | Shape | `height` | `21.00` |
+| Shape | `sizeAdaptation` | `1.00` |
 | Optics | `ior` | `2.00` |
 | Optics | `dispersion` | `0.06` |
 | Optics | `refractScale` | `3.00` |
@@ -168,7 +169,7 @@ const glass = new LiquidGlassWebGL(canvas, { material });
 | Edge | `edgeWidth` | `0.50` |
 | Edge | `edgeDark` | `0.02` |
 
-The returned object also includes `tintColor: [1, 1, 1]` and `debug: 0`. Parameter names use the JavaScript API names; for example, `highlightAdapt` is the “Light adaptation” control and `edgeLine` is the “Edge highlight” control.
+The returned object also includes `tintColor: [1, 1, 1]` and `debug: 0`. Parameter names use the JavaScript API names; for example, `highlightAdapt` is the “Light adaptation” control and `edgeLine` is the “Edge highlight” control. Set `sizeAdaptation` to `0` when material lengths must remain absolute; intermediate values blend between absolute and fitted optics.
 
 Backdrop RGB is stored in `SRGB8_ALPHA8`: image uploads decode to linear light, every downsample and tent-upsample pass filters linear radiance, and writes encode back to sRGB. Alpha remains linear for the optical-density channel. Wide blur blends in the reconstructed chain to avoid coarse-mip breathing; final glass output receives a sub-LSB triangular dither to suppress dark-gradient banding. `tintAdapt` controls the component-level light/dark material switch (`0` keeps `tintColor` fixed, `1` fully follows the backdrop below the component).
 
