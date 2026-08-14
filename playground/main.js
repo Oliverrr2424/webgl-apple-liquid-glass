@@ -8,7 +8,7 @@ import {
   LiquidGlassWebGL, LiquidGlassWebGLV2, connectedElementGroups,
   getDefaultMaterialV2, makeMaterial,
 } from '../src/index.js';
-import { SCENES, ICON_SOURCES, attachIconImages, isAnimated, sceneById } from './scenes.js?phone-scenes=2';
+import { SCENES, ICON_SOURCES, attachIconImages, isAnimated, sceneById } from './scenes.js?phone-scenes=3';
 import { drawSceneBackdrop } from './content.js?phone-scenes=2';
 import { drawGlassContents, drawLabel, drawBadge, drawSelection, drawPhoneSceneOverlay } from './overlay.js?phone-scenes=2';
 import { createInspector } from './inspector.js';

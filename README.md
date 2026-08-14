@@ -225,15 +225,25 @@ The default `compositeMode: 'replace'` preserves the original behavior and draws
 
 ## Visual preview
 
-These screenshots are captured from the playground with the inspector hidden. Each scene uses the same folder, rect, pill, and circle surfaces:
+These V2 screenshots are captured from the playground with the inspector hidden. The Alpine Lake scene uses the same folder, rect, pill, and circle geometry as V1, arranged on an evenly spaced 2 × 2 stage.
 
-### Smooth-union fusion
+### V2 Alpine Lake
 
-Nearby components can share one continuous distance field, so the silhouette, refraction, highlights, and shadow flow through the merged surface.
+![Liquid Glass V2 on Alpine Lake](https://unpkg.com/apple-liquid-glass-webgl@2.0.1/assets/readme/v2-alpine-lake.jpg)
+
+### V2 iPhone demos
+
+| Home Page | Control Centre |
+| --- | --- |
+| ![Liquid Glass V2 iPhone Home Page](https://unpkg.com/apple-liquid-glass-webgl@2.0.1/assets/readme/v2-home-page.jpg) | ![Liquid Glass V2 iPhone Control Centre](https://unpkg.com/apple-liquid-glass-webgl@2.0.1/assets/readme/v2-control-centre.jpg) |
+
+### V1 smooth-union fusion
+
+Nearby V1 components can share one continuous distance field, so the silhouette, refraction, highlights, and shadow flow through the merged surface.
 
 ![Smooth-union liquid glass fusion](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/smooth-union.jpg)
 
-### Individual scene previews
+### V1 wallpaper previews
 
 | Natural landscape | Abstract lines |
 | --- | --- |

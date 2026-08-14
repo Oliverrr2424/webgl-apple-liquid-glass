@@ -36,28 +36,40 @@ const WALLPAPERS = {
 };
 
 const thumbOf = (key) => `./assets/wallpapers/thumbs/${key}.webp`;
+const phoneThumbOf = (key) => `./assets/wallpapers/thumbs/${key}.jpg`;
 
 // The original comparison set: one of every shape, identical on every
 // wallpaper, so geometry and material stay the only variables.
 function shapeSet(w, h) {
+  const leftX = w * 0.24;
+  const rightX = w * 0.72;
+  const topY = h * 0.27;
+  const bottomY = h * 0.70;
+  const square = Math.min(w * 0.30, h * 0.35);
+  const pillWidth = Math.min(w * 0.39, h * 0.55);
+  const pillHeight = Math.min(w * 0.19, h * 0.21);
+  const rectWidth = Math.min(w * 0.40, h * 0.57);
+  const rectHeight = Math.min(w * 0.27, h * 0.30);
   return [
     {
       id: 'folder', shape: 'folder', label: 'Folder',
-      x: 0.19 * w - 0.10 * w, y: 0.49 * h - 0.10 * w, w: 0.20 * w, h: 0.20 * w,
+      x: leftX - square / 2, y: bottomY - square / 2, w: square, h: square,
       icons: iconSet('youtube', 'spotify', 'whatsapp', 'notion'),
     },
     {
       id: 'rect', shape: 'rect', label: 'Rect',
-      x: 0.47 * w - 0.12 * w, y: 0.52 * h - 0.09 * w, w: 0.24 * w, h: 0.18 * w,
+      x: rightX - rectWidth / 2, y: bottomY - rectHeight / 2,
+      w: rectWidth, h: rectHeight,
       icons: iconSet('figma', 'github', 'photos', 'spotify'),
     },
     {
       id: 'pill', shape: 'pill', label: 'Pill', content: 'Continue',
-      x: 0.68 * w - 0.11 * w, y: 0.48 * h - 0.06 * w, w: 0.22 * w, h: 0.12 * w,
+      x: rightX - pillWidth / 2, y: topY - pillHeight / 2,
+      w: pillWidth, h: pillHeight,
     },
     {
       id: 'circle', shape: 'circle', label: 'Circle', content: '+',
-      x: 0.37 * w - 0.065 * w, y: 0.37 * h - 0.065 * w, w: 0.13 * w, h: 0.13 * w,
+      x: leftX - square / 2, y: topY - square / 2, w: square, h: square,
     },
   ];
 }
@@ -129,10 +141,10 @@ export const SCENES = [
   { id: 'flow-lines', name: 'Flow Lines', kind: 'Abstract lines', backdrop: { type: 'image', src: WALLPAPERS['abstract-lines'], thumb: thumbOf('abstract-lines') }, layout: shapeSet },
   { id: 'color-blocks', name: 'Color Blocks', kind: 'Hard colour edges', backdrop: { type: 'image', src: WALLPAPERS['color-blocks'], thumb: thumbOf('color-blocks') }, layout: shapeSet },
   { id: 'night-city', name: 'Rainy City', kind: 'Dark, high contrast', backdrop: { type: 'image', src: WALLPAPERS['night-city'], thumb: thumbOf('night-city') }, layout: shapeSet },
-  { id: 'tab-bar', name: 'Home Page', kind: 'Fixed iPhone home screen', phoneView: 'home', lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'spectrum', tint: '#445dff' }, layout: homePage },
-  { id: 'notification', name: 'Notification', kind: 'Fixed iPhone lock screen', phoneView: 'notification', lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'type', tint: '#b7aa93' }, layout: notification },
-  { id: 'control-centre', name: 'Control Centre', kind: 'Fixed iPhone controls', phoneView: 'control-centre', lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'neon', tint: '#9b0f71' }, layout: controlCentre },
-  { id: 'scrolling-feed', name: 'Scrolling feed', kind: 'Live backdrop', backdrop: { type: 'feed', tint: '#1d2430', animated: true }, layout: scrollingFeed },
+  { id: 'tab-bar', name: 'Home Page', kind: 'Fixed iPhone home screen', phoneView: 'home', lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'spectrum', tint: '#445dff', thumb: phoneThumbOf('home-page') }, layout: homePage },
+  { id: 'notification', name: 'Notification', kind: 'Fixed iPhone lock screen', phoneView: 'notification', lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'type', tint: '#b7aa93', thumb: phoneThumbOf('notification') }, layout: notification },
+  { id: 'control-centre', name: 'Control Centre', kind: 'Fixed iPhone controls', phoneView: 'control-centre', lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'neon', tint: '#9b0f71', thumb: phoneThumbOf('control-centre') }, layout: controlCentre },
+  { id: 'scrolling-feed', name: 'Scrolling feed', kind: 'Live backdrop', backdrop: { type: 'feed', tint: '#1d2430', animated: true, thumb: phoneThumbOf('scrolling-feed') }, layout: scrollingFeed },
 ];
 
 export function sceneById(id) {
