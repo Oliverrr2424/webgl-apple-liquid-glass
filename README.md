@@ -321,7 +321,7 @@ npm run serve
 
 Open [http://localhost:8765](http://localhost:8765). It drives the published component through its public API, and the inspector covers:
 
-- Eight scenes: four wallpapers, plus a tab bar over app content, a notification, a control-centre grid, and a scrolling feed that exercises the live backdrop path.
+- Eight scenes: four wallpapers, plus fixed iPhone Home Page, Notification, and Control Centre references, and a scrolling feed that exercises the live backdrop path.
 - Component editing: add, retype, resize and delete surfaces; drag them, or select one and use the arrow keys (`Shift` for ten pixels, `Alt` to resize, `[` and `]` to cycle, `Delete` to remove).
 - Every material parameter as both a slider and a typed value. Double click a parameter name to reset just that one; modified parameters are marked.
 - A V1 Original / V2 Transparent switch. Each version retains its own tuned material while you compare them, and shared links record which renderer and parameter contract they use.

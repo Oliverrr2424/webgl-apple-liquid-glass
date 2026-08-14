@@ -7,7 +7,7 @@
 
 const SHAPES = ['folder', 'rect', 'pill', 'circle'];
 
-export function createComponentEditor({ container, addButton, addShape, store, onChange, announce }) {
+export function createComponentEditor({ container, addButton, addShape, store, onChange, announce, isLocked = () => false }) {
   function nextId(shape) {
     let index = 1;
     while (store.elements.some((element) => element.id === `${shape}-${index}`)) index++;
@@ -15,6 +15,7 @@ export function createComponentEditor({ container, addButton, addShape, store, o
   }
 
   function add() {
+    if (isLocked()) return;
     const shape = addShape.value;
     const stage = store.stageSize();
     const size = Math.max(80, Math.min(stage.width, stage.height) * 0.16);
@@ -36,6 +37,7 @@ export function createComponentEditor({ container, addButton, addShape, store, o
   }
 
   function remove(id) {
+    if (isLocked()) return;
     store.elements = store.elements.filter((element) => element.id !== id);
     if (store.selectedId === id) store.selectedId = store.elements.at(-1)?.id ?? null;
     onChange('remove');
@@ -44,11 +46,12 @@ export function createComponentEditor({ container, addButton, addShape, store, o
   }
 
   function retype(id, shape) {
+    if (isLocked()) return;
     const element = store.elements.find((entry) => entry.id === id);
     if (!element) return;
     element.shape = shape;
-    // A capsule needs a long box to read as one; a circle has to stay square.
-    if (shape === 'circle') element.h = element.w;
+    // A capsule needs a long box to read as one; circles and folders stay square.
+    if (shape === 'circle' || shape === 'folder') element.h = element.w;
     if (shape === 'pill' && element.w < element.h * 1.6) element.w = element.h * 1.9;
     onChange('retype');
     announce(`${id} is now a ${shape}`);

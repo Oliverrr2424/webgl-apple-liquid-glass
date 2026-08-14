@@ -183,7 +183,7 @@
         <span id="customSceneStatus">PNG, JPG, WebP, MP4, WebM</span>
       </div>
     </div>
-    <div class="section">
+    <div class="section" id="componentSection">
       <div class="sectionHeader"><h2>Components</h2><span class="sectionMeta">select, then arrow keys</span></div>
       <div id="componentList"></div>
       <div class="componentAdd">
@@ -196,7 +196,7 @@
         </select>
       </div>
     </div>
-    <div class="section">
+    <div class="section" id="viewSection">
       <div class="sectionHeader"><h2>View</h2><span class="sectionMeta" id="sceneKind">Natural landscape</span></div>
       <div class="segmented" id="fusionControl">
         <button type="button" data-fusion-mode="on">Smooth union</button>
@@ -229,7 +229,7 @@
       refraction and highlight flow through a shared bridge. A gap only closes while it is narrower
       than about half the fusion distance.
     </div>
-    <div class="note">
+    <div class="note" id="keyboardHelp">
       Keyboard: <kbd>Tab</kbd> to the stage, <kbd>[</kbd> <kbd>]</kbd> to cycle components,
       arrows to move, <kbd>Shift</kbd> for ten pixels, <kbd>Alt</kbd> to resize,
       <kbd>Delete</kbd> to remove. Double click a parameter name to reset just that one.
@@ -237,6 +237,6 @@
   </div>
 </div>
 <div id="announcer" class="srOnly" role="status" aria-live="polite"></div>
-<script type="module" src="./playground/main.js"></script>
+<script type="module" src="./playground/main.js?phone-scenes=2"></script>
 </body>
 </html>

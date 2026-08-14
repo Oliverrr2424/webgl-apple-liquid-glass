@@ -8,12 +8,12 @@ import {
   LiquidGlassWebGL, LiquidGlassWebGLV2, connectedElementGroups,
   getDefaultMaterialV2, makeMaterial,
 } from '../src/index.js';
-import { SCENES, ICON_SOURCES, attachIconImages, isAnimated, sceneById } from './scenes.js';
-import { drawSceneBackdrop } from './content.js';
-import { drawGlassContents, drawLabel, drawBadge, drawSelection } from './overlay.js';
+import { SCENES, ICON_SOURCES, attachIconImages, isAnimated, sceneById } from './scenes.js?phone-scenes=1';
+import { drawSceneBackdrop } from './content.js?phone-scenes=1';
+import { drawGlassContents, drawLabel, drawBadge, drawSelection, drawPhoneSceneOverlay } from './overlay.js?phone-scenes=1';
 import { createInspector } from './inspector.js';
-import { createComponentEditor } from './components.js';
-import { attachStageInteractions } from './interactions.js';
+import { createComponentEditor } from './components.js?phone-scenes=1';
+import { attachStageInteractions } from './interactions.js?phone-scenes=1';
 import { createStats } from './stats.js';
 import { decodeState, toCode, writeHash } from './permalink.js';
 
@@ -61,6 +61,10 @@ const store = {
 };
 Object.assign(store.material, shared?.material ?? {});
 
+function effectiveFusion() {
+  return store.fusion && !currentScene().lockedComponents;
+}
+
 function createGlass() {
   const GlassClass = store.version === 'v2' ? LiquidGlassWebGLV2 : LiquidGlassWebGL;
   const options = {
@@ -73,7 +77,7 @@ function createGlass() {
     onContextLost: () => announce('The GPU context was lost. Waiting for the browser to restore it.'),
     onContextRestored: () => announce('The GPU context was restored.'),
   };
-  if (store.version === 'v1') options.fusion = store.fusion;
+  if (store.version === 'v1') options.fusion = effectiveFusion();
   const instance = new GlassClass(glCanvas, options);
   instance.setBackdrop(contentCanvas, { update: 'static', autoStart: false, shouldRender: false });
   return instance;
@@ -146,6 +150,7 @@ function syncBackdropMode() {
 
 function layoutScene({ keepEdits = false } = {}) {
   const scene = currentScene();
+  if (scene.lockedComponents) keepEdits = false;
   const { width, height } = store.stageSize();
   const previous = new Map(store.elements.map((element) => [element.id, element]));
   const fresh = scene.layout(width, height);
@@ -158,7 +163,7 @@ function layoutScene({ keepEdits = false } = {}) {
 }
 
 function applySharedElements() {
-  if (!shared?.elements?.length) return;
+  if (!shared?.elements?.length || currentScene().lockedComponents) return;
   const byId = new Map(store.elements.map((element) => [element.id, element]));
   for (const element of shared.elements) {
     const existing = byId.get(element.id);
@@ -177,6 +182,7 @@ function selectScene(id, { fromShare = false } = {}) {
   syncBackdropMode();
   layoutScene();
   if (fromShare) applySharedElements();
+  if (store.version === 'v1') glass.setFusion(effectiveFusion(), undefined, false);
   applyElements();
   syncSceneUI();
   componentEditor.render();
@@ -218,12 +224,17 @@ function syncSizes() {
 function drawOverlayLayer({ width, height, dpr }) {
   uiContext.setTransform(dpr, 0, 0, dpr, 0, 0);
   uiContext.clearRect(0, 0, width, height);
-  for (const element of glass.elements) {
-    if (store.showIcons) drawGlassContents(uiContext, element);
-    if (store.showLabels) { drawLabel(uiContext, element); drawBadge(uiContext, element); }
+  const scene = currentScene();
+  if (scene.phoneView) {
+    drawPhoneSceneOverlay(uiContext, scene, glass.elements, width, height);
+  } else {
+    for (const element of glass.elements) {
+      if (store.showIcons) drawGlassContents(uiContext, element);
+      if (store.showLabels) { drawLabel(uiContext, element); drawBadge(uiContext, element); }
+    }
+    const selected = glass.elements.find((element) => element.id === store.selectedId);
+    if (selected) drawSelection(uiContext, selected);
   }
-  const selected = glass.elements.find((element) => element.id === store.selectedId);
-  if (selected) drawSelection(uiContext, selected);
 }
 
 function frame(now) {
@@ -252,7 +263,7 @@ function frame(now) {
 
   const groups = store.version === 'v2'
     ? Math.ceil(glass.elements.length / 16)
-    : store.fusion
+    : effectiveFusion()
       ? connectedElementGroups(glass.elements, glass.material.mergeRadius).length
       : glass.elements.length;
   stats.info({
@@ -305,6 +316,7 @@ const componentEditor = createComponentEditor({
   store,
   onChange: onSceneChange,
   announce,
+  isLocked: () => Boolean(currentScene().lockedComponents),
 });
 
 attachStageInteractions({
@@ -313,6 +325,7 @@ attachStageInteractions({
   store,
   onChange: onSceneChange,
   announce,
+  isLocked: () => Boolean(currentScene().lockedComponents),
 });
 
 function syncPresetButtons(active) {
@@ -346,6 +359,7 @@ $('resetMaterial').addEventListener('click', () => {
 
 function syncVersionUI() {
   const isV2 = store.version === 'v2';
+  const locked = Boolean(currentScene().lockedComponents);
   for (const button of document.querySelectorAll('[data-renderer-version]')) {
     button.classList.toggle('active', button.dataset.rendererVersion === store.version);
   }
@@ -355,12 +369,14 @@ function syncVersionUI() {
     ? 'Clear edge-capture optics. Its values are independent from V1, including same-named controls.'
     : 'The original frosted material with smooth-union fusion.';
   $('hudVersion').textContent = isV2 ? 'LIQUID GLASS / V2 TRANSPARENT' : 'LIQUID GLASS / V1 ORIGINAL';
-  $('materialTip').textContent = isV2
-    ? 'V2 keeps the centre nearly straight-through and captures nearby backdrop transitions only in the edge field. Roundness is a ratio; optical lengths are scaled independently.'
-    : 'Drag components together: inside the fusion distance they form one surface, so the silhouette, refraction and highlight flow through a shared bridge. A gap only closes while it is narrower than about half the fusion distance.';
+  $('materialTip').textContent = locked
+    ? 'This reference scene has a fixed iPhone layout. Switch between V1 and V2, then adjust only that renderer’s material parameters.'
+    : (isV2
+      ? 'V2 keeps the centre nearly straight-through and captures nearby backdrop transitions only in the edge field. Roundness is a ratio; optical lengths are scaled independently.'
+      : 'Drag components together: inside the fusion distance they form one surface, so the silhouette, refraction and highlight flow through a shared bridge. A gap only closes while it is narrower than about half the fusion distance.');
   $('presetToolbar').hidden = isV2;
   $('fusionControl').hidden = isV2;
-  $('debugSection').hidden = isV2;
+  $('debugSection').hidden = isV2 || locked;
 }
 
 function setRendererVersion(version, { announceChange = true } = {}) {
@@ -483,7 +499,23 @@ function syncSceneUI() {
   sceneSelect.value = scene.id;
   $('sceneKind').textContent = scene.kind;
   $('hudScene').textContent = scene.name;
-  $('hudKind').textContent = `${scene.kind} / drag the components, or select one and use the arrow keys`;
+  const locked = Boolean(scene.lockedComponents);
+  $('hudKind').textContent = locked ? `${scene.kind} / material parameters only`
+    : `${scene.kind} / drag the components, or select one and use the arrow keys`;
+  $('componentSection').hidden = locked;
+  $('viewSection').hidden = locked;
+  $('stageHud').hidden = locked;
+  $('keyboardHelp').hidden = locked;
+  $('materialTip').textContent = locked
+    ? 'This reference scene has a fixed iPhone layout. Switch between V1 and V2, then adjust only that renderer’s material parameters.'
+    : (store.version === 'v2'
+      ? 'V2 keeps the centre nearly straight-through and captures nearby backdrop transitions only in the edge field. Roundness is a ratio; optical lengths are scaled independently.'
+      : 'Drag components together: inside the fusion distance they form one surface, so the silhouette, refraction and highlight flow through a shared bridge. A gap only closes while it is narrower than about half the fusion distance.');
+  $('debugSection').hidden = store.version === 'v2' || locked;
+  uiCanvas.setAttribute('aria-label', locked
+    ? `${scene.name}. Components are fixed; use the inspector to adjust material parameters.`
+    : 'Liquid glass stage. Drag a component, or select one and move it with the arrow keys.');
+  if (locked) store.selectedId = null;
   $('sceneCount').textContent = `${String(index + 1).padStart(2, '0')} / ${String(list.length).padStart(2, '0')}`;
   for (const card of scenePicker.querySelectorAll('[data-scene]')) {
     card.classList.toggle('active', card.dataset.scene === scene.id);
