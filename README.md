@@ -5,6 +5,24 @@ original frosted V1 renderer and the clear optical V2 renderer available side by
 
 This package is framework-free and renders Apple-inspired translucent surfaces with screen-space refraction, variable blur, Fresnel reflection, chromatic dispersion, edge highlights, and contact shadows.
 
+## V2 demos
+
+### Alpine Lake
+
+![Liquid Glass V2 on Alpine Lake](https://unpkg.com/apple-liquid-glass-webgl@2.0.2/assets/readme/v2-alpine-lake.jpg)
+
+### iPhone Home Page
+
+<p align="center">
+  <img src="https://unpkg.com/apple-liquid-glass-webgl@2.0.2/assets/readme/v2-home-page.jpg" alt="Liquid Glass V2 iPhone Home Page" width="720">
+</p>
+
+### iPhone Control Centre
+
+<p align="center">
+  <img src="https://unpkg.com/apple-liquid-glass-webgl@2.0.2/assets/readme/v2-control-centre.jpg" alt="Liquid Glass V2 iPhone Control Centre" width="720">
+</p>
+
 ## Install
 
 ```bash
@@ -222,36 +240,6 @@ glass.stop();
 ```
 
 The default `compositeMode: 'replace'` preserves the original behavior and draws the supplied backdrop across the full WebGL canvas. Browsers do not expose arbitrary composited DOM/CSS pixels to WebGL, so the backdrop must be supplied explicitly as an image, canvas, video, ImageBitmap, or OffscreenCanvas. Cross-origin sources must permit CORS access.
-
-## Visual preview
-
-These V2 screenshots are captured from the playground with the inspector hidden. The Alpine Lake scene uses the same folder, rect, pill, and circle geometry as V1, arranged on an evenly spaced 2 × 2 stage.
-
-### V2 Alpine Lake
-
-![Liquid Glass V2 on Alpine Lake](https://unpkg.com/apple-liquid-glass-webgl@2.0.1/assets/readme/v2-alpine-lake.jpg)
-
-### V2 iPhone demos
-
-| Home Page | Control Centre |
-| --- | --- |
-| ![Liquid Glass V2 iPhone Home Page](https://unpkg.com/apple-liquid-glass-webgl@2.0.1/assets/readme/v2-home-page.jpg) | ![Liquid Glass V2 iPhone Control Centre](https://unpkg.com/apple-liquid-glass-webgl@2.0.1/assets/readme/v2-control-centre.jpg) |
-
-### V1 smooth-union fusion
-
-Nearby V1 components can share one continuous distance field, so the silhouette, refraction, highlights, and shadow flow through the merged surface.
-
-![Smooth-union liquid glass fusion](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/smooth-union.jpg)
-
-### V1 wallpaper previews
-
-| Natural landscape | Abstract lines |
-| --- | --- |
-| ![Natural landscape](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/natural-lake.jpg) | ![Abstract lines](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/abstract-lines.jpg) |
-
-| Color blocks | Night city |
-| --- | --- |
-| ![Color blocks](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/color-blocks.jpg) | ![Night city](https://cdn.jsdelivr.net/gh/Oliverrr2424/webgl-apple-liquid-glass@main/assets/readme/night-city.jpg) |
 
 ## Hit testing
 
