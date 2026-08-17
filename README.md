@@ -111,11 +111,27 @@ evaluated independently.
 | `dispersion` | Spread around the refractive index, used in three Snell-law evaluations | Direct display-space RGB sample split in pixels |
 | `edgeWidth` | CSS-pixel contour/highlight line width | Fraction of the short half-side used by the edge capture field |
 | Corner control | `radius` is a CSS-pixel radius capped by the shape size | `roundness` is a ratio of the short half-side; its default matches V1's 23.5% cap |
-| Refraction | `ior × height × refractScale` through a bevel height field | `refraction` plus independent `edgeReach × edgePull` capture distance |
-| Tint | Fixed/adaptive `tintColor` mixed by `tintAmount` | Local light/dark material selected by `tint` opacity |
+| Refraction | `ior × height × refractScale` through a bevel height field | `refraction` for body bending plus one independent `edgeReach` capture distance |
+| Tint | Fixed/adaptive `tintColor` mixed by `tintAmount` | Component-level light/dark material selected by `tint` opacity |
 
 V2 surfaces remain separate and resolve overlap in element order; V1's `fusion` and
 `mergeRadius` smooth-union controls do not apply to V2.
+
+V2 also accepts optional `tint` and `tintTone` values on each element. `tint` overrides the global
+material value only for that surface, so a legibility-first notification can use a coherent milky
+tint while folders and the dock remain clear in the same renderer. `tintTone` can force a stable
+`light` or `dark` treatment; its default `auto` tone is selected from the average backdrop below
+the whole component rather than from each pixel:
+
+```js
+glass.setElements([
+  { id: 'folder', shape: 'folder', x: 24, y: 180, size: 104 },
+  {
+    id: 'notification', shape: 'rect', x: 18, y: 70,
+    width: 357, height: 78, tint: 0.86, tintTone: 'light',
+  },
+]);
+```
 
 Both versions use the same visible shape contract: `folder` and `rect` are rounded boxes,
 `pill` is a capsule, and `circle` uses the short half-side. In particular, V2 `folder` has no
@@ -124,12 +140,14 @@ remain independent.
 
 ### V2 default material parameters
 
+The Playground exposes `refraction` from `0` to `110`. Edge capture is opt-in:
+both `edgeReach` and `edgeWidth` default to zero.
+
 | Group | Parameter | Default |
 | --- | --- | ---: |
-| Transmission | `refraction` | `9.00` |
-| Transmission | `edgePull` | `1.24` |
-| Transmission | `edgeReach` | `62.00` |
-| Transmission | `edgeWidth` | `0.25` |
+| Transmission | `refraction` | `90.00` |
+| Transmission | `edgeReach` | `0.00` |
+| Transmission | `edgeWidth` | `0.00` |
 | Transmission | `dispersion` | `0.70` |
 | Transmission | `frost` | `0.18` |
 | Transmission | `body` | `0.72` |

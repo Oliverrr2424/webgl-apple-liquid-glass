@@ -8,6 +8,7 @@ out vec4 outColor;
 
 uniform sampler2D uSrc;
 uniform vec2 uRes;
+uniform float uDpr;
 uniform float uMips;
 const int MAX_SHAPES = 16;
 uniform int uShapeCount;
@@ -15,16 +16,16 @@ uniform vec2 uShapeCenters[MAX_SHAPES];
 uniform vec2 uShapeHalves[MAX_SHAPES];
 uniform int uShapeTypes[MAX_SHAPES];
 uniform float uShapeRadii[MAX_SHAPES];
+uniform float uShapeTints[MAX_SHAPES];
+uniform float uShapeTintLights[MAX_SHAPES];
 uniform vec2 uLightDirs[MAX_SHAPES];
 uniform float uRefraction;
-uniform float uEdgePull;
 uniform float uEdgeReach;
 uniform float uEdgeWidth;
 uniform float uDispersion;
 uniform float uFrost;
 uniform float uBody;
 uniform float uAbsorption;
-uniform float uTint;
 uniform float uRim;
 uniform float uReflection;
 uniform float uHighlight;
@@ -107,30 +108,21 @@ vec3 softBackdrop(vec2 uv, float radius) {
 
 float luminance(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
-float colorDistance(vec3 a, vec3 b) {
-  float valueDelta = abs(luminance(a) - luminance(b));
-  return length(a - b) * 0.68 + valueDelta * 0.38;
-}
-
-float colorfulness(vec3 c) {
-  return max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
-}
-
 vec3 interfaceColor(vec2 point, vec2 normal) {
-  vec3 outsideColor = softBackdrop((point + normal * 2.4) / uRes, 2.6);
-  vec3 insideColor = softBackdrop((point - normal * 2.4) / uRes, 2.6);
-  float outsideChroma = colorfulness(outsideColor);
-  float insideChroma = colorfulness(insideColor);
-  float sourceMix = smoothstep(-0.08, 0.08, insideChroma - outsideChroma);
-  vec3 source = mix(outsideColor, insideColor, sourceMix);
-  float sourceLum = luminance(source);
-  vec3 saturatedSource = mix(vec3(sourceLum), source, 1.38);
-  float localLum = (luminance(outsideColor) + luminance(insideColor)) * 0.5;
-  vec3 neutral = mix(vec3(0.985), vec3(0.012, 0.011, 0.016), smoothstep(0.38, 0.86, localLum));
-  float transition = smoothstep(0.055, 0.30, colorDistance(outsideColor, insideColor));
-  float chromaGate = smoothstep(0.025, 0.16, max(outsideChroma, insideChroma));
-  return mix(neutral, clamp(saturatedSource * 1.13 + 0.018, 0.0, 1.0),
-             transition * chromaGate * 0.86);
+  vec3 outsideColor = softBackdrop((point + normal * 1.8) / uRes, 2.0);
+  vec3 insideColor = softBackdrop((point - normal * 1.8) / uRes, 2.0);
+  // Apple's outer interface is a neutral contrast line rather than a copy of
+  // the wallpaper colour. Include display-space value as well as luminance so
+  // saturated blue/purple fields select a dark line even though their formal
+  // luminance is modest. The outside carries more weight because that is the
+  // field the silhouette must remain legible against.
+  float outsideValue = max(outsideColor.r, max(outsideColor.g, outsideColor.b));
+  float insideValue = max(insideColor.r, max(insideColor.g, insideColor.b));
+  float outsideLight = max(luminance(outsideColor), outsideValue * 0.72);
+  float insideLight = max(luminance(insideColor), insideValue * 0.72);
+  float interfaceLight = outsideLight * 0.68 + insideLight * 0.32;
+  float darkLine = smoothstep(0.40, 0.61, interfaceLight);
+  return mix(vec3(0.92, 0.93, 0.96), vec3(0.014, 0.013, 0.018), darkLine);
 }
 
 void main() {
@@ -156,26 +148,47 @@ void main() {
   float dy = shapeSdf(chosen, point + vec2(0.0, e)) - shapeSdf(chosen, point - vec2(0.0, e));
   vec2 normal = normalize(vec2(dx, dy) + vec2(0.0001));
   float depth = clamp(-chosenD / max(12.0, minHalf * 0.62), 0.0, 1.0);
-  float edgeCurve = pow(1.0 - smoothstep(0.0, max(14.0, minHalf * 0.50), -chosenD), 2.2);
+  float refractionSupport = max(14.0, minHalf * 0.50);
+  float edgeCurve = pow(1.0 - smoothstep(0.0, refractionSupport, -chosenD), 2.2);
   vec2 local = (point - center) / max(halfSize, vec2(1.0));
 
   float edgeDepth = max(-chosenD, 0.0);
-  vec2 bendNormal = opticalNormal(chosen, point, normal);
-  vec2 inward = -bendNormal;
   float causticSupport = max(8.0, minHalf * uEdgeWidth);
+  float captureX = clamp(edgeDepth / causticSupport, 0.0, 1.0);
   float causticT = 1.0 - smoothstep(0.0, causticSupport, edgeDepth);
-  float captureProfile = causticT * causticT * (3.0 - 2.0 * causticT);
-  float captureDistance = uEdgeReach * uEdgePull * pow(captureProfile, 1.28);
-  float shallowRefraction = uRefraction * edgeCurve * 0.32;
+  float causticShade = causticT * causticT * (3.0 - 2.0 * causticT);
+  // The old double-smoothstep displacement flattened at the visible contour.
+  // Its source-coordinate derivative therefore changed sign twice, making a
+  // captured line turn back just before it touched the edge. A one-sided exit
+  // profile keeps a finite slope at the contour and relaxes to zero only on
+  // the inner side of the capture band, leaving a single optical fold.
+  float captureProfile = pow(1.0 - captureX, 1.64);
+  float refractionX = clamp(edgeDepth / refractionSupport, 0.0, 1.0);
+  float refractionProfile = pow(1.0 - refractionX, 2.2);
+  // The silhouette and optical superellipse deliberately differ in V2, but
+  // the visible contour must still exit along the silhouette normal. Blend to
+  // the broader optical field only after leaving the outer edge pixels.
+  float opticalNormalMix = smoothstep(0.12, 0.55, captureX);
+  vec2 bendNormal = normalize(mix(normal, opticalNormal(chosen, point, normal), opticalNormalMix));
+  vec2 inward = -bendNormal;
+  // Edge pull used to multiply Capture reach as a second public control. Keep
+  // its original default as an internal calibration so the default material
+  // retains the same displacement with one unambiguous capture parameter.
+  const float CAPTURE_REACH_SCALE = 1.24;
+  float captureDistance = uEdgeReach * CAPTURE_REACH_SCALE * captureProfile;
+  float shallowRefraction = uRefraction * refractionProfile * 0.32;
   vec2 lensShift = inward * (shallowRefraction + captureDistance);
   lensShift += -local * (uRefraction * 0.035) * smoothstep(0.16, 0.92, depth);
   vec2 chromaShift = bendNormal * uDispersion * (0.32 + edgeCurve * 0.95);
   vec2 uvR = (point + lensShift * (1.0 + uDispersion * 0.009) + chromaShift) / uRes;
   vec2 uvG = (point + lensShift) / uRes;
   vec2 uvB = (point + lensShift * (1.0 - uDispersion * 0.011) - chromaShift) / uRes;
-  float causticBlur = min(3.2, 0.7 + captureDistance * 0.026);
+  // Reach controls where the sample comes from, not how fat a captured line
+  // becomes. Preserve the tuned reach=35 softness while preventing larger
+  // reaches from silently doubling the blur radius.
+  float causticBlur = min(0.7 + 1.13 * uDpr, 0.7 + captureDistance * 0.026);
   float blurRadius = max(uFrost * (0.55 + depth * 1.3), causticBlur);
-  float blurMix = clamp(uFrost * 0.20 + captureProfile * 0.18, 0.0, 0.84);
+  float blurMix = clamp(uFrost * 0.20 + causticShade * 0.18, 0.0, 0.84);
   vec3 sr = mix(backdrop(uvR), softBackdrop(uvR, blurRadius), blurMix);
   vec3 sg = mix(backdrop(uvG), softBackdrop(uvG, blurRadius), blurMix);
   vec3 sb = mix(backdrop(uvB), softBackdrop(uvB, blurRadius), blurMix);
@@ -190,11 +203,13 @@ void main() {
 
   float opticalPath = 0.26 + sqrt(depth) * 0.74;
   transmitted *= exp(-vec3(0.018, 0.011, 0.004) * opticalPath * 2.4 * uAbsorption);
-  vec3 base = backdrop(point / uRes);
-  float fieldLum = luminance(base);
-  vec3 tintTarget = mix(vec3(0.055, 0.057, 0.066), vec3(0.965, 0.958, 0.94),
-                        smoothstep(0.22, 0.50, fieldLum));
-  float tintOpacity = smoothstep(0.0, 1.5, uTint) * 0.78;
+  // Tinted Liquid Glass chooses one light/dark material for the whole
+  // component. Choosing per fragment lets high-contrast content punch a
+  // checkerboard through the surface instead of producing the coherent milky
+  // veil used by notifications and other legibility-first controls.
+  vec3 tintTarget = mix(vec3(0.055, 0.057, 0.066), vec3(0.975, 0.970, 0.955),
+                        clamp(uShapeTintLights[chosen], 0.0, 1.0));
+  float tintOpacity = smoothstep(0.0, 1.5, uShapeTints[chosen]) * 0.78;
   transmitted = mix(transmitted, tintTarget, tintOpacity * (0.88 + depth * 0.12));
 
   float mask = 1.0 - smoothstep(0.0, 1.35, chosenD);
@@ -227,6 +242,11 @@ void main() {
   float strokeDistance = abs(chosenD + 0.10) - lineWidth * 0.5;
   float hairline = 1.0 - smoothstep(-edgeAA * 0.72, edgeAA * 0.72, strokeDistance);
   vec3 hairColor = interfaceColor(point, normal);
+  // The contrast line is the default interface. On the light-facing arc the
+  // specular key replaces it with the thin white highlight visible in the
+  // native material instead of merely brightening the black line underneath.
+  float hairHighlight = clamp(key * uHighlight * 2.5 * (0.65 + uRim * 0.60), 0.0, 0.96);
+  hairColor = mix(hairColor, vec3(0.985, 0.99, 1.0), hairHighlight);
 
   // Premultiplied layer composition exactly reproduces the prototype's two
   // sequential mixes when drawn over the supplied backdrop, and also allows

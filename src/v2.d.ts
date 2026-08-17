@@ -4,7 +4,6 @@ export type LiquidGlassV2BackdropUpdate = 'auto' | 'static' | 'live';
 
 export interface LiquidGlassV2Material {
   refraction: number;
-  edgePull: number;
   edgeReach: number;
   edgeWidth: number;
   dispersion: number;
@@ -32,6 +31,12 @@ export interface LiquidGlassV2Element {
   w?: number;
   h?: number;
   size?: number;
+  /** Override the material tint opacity for this surface. This lets a tinted
+   * notification share a renderer with clear folders and controls. */
+  tint?: number;
+  /** Select a coherent light or dark tint for the whole surface. `auto`
+   * derives it from the average backdrop below the component. */
+  tintTone?: 'auto' | 'light' | 'dark';
   [key: string]: unknown;
 }
 

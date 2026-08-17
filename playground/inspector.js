@@ -17,7 +17,7 @@ const GROUPS_V1 = {
 };
 
 const GROUPS_V2 = {
-  transmission: ['refraction', 'edgePull', 'edgeReach', 'edgeWidth', 'dispersion',
+  transmission: ['refraction', 'edgeReach', 'edgeWidth', 'dispersion',
     'frost', 'body', 'absorption', 'tint'],
   reflection: ['rim', 'reflection', 'highlight', 'lightAngle', 'echo'],
   interface: ['hairline', 'hairWidth', 'roundness'],
@@ -39,7 +39,7 @@ const LABELS_V1 = {
 };
 
 const LABELS_V2 = {
-  refraction: 'Refraction', edgePull: 'Edge pull', edgeReach: 'Capture reach',
+  refraction: 'Refraction', edgeReach: 'Capture reach',
   edgeWidth: 'Pull width', dispersion: 'Dispersion', frost: 'Softness',
   body: 'Glass body', absorption: 'Absorption', tint: 'Tint opacity',
   rim: 'Edge light', reflection: 'Reflection', highlight: 'Highlight',

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      html, body { margin: 0; background: #0b0d10; }
+      #output { display: block; width: 320px; height: 200px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="output"></canvas>
+    <script type="module">
+      import { LiquidGlassWebGLV2 } from '../src/index.js';
+
+      window.runTest = () => {
+        const backdrop = document.createElement('canvas');
+        backdrop.width = 640;
+        backdrop.height = 400;
+        const context = backdrop.getContext('2d');
+        context.fillStyle = '#111722';
+        context.fillRect(0, 0, 320, 400);
+        context.fillStyle = '#e47d21';
+        context.fillRect(320, 0, 320, 400);
+
+        const output = document.querySelector('#output');
+        const glass = new LiquidGlassWebGLV2(output, {
+          compositeMode: 'overlay', preserveDrawingBuffer: true, autoResize: false,
+          elements: [
+            { id: 'clear', shape: 'rect', x: 30, y: 18, width: 260, height: 68 },
+            {
+              id: 'notification', shape: 'rect', x: 30, y: 114,
+              width: 260, height: 68, tint: 0.86, tintTone: 'light',
+            },
+          ],
+        });
+        glass.setBackdrop(backdrop, { update: 'static', autoStart: false, shouldRender: false });
+        glass.render({ force: true });
+
+        const sample = (x, y) => {
+          const gl = glass.renderer.gl;
+          const dpr = gl.drawingBufferWidth / output.clientWidth;
+          const pixel = new Uint8Array(4);
+          gl.readPixels(
+            Math.round(x * dpr), gl.drawingBufferHeight - Math.round(y * dpr) - 1,
+            1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel,
+          );
+          return Array.from(pixel);
+        };
+        const distance = (a, b) => Math.hypot(
+          a[0] - b[0], a[1] - b[1], a[2] - b[2],
+        );
+        const clearDark = sample(92, 52);
+        const clearBright = sample(228, 52);
+        const tintedDark = sample(92, 148);
+        const tintedBright = sample(228, 148);
+        const clearContrast = distance(clearDark, clearBright);
+        const tintedContrast = distance(tintedDark, tintedBright);
+
+        if (clearContrast < 100) {
+          throw new Error(`clear surface stopped transmitting the backdrop: ${clearContrast}`);
+        }
+        if (tintedContrast >= clearContrast * 0.72) {
+          throw new Error(`tinted surface did not suppress backdrop contrast: ${tintedContrast} vs ${clearContrast}`);
+        }
+        if (tintedDark[0] < clearDark[0] + 55) {
+          throw new Error(`forced light tint did not whiten the dark field: ${clearDark} -> ${tintedDark}`);
+        }
+        if (glass.elements[0].tint !== undefined) {
+          throw new Error('the element tint override leaked onto the clear surface');
+        }
+        if (glass.elements[1].tintTone !== 'light') {
+          throw new Error('the element tint tone was not preserved');
+        }
+        let rejected = false;
+        try {
+          glass.addElement({ shape: 'rect', x: 0, y: 0, width: 20, height: 20, tintTone: 'blue' }, false);
+        } catch (error) {
+          rejected = /tint tone/.test(error.message);
+        }
+        if (!rejected) throw new Error('an unknown tint tone was accepted');
+        if (sample(6, 6)[3] !== 0) throw new Error('the overlay leaked outside the surfaces');
+
+        glass.destroy();
+        return {
+          checks: [
+            `clear=${Math.round(clearContrast)}`,
+            `tinted=${Math.round(tintedContrast)}`,
+            'per-element light tint',
+          ],
+        };
+      };
+    </script>
+  </body>
+</html>

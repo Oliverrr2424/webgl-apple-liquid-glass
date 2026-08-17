@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      html, body { margin: 0; background: #111; }
+      canvas { display: block; width: 240px; height: 240px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="output"></canvas>
+    <script type="module">
+      import { GlassRenderer } from '../src/renderer.js';
+      import { getDefaultMaterial } from '../src/material.js';
+
+      window.runTest = () => {
+        const canvas = document.querySelector('#output');
+        const renderer = new GlassRenderer(canvas, { preserveDrawingBuffer: true });
+        renderer.resize(240, 240);
+
+        const source = document.createElement('canvas');
+        source.width = 240;
+        source.height = 240;
+        source.getContext('2d').fillRect(0, 0, 240, 240);
+        renderer.setWallpapers([source]);
+        renderer.buildBackdrop(0, 1);
+
+        const material = { ...getDefaultMaterial(), debug: 2, shadow: 0 };
+        renderer.drawBackdrop();
+        renderer.drawGlassGroup([
+          { shape: 'rect', x: 40, y: 40, w: 160, h: 160, radius: 40 },
+        ], material, 1, 0);
+
+        const gl = renderer.gl;
+        const pixels = new Uint8Array(3 * 4);
+        // The top-left circular corner meets the top side at x=80. Five pixels
+        // before that tangent, a C1 circular join still points visibly sideways
+        // and produces the caustic wedge. A continuous-curvature optical normal
+        // has already eased back to the vertical side normal here.
+        gl.readPixels(74, 190, 3, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        const tangentRed = pixels[0] + pixels[4] + pixels[8];
+
+        const curvedPixel = new Uint8Array(4);
+        gl.readPixels(70, 190, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, curvedPixel);
+        renderer.destroy();
+
+        if (tangentRed > 392) {
+          throw new Error(`corner normal turns too abruptly at tangent: ${tangentRed}`);
+        }
+        if (curvedPixel[0] < 135) {
+          throw new Error(`corner normal was flattened instead of eased: ${curvedPixel[0]}`);
+        }
+        return { checks: [
+          `tangent-normal=${tangentRed}`,
+          `corner-normal=${curvedPixel[0]}`,
+        ] };
+      };
+    </script>
+  </body>
+</html>

@@ -179,14 +179,26 @@ function drawSpectrum(ctx, w, h) {
   ctx.fillText('RGB', w * 0.08, h * 0.64);
 }
 
-function drawWallpaper(ctx, wallpaper, width, height) {
+function drawImageCover(ctx, image, width, height) {
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  if (!(sourceWidth > 0) || !(sourceHeight > 0)) return false;
+  const scale = Math.max(width / sourceWidth, height / sourceHeight);
+  const drawWidth = sourceWidth * scale;
+  const drawHeight = sourceHeight * scale;
+  ctx.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+  return true;
+}
+
+function drawWallpaper(ctx, wallpaper, width, height, image = null) {
+  if (wallpaper === 'image' && image?.complete && drawImageCover(ctx, image, width, height)) return;
   if (wallpaper === 'type') drawType(ctx, width, height);
   else if (wallpaper === 'neon') drawNeon(ctx, width, height);
   else drawSpectrum(ctx, width, height);
 }
 
 /** Paint the stage, titanium bezel, and one of the three V2 prototype images. */
-export function drawPhoneBackdrop(ctx, scene, width, height) {
+export function drawPhoneBackdrop(ctx, scene, width, height, image = null) {
   const frame = phoneFrame(width, height);
   const stageGlow = ctx.createRadialGradient(width * 0.5, height * 0.47, 0, width * 0.5, height * 0.47, Math.max(width, height) * 0.62);
   stageGlow.addColorStop(0, '#222936');
@@ -214,9 +226,9 @@ export function drawPhoneBackdrop(ctx, scene, width, height) {
   rounded(ctx, frame.screen, frame.screen.r);
   ctx.clip();
   ctx.translate(frame.screen.x, frame.screen.y);
-  drawWallpaper(ctx, scene.backdrop.wallpaper, frame.screen.w, frame.screen.h);
+  drawWallpaper(ctx, scene.backdrop.wallpaper, frame.screen.w, frame.screen.h, image);
   // Notification and Control Centre sit over a softened wallpaper on iOS.
-  if (scene.phoneView !== 'home') {
+  if (!scene.phoneView.startsWith('home')) {
     ctx.fillStyle = scene.phoneView === 'notification' ? 'rgba(18,14,18,.22)' : 'rgba(3,5,10,.34)';
     ctx.fillRect(0, 0, frame.screen.w, frame.screen.h);
   }
@@ -236,41 +248,116 @@ export function drawPhoneBackdrop(ctx, scene, width, height) {
   return frame;
 }
 
-export function drawPhoneChrome(ctx, frame, { darkStatus = false } = {}) {
+export function drawPhoneChrome(ctx, frame, {
+  darkStatus = false, time = '9:41', recording = false, statusIcon = 'location',
+} = {}) {
   const { screen, scale } = frame;
   const fg = darkStatus ? '#090a0d' : '#fff';
   ctx.save();
   ctx.fillStyle = fg;
   ctx.font = `600 ${15 * scale}px -apple-system, "SF Pro Text", system-ui, sans-serif`;
   ctx.textBaseline = 'middle';
-  ctx.fillText('9:41', screen.x + 27 * scale, screen.y + 34 * scale);
+  ctx.fillText(time, screen.x + 27 * scale, screen.y + 34 * scale);
 
   const right = screen.x + screen.w;
   const cy = screen.y + 34 * scale;
   ctx.strokeStyle = fg;
   ctx.fillStyle = fg;
   ctx.lineWidth = Math.max(1.3, 2.1 * scale);
-  // cellular bars use the same optical weight as the vendored status glyphs.
-  for (let index = 0; index < 4; index++) {
-    const barH = (4 + index * 3) * scale;
+  // Recording captures replace the cellular bars with the privacy indicator
+  // and show the live battery percentage in its green system capsule.
+  if (!recording) {
+    for (let index = 0; index < 4; index++) {
+      const barH = (4 + index * 3) * scale;
+      ctx.beginPath();
+      ctx.roundRect(right - 94 * scale + index * 6 * scale, cy + 6 * scale - barH, 3.6 * scale, barH, 2 * scale);
+      ctx.fill();
+    }
+    drawPhoneIcon(ctx, 'wifi', right - 65 * scale, cy - 11 * scale, 23 * scale, 23 * scale, fg);
+    drawPhoneIcon(ctx, 'battery', right - 36 * scale, cy - 12 * scale, 27 * scale, 24 * scale, fg);
     ctx.beginPath();
-    ctx.roundRect(right - 94 * scale + index * 6 * scale, cy + 6 * scale - barH, 3.6 * scale, barH, 2 * scale);
+    ctx.roundRect(right - 30.5 * scale, cy - 4 * scale, 13.5 * scale, 8 * scale, 2 * scale);
+    ctx.fillStyle = fg;
     ctx.fill();
+  } else {
+    drawPhoneIcon(ctx, 'wifi', screen.x + 310 * scale, cy - 11 * scale, 23 * scale, 23 * scale, fg);
+    ctx.beginPath();
+    ctx.roundRect(screen.x + 335 * scale, cy - 9 * scale, 24 * scale, 18 * scale, 4 * scale);
+    ctx.fillStyle = '#54ca62';
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = `700 ${12 * scale}px -apple-system, "SF Pro Text", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('99', screen.x + 347 * scale, cy + 0.5 * scale);
   }
-  drawPhoneIcon(ctx, 'wifi', right - 65 * scale, cy - 11 * scale, 23 * scale, 23 * scale, fg);
-  drawPhoneIcon(ctx, 'battery', right - 36 * scale, cy - 12 * scale, 27 * scale, 24 * scale, fg);
-  ctx.beginPath();
-  ctx.roundRect(right - 30.5 * scale, cy - 4 * scale, 13.5 * scale, 8 * scale, 2 * scale);
-  ctx.fillStyle = fg;
-  ctx.fill();
 
   // Dynamic Island is drawn last so nothing visually crosses the hardware cutout.
-  const island = phoneRect(frame, 132, 11, 129, 36);
+  const island = recording
+    ? phoneRect(frame, 107, 11, 171, 36)
+    : phoneRect(frame, 132, 11, 129, 36);
   ctx.shadowColor = 'rgba(0,0,0,.3)';
   ctx.shadowBlur = 5 * scale;
   rounded(ctx, island, island.h / 2);
   ctx.fillStyle = '#020203';
   ctx.fill();
+
+  if (recording) {
+    // The real captures use a location arrow on page one and a muted bell on
+    // page two while the microphone activity remains live in Dynamic Island.
+    ctx.save();
+    ctx.translate(screen.x + 81 * scale, screen.y + 34 * scale);
+    if (statusIcon === 'muted') {
+      ctx.strokeStyle = fg;
+      ctx.lineWidth = Math.max(1.3, 2 * scale);
+      ctx.beginPath();
+      ctx.arc(0, 1 * scale, 5 * scale, Math.PI, 0);
+      ctx.lineTo(5 * scale, 6 * scale);
+      ctx.lineTo(-5 * scale, 6 * scale);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-7 * scale, -7 * scale);
+      ctx.lineTo(7 * scale, 9 * scale);
+      ctx.stroke();
+    } else {
+      ctx.rotate(-0.62);
+      ctx.beginPath();
+      ctx.moveTo(0, -6 * scale);
+      ctx.lineTo(5 * scale, 6 * scale);
+      ctx.lineTo(0, 3 * scale);
+      ctx.lineTo(-5 * scale, 6 * scale);
+      ctx.closePath();
+      ctx.fillStyle = fg;
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Active microphone and its separate orange privacy indicator.
+    const micX = island.x + 31 * scale;
+    const micY = island.y + island.h / 2;
+    ctx.strokeStyle = '#ffac2f';
+    ctx.lineWidth = Math.max(1.6, 2.4 * scale);
+    ctx.beginPath();
+    ctx.roundRect(micX - 4 * scale, micY - 9 * scale, 8 * scale, 15 * scale, 4 * scale);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(micX, micY, 8 * scale, 0.18, Math.PI - 0.18);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(micX, micY + 8 * scale);
+    ctx.lineTo(micX, micY + 12 * scale);
+    ctx.stroke();
+    const privacyX = screen.x + 291 * scale;
+    ctx.beginPath();
+    ctx.arc(privacyX, screen.y + 29 * scale, 11 * scale, 0, Math.PI * 2);
+    ctx.fillStyle = '#020203';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(privacyX, screen.y + 29 * scale, 4.2 * scale, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff9f1f';
+    ctx.fill();
+  }
   ctx.shadowColor = 'transparent';
   ctx.fillStyle = 'rgba(16,28,44,.65)';
   ctx.beginPath();

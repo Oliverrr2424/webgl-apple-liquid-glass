@@ -116,3 +116,11 @@ test('same-named parameters are decoded against the selected version only', () =
   const v1 = decodeState('#scene=tab-bar&m=dispersion:0.07|edgeWidth:2|edgeReach:80');
   assert.deepEqual(v1.material, { dispersion: 0.07, edgeWidth: 2 });
 });
+
+test('legacy V2 edge pull links collapse into capture reach', () => {
+  const decoded = decodeState('#scene=tab-bar&version=v2&m=edgePull:0.31|edgeReach:44');
+  assert.deepEqual(decoded.material, { edgeReach: 11 });
+
+  const inherited = decodeState('#scene=tab-bar&version=v2&m=edgePull:1.24');
+  assert.deepEqual(inherited.material, { edgeReach: 62 });
+});

@@ -8,15 +8,15 @@ import {
   LiquidGlassWebGL, LiquidGlassWebGLV2, connectedElementGroups,
   getDefaultMaterialV2, makeMaterial,
 } from '../src/index.js';
-import { SCENES, ICON_SOURCES, attachIconImages, isAnimated, sceneById } from './scenes.js?phone-scenes=3';
-import { drawSceneBackdrop } from './content.js?phone-scenes=2';
-import { drawGlassContents, drawLabel, drawBadge, drawSelection, drawPhoneSceneOverlay } from './overlay.js?phone-scenes=2';
+import { SCENES, ICON_SOURCES, attachIconImages, isAnimated, sceneById } from './scenes.js?phone-scenes=6';
+import { drawSceneBackdrop } from './content.js?phone-scenes=3';
+import { drawGlassContents, drawLabel, drawBadge, drawSelection, drawPhoneSceneOverlay } from './overlay.js?phone-scenes=3';
 import { createInspector } from './inspector.js';
 import { createComponentEditor } from './components.js?phone-scenes=2';
 import { attachStageInteractions } from './interactions.js?phone-scenes=2';
 import { createStats } from './stats.js';
 import { decodeState, toCode, writeHash } from './permalink.js';
-import { PHONE_ICON_SOURCES, attachPhoneIconImages } from './phone.js?phone-scenes=2';
+import { PHONE_ICON_SOURCES, attachPhoneIconImages, phoneFrame } from './phone.js?phone-scenes=3';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -58,6 +58,9 @@ const store = {
   movedElements: false,
   customScene: null,
   customObjectUrl: null,
+  customPhoneObjectUrls: new Map(),
+  homePageIndex: 0,
+  homePageOffset: 0,
   stageSize: () => ({ width: stage.clientWidth, height: stage.clientHeight }),
 };
 Object.assign(store.material, shared?.material ?? {});
@@ -100,6 +103,20 @@ function currentScene() {
 
 function allScenes() {
   return store.customScene ? [...SCENES, store.customScene] : SCENES;
+}
+
+const PHONE_WALLPAPER_SCENES = new Set(['tab-bar', 'notification', 'control-centre']);
+
+function applyHomePageTransform() {
+  if (currentScene().phoneView !== 'home') return;
+  const { width, height } = store.stageSize();
+  const pageWidth = phoneFrame(width, height).screen.w;
+  const shift = -store.homePageIndex * pageWidth + store.homePageOffset;
+  for (const element of store.elements) {
+    if (Number.isInteger(element.phonePage) && Number.isFinite(element.phoneBaseX)) {
+      element.x = element.phoneBaseX + shift;
+    }
+  }
 }
 
 /** Loads a scene's wallpaper the first time it is needed, never before. */
@@ -159,6 +176,7 @@ function layoutScene({ keepEdits = false } = {}) {
     const kept = keepEdits ? previous.get(element.id) : null;
     return kept ? { ...element, x: kept.x, y: kept.y, w: kept.w, h: kept.h, shape: kept.shape } : element;
   });
+  applyHomePageTransform();
   if (!keepEdits) store.movedElements = false;
   if (!store.elements.some((element) => element.id === store.selectedId)) store.selectedId = null;
 }
@@ -174,9 +192,15 @@ function applySharedElements() {
   store.movedElements = true;
 }
 
+let cancelHomePageAnimation = () => {};
+
 function selectScene(id, { fromShare = false } = {}) {
+  const changed = store.sceneId !== id;
+  cancelHomePageAnimation();
   store.sceneId = allScenes().some((scene) => scene.id === id) ? id : SCENES[0].id;
   const scene = currentScene();
+  if (scene.phoneView === 'home' && changed) store.homePageIndex = 0;
+  store.homePageOffset = 0;
   ensureBackdropImage(scene);
   // Scenes that paint their own backdrop have nothing to wait for.
   if (!scene.backdrop.src) document.body.classList.add('wallpapers-ready');
@@ -219,6 +243,15 @@ function syncSizes() {
     glCanvas.style.height = `${height}px`;
     lastSize = { width, height, dpr };
   }
+  const scene = currentScene();
+  if (scene.phoneView) {
+    const frame = phoneFrame(width, height);
+    const right = Math.max(0, width - frame.screen.x - frame.screen.w);
+    const bottom = Math.max(0, height - frame.screen.y - frame.screen.h);
+    glCanvas.style.clipPath = `inset(${frame.screen.y}px ${right}px ${bottom}px ${frame.screen.x}px round ${frame.screen.r}px)`;
+  } else {
+    glCanvas.style.clipPath = 'none';
+  }
   return { width, height, dpr, resized };
 }
 
@@ -227,7 +260,10 @@ function drawOverlayLayer({ width, height, dpr }) {
   uiContext.clearRect(0, 0, width, height);
   const scene = currentScene();
   if (scene.phoneView) {
-    drawPhoneSceneOverlay(uiContext, scene, glass.elements, width, height);
+    drawPhoneSceneOverlay(uiContext, scene, store.elements, width, height, store.version, {
+      pageIndex: store.homePageIndex,
+      pageOffset: store.homePageOffset,
+    });
   } else {
     for (const element of glass.elements) {
       if (store.showIcons) drawGlassContents(uiContext, element);
@@ -328,6 +364,125 @@ attachStageInteractions({
   announce,
   isLocked: () => Boolean(currentScene().lockedComponents),
 });
+
+function attachHomePager() {
+  const reduceMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+  let drag = null;
+  let animationFrame = 0;
+
+  const isActive = () => currentScene().phoneView === 'home';
+  const currentFrame = () => {
+    const { width, height } = store.stageSize();
+    return phoneFrame(width, height);
+  };
+  const updateOffset = (offset) => {
+    store.homePageOffset = offset;
+    applyHomePageTransform();
+    applyElements();
+    invalidate();
+  };
+  const commitPage = (pageIndex) => {
+    store.homePageIndex = Math.max(0, Math.min(1, pageIndex));
+    updateOffset(0);
+    announce(`Home screen page ${store.homePageIndex + 1} of 2.`);
+  };
+
+  cancelHomePageAnimation = () => {
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    animationFrame = 0;
+  };
+
+  const animateTo = (pageIndex) => {
+    cancelHomePageAnimation();
+    const targetPage = Math.max(0, Math.min(1, pageIndex));
+    const pageWidth = currentFrame().screen.w;
+    const startOffset = store.homePageOffset;
+    const targetOffset = (store.homePageIndex - targetPage) * pageWidth;
+    if (reduceMotion?.matches || Math.abs(targetOffset - startOffset) < 0.5) {
+      commitPage(targetPage);
+      return;
+    }
+    const startTime = performance.now();
+    const duration = 280;
+    const tick = (now) => {
+      const elapsed = Math.min(1, (now - startTime) / duration);
+      const eased = 1 - Math.pow(1 - elapsed, 3);
+      updateOffset(startOffset + (targetOffset - startOffset) * eased);
+      if (elapsed < 1) animationFrame = requestAnimationFrame(tick);
+      else {
+        animationFrame = 0;
+        commitPage(targetPage);
+      }
+    };
+    animationFrame = requestAnimationFrame(tick);
+  };
+
+  uiCanvas.addEventListener('pointerdown', (event) => {
+    if (!isActive() || drag) return;
+    const point = glass.pointerPosition(event);
+    const frame = currentFrame();
+    const withinScreen = point.x >= frame.screen.x && point.x <= frame.screen.x + frame.screen.w
+      && point.y >= frame.screen.y + 52 * frame.scale
+      && point.y <= frame.screen.y + 720 * frame.scale;
+    if (!withinScreen) return;
+    event.preventDefault();
+    cancelHomePageAnimation();
+    drag = {
+      pointerId: event.pointerId,
+      startX: point.x,
+      startOffset: store.homePageOffset,
+      lastX: point.x,
+      lastTime: performance.now(),
+      velocity: 0,
+    };
+    uiCanvas.setPointerCapture(event.pointerId);
+    uiCanvas.focus({ preventScroll: true });
+    uiCanvas.style.cursor = 'grabbing';
+  });
+
+  uiCanvas.addEventListener('pointermove', (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    event.preventDefault();
+    const point = glass.pointerPosition(event);
+    const now = performance.now();
+    const elapsed = Math.max(1, now - drag.lastTime);
+    drag.velocity = (point.x - drag.lastX) / elapsed;
+    drag.lastX = point.x;
+    drag.lastTime = now;
+    const pageWidth = currentFrame().screen.w;
+    let offset = drag.startOffset + point.x - drag.startX;
+    if ((store.homePageIndex === 0 && offset > 0) || (store.homePageIndex === 1 && offset < 0)) {
+      offset *= 0.28;
+    }
+    updateOffset(Math.max(-pageWidth * 1.12, Math.min(pageWidth * 1.12, offset)));
+  });
+
+  const endDrag = (event, cancelled = false) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const { velocity } = drag;
+    drag = null;
+    uiCanvas.style.cursor = 'grab';
+    if (cancelled) {
+      animateTo(store.homePageIndex);
+      return;
+    }
+    const pageWidth = currentFrame().screen.w;
+    const progress = store.homePageIndex - store.homePageOffset / pageWidth;
+    const target = velocity < -0.45 ? Math.ceil(progress)
+      : velocity > 0.45 ? Math.floor(progress)
+        : Math.round(progress);
+    animateTo(target);
+  };
+  uiCanvas.addEventListener('pointerup', (event) => endDrag(event, false));
+  uiCanvas.addEventListener('pointercancel', (event) => endDrag(event, true));
+  uiCanvas.addEventListener('keydown', (event) => {
+    if (!isActive() || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+    event.preventDefault();
+    animateTo(store.homePageIndex + (event.key === 'ArrowRight' ? 1 : -1));
+  });
+}
+
+attachHomePager();
 
 function syncPresetButtons(active) {
   for (const button of document.querySelectorAll('[data-preset]')) {
@@ -504,6 +659,14 @@ function syncSceneUI() {
   $('hudKind').textContent = locked ? `${scene.kind} / material parameters only`
     : `${scene.kind} / drag the components, or select one and use the arrow keys`;
   $('componentSection').hidden = locked;
+  const phoneWallpaperEnabled = PHONE_WALLPAPER_SCENES.has(scene.id);
+  $('sceneUpload').classList.toggle('phoneMode', phoneWallpaperEnabled);
+  $('phoneWallpaperUpload').hidden = !phoneWallpaperEnabled;
+  if (phoneWallpaperEnabled && store.customPhoneObjectUrls.has(scene.id)) {
+    phoneWallpaperStatus.textContent = 'Custom wallpaper loaded';
+  } else if (!phoneWallpaperEnabled) {
+    phoneWallpaperStatus.textContent = 'Only for phone scenes';
+  }
   $('viewSection').hidden = locked;
   $('stageHud').hidden = locked;
   $('keyboardHelp').hidden = locked;
@@ -514,8 +677,11 @@ function syncSceneUI() {
       : 'Drag components together: inside the fusion distance they form one surface, so the silhouette, refraction and highlight flow through a shared bridge. A gap only closes while it is narrower than about half the fusion distance.');
   $('debugSection').hidden = store.version === 'v2' || locked;
   uiCanvas.setAttribute('aria-label', locked
-    ? `${scene.name}. Components are fixed; use the inspector to adjust material parameters.`
+    ? (scene.phoneView === 'home'
+      ? `${scene.name}. Swipe horizontally, or use the left and right arrow keys, to change home screen pages.`
+      : `${scene.name}. Components are fixed; use the inspector to adjust material parameters.`)
     : 'Liquid glass stage. Drag a component, or select one and move it with the arrow keys.');
+  uiCanvas.style.cursor = scene.phoneView === 'home' ? 'grab' : 'default';
   if (locked) store.selectedId = null;
   $('sceneCount').textContent = `${String(index + 1).padStart(2, '0')} / ${String(list.length).padStart(2, '0')}`;
   for (const card of scenePicker.querySelectorAll('[data-scene]')) {
@@ -530,6 +696,8 @@ sceneSelect.addEventListener('change', () => selectScene(sceneSelect.value));
 // ------------------------------------------------------------- custom uploads
 const customInput = $('customMedia');
 const customStatus = $('customSceneStatus');
+const phoneWallpaperInput = $('phoneWallpaper');
+const phoneWallpaperStatus = $('phoneWallpaperStatus');
 
 function loadMedia(url, kind) {
   return new Promise((resolve, reject) => {
@@ -581,7 +749,7 @@ customInput.addEventListener('change', async () => {
       backdrop: kind === 'video'
         ? { type: 'video', source, animated: true, thumb: videoThumb(source) }
         : { type: 'image', src: url, thumb: url },
-      layout: sceneById(store.sceneId).layout,
+      layout: sceneById('alpine-lake').layout,
     };
     if (kind === 'image') images.set(url, source);
     if (previous && previous !== url) URL.revokeObjectURL(previous);
@@ -594,6 +762,55 @@ customInput.addEventListener('change', async () => {
     console.warn('Custom scene loading failed.', error);
   } finally {
     customInput.value = '';
+  }
+});
+
+phoneWallpaperInput.addEventListener('change', async () => {
+  const [file] = phoneWallpaperInput.files || [];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    phoneWallpaperStatus.textContent = 'Choose an image file';
+    phoneWallpaperInput.value = '';
+    return;
+  }
+
+  phoneWallpaperStatus.textContent = 'Loading wallpaper…';
+  let url;
+  try {
+    url = URL.createObjectURL(file);
+    const source = await loadMedia(url, 'image');
+    const targetScene = currentScene();
+    if (!PHONE_WALLPAPER_SCENES.has(targetScene.id)) {
+      URL.revokeObjectURL(url);
+      phoneWallpaperStatus.textContent = 'Select a phone scene first';
+      return;
+    }
+    const previous = store.customPhoneObjectUrls.get(targetScene.id);
+    store.customPhoneObjectUrls.set(targetScene.id, url);
+    images.set(url, source);
+
+    targetScene.backdrop = {
+      ...targetScene.backdrop,
+      type: 'phone',
+      wallpaper: 'image',
+      src: url,
+      thumb: url,
+    };
+
+    if (previous && previous !== url) {
+      images.delete(previous);
+      URL.revokeObjectURL(previous);
+    }
+    renderScenePicker();
+    selectScene(targetScene.id);
+    phoneWallpaperStatus.textContent = `${file.name} · ${targetScene.name}`;
+    announce(`Custom wallpaper applied to ${targetScene.name}. The phone layout and glass components are unchanged.`);
+  } catch (error) {
+    if (url) URL.revokeObjectURL(url);
+    phoneWallpaperStatus.textContent = 'Could not load that image';
+    console.warn('Phone wallpaper loading failed.', error);
+  } finally {
+    phoneWallpaperInput.value = '';
   }
 });
 
@@ -674,6 +891,7 @@ document.addEventListener('visibilitychange', () => {
 
 window.addEventListener('beforeunload', () => {
   if (store.customObjectUrl) URL.revokeObjectURL(store.customObjectUrl);
+  for (const url of store.customPhoneObjectUrls.values()) URL.revokeObjectURL(url);
 });
 
 // ----------------------------------------------------------------- bootstrap

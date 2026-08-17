@@ -23,6 +23,11 @@ test('V2 materials are independent copies with their own parameter ranges', () =
     assert.ok(DEFAULT_MATERIAL_V2[key] >= min && DEFAULT_MATERIAL_V2[key] <= max);
     assert.ok(step > 0);
   }
+  assert.deepEqual(SLIDERS_V2.find(([key]) => key === 'refraction'),
+    ['refraction', 0, 110, 1]);
+  assert.equal(DEFAULT_MATERIAL_V2.refraction, 90);
+  assert.equal(DEFAULT_MATERIAL_V2.edgeReach, 0);
+  assert.equal(DEFAULT_MATERIAL_V2.edgeWidth, 0);
 });
 
 test('V1 and V2 material state cannot mutate each other', () => {

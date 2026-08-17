@@ -533,7 +533,7 @@ export class GlassRenderer {
   // nothing from the material calculation. In particular, similarly named
   // uniforms are filled using V2's own units: edgeWidth is a fraction,
   // dispersion is a pixel split, and roundness is a short-half ratio.
-  drawGlassV2Group(elements, m, dpr, lightDirections = []) {
+  drawGlassV2Group(elements, m, dpr, lightDirections = [], tintLights = []) {
     if (!elements.length || this.lost || !this.tex) return;
 
     const gl = this.gl;
@@ -551,6 +551,8 @@ export class GlassRenderer {
     const radii = new Float32Array(MAX_GLASS_SHAPES);
     const types = new Int32Array(MAX_GLASS_SHAPES);
     const lights = new Float32Array(MAX_GLASS_SHAPES * 2);
+    const tints = new Float32Array(MAX_GLASS_SHAPES);
+    const tintTones = new Float32Array(MAX_GLASS_SHAPES);
     shapes.forEach((element, i) => {
       const short = Math.min(element.w, element.h);
       centers[i * 2] = (element.x + element.w / 2) * dpr;
@@ -563,6 +565,8 @@ export class GlassRenderer {
       const direction = lightDirections[i] ?? [Math.SQRT1_2, Math.SQRT1_2];
       lights[i * 2] = direction[0];
       lights[i * 2 + 1] = direction[1];
+      tints[i] = element.tint ?? m.tint;
+      tintTones[i] = tintLights[i] ?? 1;
     });
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -576,6 +580,7 @@ export class GlassRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this.tex);
     gl.uniform1i(loc.uSrc, 0);
     gl.uniform2f(loc.uRes, this.w, this.h);
+    gl.uniform1f(loc.uDpr, dpr);
     gl.uniform2f(loc.uCenter,
       (minX + groupWidth / 2) * dpr,
       this.h - (minY + groupHeight / 2) * dpr);
@@ -587,16 +592,16 @@ export class GlassRenderer {
     gl.uniform2fv(loc.uShapeHalves, halves);
     gl.uniform1iv(loc.uShapeTypes, types);
     gl.uniform1fv(loc.uShapeRadii, radii);
+    gl.uniform1fv(loc.uShapeTints, tints);
+    gl.uniform1fv(loc.uShapeTintLights, tintTones);
     gl.uniform2fv(loc.uLightDirs, lights);
     gl.uniform1f(loc.uRefraction, m.refraction * dpr);
-    gl.uniform1f(loc.uEdgePull, m.edgePull);
     gl.uniform1f(loc.uEdgeReach, m.edgeReach * dpr);
     gl.uniform1f(loc.uEdgeWidth, m.edgeWidth);
     gl.uniform1f(loc.uDispersion, m.dispersion);
     gl.uniform1f(loc.uFrost, m.frost * dpr);
     gl.uniform1f(loc.uBody, m.body);
     gl.uniform1f(loc.uAbsorption, m.absorption);
-    gl.uniform1f(loc.uTint, m.tint);
     gl.uniform1f(loc.uRim, m.rim);
     gl.uniform1f(loc.uReflection, m.reflection);
     gl.uniform1f(loc.uHighlight, m.highlight);

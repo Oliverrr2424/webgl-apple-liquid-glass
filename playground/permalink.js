@@ -50,9 +50,24 @@ export function decodeState(hash = globalThis.location?.hash ?? '') {
   const version = versionOf(params.get('version'));
   const defaults = defaultsFor(version);
   const material = {};
+  let legacyEdgePull = null;
   for (const pair of (params.get('m') ?? '').split('|').filter(Boolean)) {
     const [key, value] = pair.split(':');
-    if (key in defaults && Number.isFinite(Number(value))) material[key] = Number(value);
+    const number = Number(value);
+    if (key in defaults && Number.isFinite(number)) material[key] = number;
+    else if (version === 'v2' && key === 'edgePull' && Number.isFinite(number)) {
+      legacyEdgePull = number;
+    }
+  }
+  // Old V2 links encoded capture as edgeReach * edgePull. Collapse that pair
+  // into the retained reach control, whose shader uses the old 1.24 default as
+  // an internal calibration. This keeps existing Playground links visually
+  // equivalent after Edge pull is removed from the public material.
+  if (version === 'v2' && legacyEdgePull !== null) {
+    // Legacy links that omitted reach inherited the old 62px default, not the
+    // current zero-capture default.
+    const legacyReach = material.edgeReach ?? 62;
+    material.edgeReach = round(legacyReach * legacyEdgePull / 1.24);
   }
   const debug = Number(params.get('debug'));
   if (version === 'v1' && debug >= 1 && debug <= 3) material.debug = debug;

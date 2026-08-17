@@ -2,10 +2,9 @@
 // values deliberately live outside material.js: similarly named V1 controls
 // (notably dispersion and edgeWidth) use different units and shader maths.
 export const DEFAULT_MATERIAL_V2 = Object.freeze({
-  refraction: 9,
-  edgePull: 1.24,
-  edgeReach: 62,
-  edgeWidth: 0.25,
+  refraction: 90,
+  edgeReach: 0,
+  edgeWidth: 0,
   dispersion: 0.7,
   frost: 0.18,
   body: 0.72,
@@ -23,7 +22,6 @@ export const DEFAULT_MATERIAL_V2 = Object.freeze({
 
 export const REDUCED_TRANSPARENCY_MATERIAL_V2 = Object.freeze({
   refraction: 0,
-  edgePull: 0,
   edgeReach: 0,
   dispersion: 0,
   frost: 0,
@@ -35,10 +33,9 @@ export const REDUCED_TRANSPARENCY_MATERIAL_V2 = Object.freeze({
 });
 
 export const SLIDERS_V2 = Object.freeze([
-  ['refraction', 0, 54, 1],
-  ['edgePull', 0, 1.8, 0.01],
+  ['refraction', 0, 110, 1],
   ['edgeReach', 0, 160, 1],
-  ['edgeWidth', 0.08, 0.55, 0.01],
+  ['edgeWidth', 0, 0.55, 0.01],
   ['dispersion', 0, 7, 0.1],
   ['frost', 0, 3.5, 0.05],
   ['body', 0, 1.5, 0.01],

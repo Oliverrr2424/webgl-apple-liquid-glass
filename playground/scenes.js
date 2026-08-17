@@ -5,7 +5,7 @@
 // fixed surfaces into real iPhone contexts, while the scrolling feed stresses
 // the material in ways a still folder never will.
 
-import { phoneFrame, phoneRect } from './phone.js?phone-scenes=2';
+import { PHONE_SCREEN_WIDTH, phoneFrame, phoneRect } from './phone.js?phone-scenes=3';
 
 const ICONS = {
   youtube: { name: 'YouTube', src: './assets/icons/youtube.svg', c0: '#f7f8fb', c1: '#d9dde7' },
@@ -33,6 +33,8 @@ const WALLPAPERS = {
   'abstract-lines': './assets/wallpapers/abstract-lines.webp',
   'color-blocks': './assets/wallpapers/color-blocks.webp',
   'night-city': './assets/wallpapers/night-city.webp',
+  'home-page-warm': './assets/wallpapers/home-page-warm.png',
+  'home-page-sunset': './assets/wallpapers/home-page-sunset.png',
 };
 
 const thumbOf = (key) => `./assets/wallpapers/thumbs/${key}.webp`;
@@ -79,25 +81,52 @@ function inPhone(width, height, specs) {
   return specs.map((spec) => ({ ...spec, ...phoneRect(frame, spec.x, spec.y, spec.w, spec.h) }));
 }
 
+const HOME_PAGE_ONE = [
+    // Measured from the supplied 1206 × 2622 home-screen capture and mapped
+    // into the shared 393 × 852 point coordinate system.
+    { id: 'clock', shape: 'rect', label: '时钟', x: 25, y: 88, w: 161, h: 160 },
+    { id: 'fitness', shape: 'rect', label: '健身', x: 207, y: 88, w: 160, h: 160 },
+    { id: 'travel', shape: 'folder', label: '旅行', x: 119, y: 284, w: 63, h: 63, icons: iconSet('photos', 'whatsapp', 'spotify') },
+    { id: 'photos-video', shape: 'folder', label: '照片与视频', x: 210, y: 284, w: 63, h: 63, icons: iconSet('github', 'spotify') },
+    { id: 'mail', shape: 'folder', label: '📧', x: 29, y: 381, w: 63, h: 63, icons: iconSet('photos', 'whatsapp', 'spotify', 'notion') },
+    { id: 'games', shape: 'folder', label: '🎮', x: 119, y: 381, w: 63, h: 63, icons: iconSet('github', 'youtube', 'figma', 'spotify') },
+    { id: 'shopping', shape: 'folder', label: '💰', x: 210, y: 381, w: 63, h: 63, icons: iconSet('whatsapp', 'youtube', 'figma', 'photos') },
+    { id: 'music', shape: 'folder', label: '🎵', x: 301, y: 381, w: 63, h: 63, icons: iconSet('youtube', 'spotify', 'photos') },
+    { id: 'social', shape: 'folder', label: '社交', x: 119, y: 479, w: 63, h: 63, icons: iconSet('youtube', 'figma', 'whatsapp') },
+    { id: 'productivity', shape: 'folder', label: 'Productivity', x: 210, y: 479, w: 63, h: 63, icons: iconSet('notion', 'photos', 'figma', 'spotify') },
+    { id: 'social-2', shape: 'folder', label: '社交', x: 210, y: 577, w: 63, h: 63, icons: iconSet('youtube', 'whatsapp', 'github') },
+];
+
+const HOME_PAGE_TWO = [
+    { id: 'weather-widget', shape: 'rect', label: '天气', x: 26, y: 90, w: 341, h: 160 },
+    { id: 'education', shape: 'folder', label: '教育', x: 302, y: 286, w: 63, h: 63, icons: iconSet('spotify', 'photos') },
+    { id: 'utilities', shape: 'folder', label: '🈚', x: 121, y: 383, w: 63, h: 63, icons: iconSet('github', 'photos', 'figma', 'notion') },
+    { id: 'tools', shape: 'folder', label: '工具🛠️', x: 211, y: 383, w: 63, h: 63, icons: iconSet('notion', 'github', 'figma', 'spotify') },
+    { id: 'battery-widget', shape: 'rect', label: '电池', x: 26, y: 482, w: 341, h: 160 },
+];
+
 function homePage(w, h) {
-  return inPhone(w, h, [
-    { id: 'clock', shape: 'folder', label: 'Clock', x: 22, y: 145, w: 166, h: 166, icons: iconSet('notion', 'github', 'photos', 'spotify') },
-    { id: 'fitness', shape: 'folder', label: 'Fitness', x: 205, y: 145, w: 166, h: 166, icons: iconSet('spotify', 'photos', 'whatsapp', 'figma') },
-    { id: 'travel', shape: 'folder', label: 'Travel', x: 22, y: 352, w: 104, h: 104, icons: iconSet('photos', 'whatsapp', 'spotify', 'notion') },
-    { id: 'games', shape: 'folder', label: 'Games', x: 145, y: 352, w: 104, h: 104, icons: iconSet('github', 'youtube', 'figma', 'spotify') },
-    { id: 'social', shape: 'folder', label: 'Social', x: 267, y: 352, w: 104, h: 104, icons: iconSet('whatsapp', 'youtube', 'figma', 'photos') },
-    { id: 'studio', shape: 'folder', label: 'Studio', x: 22, y: 510, w: 104, h: 104, icons: iconSet('figma', 'photos', 'github', 'youtube') },
-    { id: 'work', shape: 'folder', label: 'Work', x: 145, y: 510, w: 104, h: 104, icons: iconSet('notion', 'github', 'figma', 'photos') },
-    { id: 'media', shape: 'folder', label: 'Media', x: 267, y: 510, w: 104, h: 104, icons: iconSet('youtube', 'spotify', 'photos', 'whatsapp') },
-    { id: 'dock', shape: 'pill', label: 'Dock', x: 18, y: 744, w: 357, h: 76, icons: iconSet('whatsapp', 'spotify', 'photos', 'github') },
-  ]);
+  const frame = phoneFrame(w, h);
+  const pageElements = [HOME_PAGE_ONE, HOME_PAGE_TWO].flatMap((specs, phonePage) => specs.map((spec) => {
+    const rect = phoneRect(frame, spec.x + phonePage * PHONE_SCREEN_WIDTH, spec.y, spec.w, spec.h);
+    return {
+      ...spec,
+      ...rect,
+      id: `home-${phonePage + 1}-${spec.id}`,
+      homeId: spec.id,
+      phonePage,
+      phoneBaseX: rect.x,
+    };
+  }));
+  const dockSpec = { id: 'dock', shape: 'pill', label: 'Dock', x: 17, y: 731, w: 359, h: 91 };
+  return [...pageElements, { ...dockSpec, ...phoneRect(frame, dockSpec.x, dockSpec.y, dockSpec.w, dockSpec.h) }];
 }
 
 function notification(w, h) {
   return inPhone(w, h, [
-    { id: 'headline', shape: 'rect', label: 'Match result', x: 18, y: 291, w: 357, h: 78 },
-    { id: 'building', shape: 'rect', label: 'Five Condos', x: 18, y: 382, w: 357, h: 112 },
-    { id: 'message', shape: 'rect', label: 'Oliverrr', x: 18, y: 508, w: 357, h: 92 },
+    { id: 'headline', shape: 'rect', label: 'Match result', x: 18, y: 291, w: 357, h: 78, tint: 0.86, tintTone: 'light' },
+    { id: 'building', shape: 'rect', label: 'Five Condos', x: 18, y: 382, w: 357, h: 112, tint: 0.86, tintTone: 'light' },
+    { id: 'message', shape: 'rect', label: 'Oliverrr', x: 18, y: 508, w: 357, h: 92, tint: 0.86, tintTone: 'light' },
     { id: 'flashlight', shape: 'circle', label: 'Flashlight', x: 42, y: 748, w: 62, h: 62 },
     { id: 'camera', shape: 'circle', label: 'Camera', x: 289, y: 748, w: 62, h: 62 },
   ]);
@@ -141,13 +170,14 @@ export const SCENES = [
   { id: 'flow-lines', name: 'Flow Lines', kind: 'Abstract lines', backdrop: { type: 'image', src: WALLPAPERS['abstract-lines'], thumb: thumbOf('abstract-lines') }, layout: shapeSet },
   { id: 'color-blocks', name: 'Color Blocks', kind: 'Hard colour edges', backdrop: { type: 'image', src: WALLPAPERS['color-blocks'], thumb: thumbOf('color-blocks') }, layout: shapeSet },
   { id: 'night-city', name: 'Rainy City', kind: 'Dark, high contrast', backdrop: { type: 'image', src: WALLPAPERS['night-city'], thumb: thumbOf('night-city') }, layout: shapeSet },
-  { id: 'tab-bar', name: 'Home Page', kind: 'Fixed iPhone home screen', phoneView: 'home', lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'spectrum', tint: '#445dff', thumb: phoneThumbOf('home-page') }, layout: homePage },
+  { id: 'tab-bar', name: 'Home Page', kind: 'Swipeable iPhone home screen', phoneView: 'home', phonePages: 2, lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'image', src: WALLPAPERS['home-page-sunset'], tint: '#334d69', thumb: phoneThumbOf('home-page-sunset') }, layout: homePage },
   { id: 'notification', name: 'Notification', kind: 'Fixed iPhone lock screen', phoneView: 'notification', lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'type', tint: '#b7aa93', thumb: phoneThumbOf('notification') }, layout: notification },
   { id: 'control-centre', name: 'Control Centre', kind: 'Fixed iPhone controls', phoneView: 'control-centre', lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'neon', tint: '#9b0f71', thumb: phoneThumbOf('control-centre') }, layout: controlCentre },
   { id: 'scrolling-feed', name: 'Scrolling feed', kind: 'Live backdrop', backdrop: { type: 'feed', tint: '#1d2430', animated: true, thumb: phoneThumbOf('scrolling-feed') }, layout: scrollingFeed },
 ];
 
 export function sceneById(id) {
+  if (id === 'home-page-2') return SCENES.find((scene) => scene.id === 'tab-bar');
   return SCENES.find((scene) => scene.id === id) ?? SCENES[0];
 }
 

@@ -28,6 +28,14 @@ function normalizeElement(input, index) {
   if (!(width > 0) || !(height > 0)) {
     throw new TypeError('Liquid glass V2 elements need a positive width and height.');
   }
+  const tint = input.tint == null ? undefined : Number(input.tint);
+  if (tint !== undefined && !Number.isFinite(tint)) {
+    throw new TypeError('Liquid glass V2 element tint must be a finite number.');
+  }
+  const tintTone = input.tintTone ?? 'auto';
+  if (!['auto', 'light', 'dark'].includes(tintTone)) {
+    throw new TypeError(`Unknown liquid glass V2 tint tone: ${tintTone}`);
+  }
   return {
     ...input,
     id: input.id ?? `glass-v2-${index + 1}`,
@@ -36,6 +44,8 @@ function normalizeElement(input, index) {
     y: Number(input.y ?? 0),
     w: width,
     h: height,
+    ...(tint === undefined ? {} : { tint }),
+    ...(input.tintTone == null ? {} : { tintTone }),
   };
 }
 
@@ -406,6 +416,23 @@ export class LiquidGlassWebGLV2 {
     return [mixedX / mixedLength, mixedY / mixedLength];
   }
 
+  tintLightForElement(element, width, height) {
+    if (element.tintTone === 'light') return 1;
+    if (element.tintTone === 'dark') return 0;
+    const positions = [-0.34, 0, 0.34];
+    let luminance = 0;
+    for (const sampleY of positions) {
+      for (const sampleX of positions) {
+        const x = (element.x + element.w * (0.5 + sampleX)) / Math.max(width, 1);
+        const y = (element.y + element.h * (0.5 + sampleY)) / Math.max(height, 1);
+        luminance += this.sampleLuminance(x, y);
+      }
+    }
+    const average = luminance / (positions.length * positions.length);
+    const t = Math.max(0, Math.min(1, (average - 0.22) / (0.50 - 0.22)));
+    return t * t * (3 - 2 * t);
+  }
+
   render(options = {}) {
     if (this.renderer.lost) return this;
     const width = this.canvas.clientWidth || this.canvas.width || 1;
@@ -454,6 +481,9 @@ export class LiquidGlassWebGLV2 {
       this.smoothedLightDirections.set(element.id, direction);
       return direction;
     });
+    const tintLights = this.elements.map((element) => (
+      this.tintLightForElement(element, width, height)
+    ));
     this.lastLightBlendTime = now;
     if (this.elements.length > MAX_GLASS_SHAPES && !this.warnedShapeLimit) {
       this.warnedShapeLimit = true;
@@ -465,6 +495,7 @@ export class LiquidGlassWebGLV2 {
         material,
         dpr,
         lightDirections.slice(i, i + MAX_GLASS_SHAPES),
+        tintLights.slice(i, i + MAX_GLASS_SHAPES),
       );
     }
 
