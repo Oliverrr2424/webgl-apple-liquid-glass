@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Liquid Glass — Playground</title>
-<link rel="preload" as="image" href="./assets/wallpapers/natural-lake.webp">
+<link rel="preload" as="image" href="./assets/wallpapers/home-page-warm.png">
 <style>
   * { box-sizing: border-box; }
   :root {
@@ -23,7 +23,8 @@
     font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
   #app { display: grid; grid-template-columns: minmax(0, 1fr) 364px; height: 100%; }
   #stage { position: relative; min-width: 0; overflow: hidden; background: #0b0c0f; }
-  #content, #gl, #ui { position: absolute; inset: 0; display: block; }
+  #content, #scrim, #gl, #ui { position: absolute; inset: 0; display: block; }
+  #scrim { pointer-events: none; }
   #ui { touch-action: none; cursor: default; }
   #ui:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   #stageHud { position: absolute; left: 24px; bottom: 22px; pointer-events: none; text-shadow: 0 2px 16px rgba(0,0,0,.48); }
@@ -32,6 +33,25 @@
   #stageHud span { color: rgba(255,255,255,.72); font-size: 11px; }
   #loadState { position: absolute; top: 18px; left: 20px; padding: 6px 9px; color: rgba(255,255,255,.75); font-size: 10px; border: 1px solid rgba(255,255,255,.16); background: rgba(9,11,16,.40); border-radius: 999px; backdrop-filter: blur(10px); transition: opacity .3s ease; }
   body.wallpapers-ready #loadState { opacity: 0; }
+  #phoneGestureTips { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+  #phoneGestureTips[hidden] { display: none; }
+  .gestureTip[hidden] { display: none; }
+  .gestureTip { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 7px; width: 150px; padding: 6px 7px; color: rgba(246,248,255,.84); border: 1px solid rgba(255,255,255,.14); border-radius: 9px; background: rgba(14,16,22,.58); backdrop-filter: blur(10px); box-shadow: 0 6px 16px rgba(0,0,0,.28); opacity: .5; pointer-events: auto; transition: opacity .25s ease, background .2s ease, border-color .2s ease; animation: gestureTipFade 6.5s ease-in-out infinite; }
+  .gestureTip:hover { opacity: .98; background: rgba(30,38,58,.72); border-color: rgba(154,186,255,.4); animation-play-state: paused; }
+  .gestureTip strong { display: block; color: rgba(255,255,255,.96); font-size: 10.5px; font-weight: 600; line-height: 1.2; }
+  .gestureTip small { display: block; margin-top: 2px; overflow: hidden; color: rgba(220,228,242,.7); font-size: 9px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+  .gestureTipIcon { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 20px; color: rgba(198,215,255,.95); border: 1px solid rgba(154,186,255,.4); border-radius: 50%; font-size: 12px; }
+  .gestureTipClose { width: 18px; min-height: 18px; flex: 0 0 18px; margin-left: auto; padding: 0; color: rgba(255,255,255,.6); border: 0; border-radius: 50%; background: transparent; font-size: 14px; line-height: 1; }
+  .gestureTipClose:hover { color: #fff; background: rgba(255,255,255,.14); }
+  .gestureTip--notification { transform: translate(-100%, -50%); }
+  .gestureTip--control { transform: translate(0, -50%); }
+  .gestureTip--page { width: auto; padding: 4px 8px 4px 6px; transform: translate(-50%, -100%); }
+  .gestureTip--page small { display: none; }
+  .gestureTip--page strong { font-size: 10px; white-space: nowrap; }
+  .gestureTip--page .gestureTipIcon { width: 17px; height: 17px; flex: 0 0 17px; }
+  .gestureTip--notification:nth-child(2) { animation-delay: -2.1s; }
+  .gestureTip--control:nth-child(3) { animation-delay: -4.2s; }
+  @keyframes gestureTipFade { 0%, 100% { opacity: .34; } 35%, 65% { opacity: .78; } }
   #unsupported { position: absolute; inset: 0; z-index: 5; display: grid; place-content: center; gap: 8px; padding: 40px; text-align: center; background: #0b0d10; }
   /* An id selector outranks the user agent's [hidden] rule, so say it here. */
   #unsupported[hidden] { display: none; }
@@ -75,6 +95,9 @@
   .sceneUpload.phoneMode { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sceneUploadRow { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
   .sceneUploadRow[hidden] { display: none; }
+  .wallpaperControl { display: grid; gap: 4px; }
+  .wallpaperControl label { color: var(--muted); font-size: 9px; }
+  .wallpaperControl select { width: 100%; min-width: 0; }
   .uploadButton { width: 100%; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 30px; padding: 0 8px; border: 1px dashed rgba(255,255,255,.22); border-radius: 8px; color: #cbd5e8; background: rgba(255,255,255,.025); font-size: 10px; cursor: pointer; transition: background .16s ease, border-color .16s ease; }
   .uploadButton:hover { background: var(--surface-raised); border-color: var(--line-strong); }
   .uploadButton span { color: var(--accent); font-size: 14px; line-height: 1; }
@@ -129,9 +152,27 @@
 <div id="app">
   <div id="stage">
     <canvas id="content" aria-hidden="true"></canvas>
+    <canvas id="scrim" aria-hidden="true"></canvas>
     <canvas id="gl" aria-hidden="true"></canvas>
     <canvas id="ui" tabindex="0" role="application"
       aria-label="Liquid glass stage. Drag a component, or select one and move it with the arrow keys."></canvas>
+    <div id="phoneGestureTips" hidden aria-live="polite">
+      <div class="gestureTip gestureTip--page" id="pageGestureTip" data-gesture-tip="page" title="Swipe left or right to change the home screen page">
+        <span class="gestureTipIcon" aria-hidden="true">↔</span>
+        <span><strong>Swipe pages</strong><small>Drag left or right</small></span>
+        <button class="gestureTipClose" type="button" aria-label="Dismiss swipe pages tip">×</button>
+      </div>
+      <div class="gestureTip gestureTip--notification" id="notificationGestureTip" data-gesture-tip="notification" title="Pull down from the top-left of the screen, then swipe up to close">
+        <span class="gestureTipIcon" aria-hidden="true">↓</span>
+        <span><strong>Notifications</strong><small>Pull down, top-left</small></span>
+        <button class="gestureTipClose" type="button" aria-label="Dismiss notifications tip">×</button>
+      </div>
+      <div class="gestureTip gestureTip--control" id="controlGestureTip" data-gesture-tip="control" title="Pull down from the top-right of the screen, then swipe up to close">
+        <span class="gestureTipIcon" aria-hidden="true">↓</span>
+        <span><strong>Control Centre</strong><small>Pull down, top-right</small></span>
+        <button class="gestureTipClose" type="button" aria-label="Dismiss control centre tip">×</button>
+      </div>
+    </div>
     <button id="showPanel" type="button" aria-label="Show inspector" title="Show inspector">Inspector</button>
     <div id="loadState">Loading source imagery</div>
     <div id="stageHud"><div class="eyebrow" id="hudVersion">LIQUID GLASS / V1</div><strong id="hudScene">Alpine Lake</strong><span id="hudKind">Natural landscape</span></div>
@@ -182,14 +223,21 @@
       <div class="sceneGrid" id="scenePicker"></div>
       <div class="sceneUpload" id="sceneUpload">
         <div class="sceneUploadRow" id="testSceneUpload">
-          <label class="uploadButton" for="customMedia"><span aria-hidden="true">＋</span>Test scene</label>
+          <div class="wallpaperControl">
+            <label for="customMedia">Test scene</label>
+          </div>
+          <label class="uploadButton" for="customMedia"><span aria-hidden="true">＋</span>Upload</label>
           <input class="srOnly" id="customMedia" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" aria-label="Upload an image or video as a four-component test scene">
           <span class="uploadStatus" id="customSceneStatus">Image or video</span>
         </div>
         <div class="sceneUploadRow" id="phoneWallpaperUpload" hidden>
-          <label class="uploadButton" for="phoneWallpaper"><span aria-hidden="true">＋</span>Phone wallpaper</label>
+          <div class="wallpaperControl">
+            <label for="phoneWallpaperPreset">Wallpaper</label>
+            <select id="phoneWallpaperPreset" aria-label="Choose a phone wallpaper"></select>
+          </div>
+          <label class="uploadButton" for="phoneWallpaper"><span aria-hidden="true">＋</span>Add wallpaper</label>
           <input class="srOnly" id="phoneWallpaper" type="file" accept="image/*" aria-label="Upload a custom wallpaper for the selected phone scene">
-          <span class="uploadStatus" id="phoneWallpaperStatus">Only for phone scenes</span>
+          <span class="uploadStatus" id="phoneWallpaperStatus">Choose a phone scene first</span>
         </div>
       </div>
     </div>
@@ -247,6 +295,6 @@
   </div>
 </div>
 <div id="announcer" class="srOnly" role="status" aria-live="polite"></div>
-<script type="module" src="./playground/main.js?phone-scenes=6"></script>
+<script type="module" src="./playground/main.js?phone-scenes=7"></script>
 </body>
 </html>

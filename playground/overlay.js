@@ -1,6 +1,6 @@
 // Everything that sits ON TOP of the glass: app icons, folder label, badge.
 
-import { drawPhoneChrome, drawPhoneIcon, phoneFrame } from './phone.js?phone-scenes=3';
+import { drawPhoneChrome, drawPhoneIcon, phoneFrame } from './phone.js?phone-scenes=7';
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -339,38 +339,38 @@ function drawWeatherWidget(ctx, element) {
   ctx.fillStyle = panel;
   ctx.fill();
 
-  phoneText(ctx, '闵行区', element.x + 18 * u, element.y + 29 * u, 15 * u, { weight: 600 });
+  phoneText(ctx, 'Minhang', element.x + 18 * u, element.y + 28 * u, 13 * u, { weight: 600 });
   ctx.save();
-  ctx.translate(element.x + 68 * u, element.y + 24 * u);
+  ctx.translate(element.x + 64 * u, element.y + 24 * u);
   ctx.rotate(-0.62);
   ctx.beginPath();
   ctx.moveTo(0, -4.5 * u); ctx.lineTo(3.6 * u, 4.4 * u);
   ctx.lineTo(0, 2.1 * u); ctx.lineTo(-3.6 * u, 4.4 * u); ctx.closePath();
   ctx.fillStyle = '#fff'; ctx.fill();
   ctx.restore();
-  phoneText(ctx, '26°', element.x + 18 * u, element.y + 72 * u, 41 * u, { weight: 320 });
+  phoneText(ctx, '26°', element.x + 18 * u, element.y + 70 * u, 35 * u, { weight: 320 });
 
-  drawWeatherGlyph(ctx, 'moon', element.x + 315 * u, element.y + 27 * u, 20 * u);
-  phoneText(ctx, '晴朗无云', element.x + 323 * u, element.y + 50 * u, 13.5 * u,
+  drawWeatherGlyph(ctx, 'moon', element.x + 315 * u, element.y + 26 * u, 18 * u);
+  phoneText(ctx, 'Clear', element.x + 323 * u, element.y + 48 * u, 12 * u,
     { align: 'right', weight: 550 });
-  phoneText(ctx, '最', element.x + 231 * u, element.y + 64 * u, 8.5 * u, { weight: 600 });
-  phoneText(ctx, '高', element.x + 231 * u, element.y + 75 * u, 8.5 * u, { weight: 600 });
-  phoneText(ctx, '32°', element.x + 244 * u, element.y + 72 * u, 23 * u, { weight: 350 });
-  phoneText(ctx, '最', element.x + 281 * u, element.y + 64 * u, 8.5 * u, { weight: 600 });
-  phoneText(ctx, '低', element.x + 281 * u, element.y + 75 * u, 8.5 * u, { weight: 600 });
-  phoneText(ctx, '25°', element.x + 294 * u, element.y + 72 * u, 23 * u, { weight: 350 });
+  phoneText(ctx, 'High', element.x + 228 * u, element.y + 69 * u, 7.5 * u,
+    { align: 'right', weight: 600 });
+  phoneText(ctx, '32°', element.x + 232 * u, element.y + 71 * u, 18 * u, { weight: 350 });
+  phoneText(ctx, 'Low', element.x + 302 * u, element.y + 69 * u, 7.5 * u,
+    { align: 'right', weight: 600 });
+  phoneText(ctx, '25°', element.x + 306 * u, element.y + 71 * u, 18 * u, { weight: 350 });
 
   const hours = [
-    ['2时', 'moon', '26°', '#fff'], ['3时', 'moon', '26°', '#fff'],
-    ['4时', 'moon', '25°', '#fff'], ['5时', 'cloud', '25°', '#fff'],
-    ['05:21', 'sunrise', '26°', '#ffdc3d'], ['6时', 'sun', '26°', '#ffdc3d'],
+    ['2 AM', 'moon', '26°', '#fff'], ['3 AM', 'moon', '26°', '#fff'],
+    ['4 AM', 'moon', '25°', '#fff'], ['5 AM', 'cloud', '25°', '#fff'],
+    ['05:21', 'sunrise', '26°', '#ffdc3d'], ['6 AM', 'sun', '26°', '#ffdc3d'],
   ];
   hours.forEach(([time, kind, temp, iconColor], index) => {
     const x = element.x + (29 + index * 56.5) * u;
-    phoneText(ctx, time, x, element.y + 95 * u, (time.length > 3 ? 10.5 : 10.7) * u,
+    phoneText(ctx, time, x, element.y + 95 * u, (time.length > 3 ? 9.3 : 9.5) * u,
       { align: 'center', weight: 600, color: 'rgba(255,255,255,.68)' });
-    drawWeatherGlyph(ctx, kind, x, element.y + 116 * u, 19 * u, iconColor);
-    phoneText(ctx, temp, x, element.y + 145 * u, 12.5 * u,
+    drawWeatherGlyph(ctx, kind, x, element.y + 116 * u, 17 * u, iconColor);
+    phoneText(ctx, temp, x, element.y + 144 * u, 11 * u,
       { align: 'center', weight: 550 });
   });
   ctx.restore();
@@ -437,9 +437,9 @@ function drawBatteryWidget(ctx, element) {
   });
 }
 
-function drawHomeApp(ctx, frame, { x, y, kind, label }, offsetX = 0) {
+function drawHomeApp(ctx, frame, { x, y, kind, label, size: logicalSize = 63 }, offsetX = 0) {
   const s = frame.scale;
-  const size = 63 * s;
+  const size = logicalSize * s;
   const left = frame.screen.x + x * s + offsetX;
   const top = frame.screen.y + y * s;
   ctx.save();
@@ -543,7 +543,7 @@ function drawHomeApp(ctx, frame, { x, y, kind, label }, offsetX = 0) {
     ctx.beginPath(); ctx.arc(left + 31.5 * s, top + 28 * s, 4 * s, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.82;
     ctx.font = `600 ${8 * s}px -apple-system, "PingFang SC", system-ui, sans-serif`;
-    ctx.fillText('预见美', left + size / 2, top + 54 * s); ctx.globalAlpha = 1;
+    ctx.fillText('Beauty', left + size / 2, top + 54 * s); ctx.globalAlpha = 1;
   } else if (kind === 'weather') {
     ctx.fillStyle = '#fff';
     ctx.beginPath(); ctx.arc(left + 36 * s, top + 27 * s, 15 * s, 0, Math.PI * 2); ctx.fillStyle = '#ffdc3d'; ctx.fill();
@@ -567,23 +567,74 @@ function drawHomeApp(ctx, frame, { x, y, kind, label }, offsetX = 0) {
     ctx.fillText(kind === 'tiger' ? '虎' : kind === 'settings' ? '⚙' : '☎', left + size / 2, top + size / 2 + 2 * s);
   }
   ctx.restore();
-  if (label) phoneText(ctx, label, left + size / 2, top + size + 17 * s, 12 * s,
-    { align: 'center', weight: 550, color: '#fff' });
+  if (label) drawFittedLabel(ctx, label, left + size / 2, top + size + 8 * s,
+    HOME_LABEL_SIZE * s, size * 1.3, { align: 'center', weight: 550, color: '#fff' });
 }
 
 function drawHomeDock(ctx, frame) {
+  const dockX = 17;
+  const dockY = 731;
+  const dockW = 359;
+  const dockH = 91;
+  const size = 60;
+  const gap = 20;
+  const startX = dockX + (dockW - size * 4 - gap * 3) / 2;
+  const topY = dockY + (dockH - size) / 2;
   const apps = [
-    { x: 35, kind: 'phone' }, { x: 119, kind: 'messages' },
-    { x: 210, kind: 'safari' }, { x: 301, kind: 'chrome' },
+    { kind: 'phone' }, { kind: 'messages' },
+    { kind: 'safari' }, { kind: 'chrome' },
   ];
-  apps.forEach((app) => drawHomeApp(ctx, frame, { ...app, y: 756, label: '' }));
+  apps.forEach((app, index) => drawHomeApp(ctx, frame, {
+    ...app, x: startX + index * (size + gap), y: topY, size, label: '',
+  }));
 }
 
-function drawHomeLabel(ctx, element) {
+/**
+ * Home Screen labels share one type size at any stage scale. A name that does
+ * not fit is squeezed by a few percent and then truncated, the way iOS does
+ * it - scaling every long name down instead would make the grid look like a
+ * dozen different fonts.
+ */
+function drawFittedLabel(ctx, text, x, y, baseSize, maxWidth, options = {}) {
+  if (!text) return;
+  ctx.save();
+  const family = options.family ?? '-apple-system, "SF Pro Display", "PingFang SC", system-ui, sans-serif';
+  const weight = options.weight ?? 550;
+  const fontFor = (fontSize) => `${weight} ${fontSize}px ${family}`;
+  const minScale = options.minScale ?? 0.86;
+  ctx.font = fontFor(baseSize);
+  let measured = ctx.measureText(text).width;
+  let size = baseSize;
+  if (measured > maxWidth) {
+    size = Math.max(baseSize * minScale, baseSize * maxWidth / measured);
+    ctx.font = fontFor(size);
+    measured = ctx.measureText(text).width;
+  }
+  let label = text;
+  if (measured > maxWidth) {
+    while (label.length > 1 && ctx.measureText(`${label}…`).width > maxWidth) label = label.slice(0, -1);
+    label = `${label}…`;
+  }
+  ctx.fillStyle = options.color ?? '#fff';
+  ctx.globalAlpha = options.alpha ?? 1;
+  ctx.textAlign = options.align ?? 'center';
+  ctx.textBaseline = options.baseline ?? 'top';
+  ctx.shadowColor = options.shadowColor ?? 'rgba(0,0,0,.45)';
+  ctx.shadowBlur = options.shadowBlur ?? Math.max(2, size * 0.32);
+  ctx.fillText(label, x, y);
+  ctx.restore();
+}
+
+// One label size for widgets, folders and apps alike; it only tracks the
+// stage scale, never the size of the thing it sits under.
+const HOME_LABEL_SIZE = 11.5;
+
+function drawHomeLabel(ctx, frame, element) {
+  const s = frame.scale;
   const large = element.w > 100;
-  const size = large ? 13 : (element.label.length > 8 ? 9.2 : 11.5);
-  phoneText(ctx, element.label, element.x + element.w / 2,
-    element.y + element.h + (large ? 18 : 14), size,
+  drawFittedLabel(ctx, element.label, element.x + element.w / 2,
+    element.y + element.h + (large ? 15 : 8) * s,
+    HOME_LABEL_SIZE * s, element.w * (large ? 0.95 : 1.3),
     { align: 'center', weight: 550, color: '#fff' });
 }
 
@@ -592,16 +643,16 @@ function drawHomePage1(ctx, frame, elements, offsetX) {
     if (element.homeId === 'clock') drawClockWidget(ctx, element);
     else if (element.homeId === 'fitness') drawFitnessWidget(ctx, element);
     else drawGlassContents(ctx, element);
-    drawHomeLabel(ctx, element);
+    drawHomeLabel(ctx, frame, element);
   }
   [
-    { x: 29, y: 284, kind: 'calendar', label: '日历' },
+    { x: 29, y: 284, kind: 'calendar', label: 'Calendar' },
     { x: 301, y: 284, kind: 'appstore', label: 'App Store' },
-    { x: 29, y: 479, kind: 'tiger', label: '虎扑' },
-    { x: 301, y: 479, kind: 'camera', label: '相机' },
-    { x: 29, y: 577, kind: 'settings', label: '设置' },
-    { x: 119, y: 577, kind: 'wechat', label: '微信' },
-    { x: 301, y: 577, kind: 'photos', label: '照片' },
+    { x: 29, y: 479, kind: 'tiger', label: 'Hupu' },
+    { x: 301, y: 479, kind: 'camera', label: 'Camera' },
+    { x: 29, y: 577, kind: 'settings', label: 'Settings' },
+    { x: 119, y: 577, kind: 'wechat', label: 'WeChat' },
+    { x: 301, y: 577, kind: 'photos', label: 'Photos' },
   ].forEach((app) => drawHomeApp(ctx, frame, app, offsetX));
 }
 
@@ -622,13 +673,13 @@ function drawHomePage2(ctx, frame, elements, offsetX) {
     if (element.homeId === 'weather-widget') drawWeatherWidget(ctx, element);
     else if (element.homeId === 'battery-widget') drawBatteryWidget(ctx, element);
     else drawGlassContents(ctx, element);
-    drawHomeLabel(ctx, element);
+    drawHomeLabel(ctx, frame, element);
   }
   [
-    { x: 30, y: 286, kind: 'baidu', label: '百度网盘' },
-    { x: 121, y: 286, kind: 'flight', label: '飞常准' },
-    { x: 211, y: 286, kind: 'lijing', label: '莉景天气' },
-    { x: 30, y: 383, kind: 'weather', label: '天气' },
+    { x: 30, y: 286, kind: 'baidu', label: 'Baidu Drive' },
+    { x: 121, y: 286, kind: 'flight', label: 'Flight Tracker' },
+    { x: 211, y: 286, kind: 'lijing', label: 'Lijing Weather' },
+    { x: 30, y: 383, kind: 'weather', label: 'Weather' },
     { x: 302, y: 383, kind: 'shadowrocket', label: 'Shadowrocket' },
   ].forEach((app) => drawHomeApp(ctx, frame, app, offsetX));
 }
@@ -716,9 +767,10 @@ function drawControlOverlay(ctx, frame, elements) {
 
   const brightness = byId.get('brightness');
   const volume = byId.get('volume');
-  for (const [element, level] of [[brightness, 0.42], [volume, 0.3]]) {
+  for (const [element, level] of [[brightness, 0.5], [volume, 0.4]]) {
     const inset = 8 * frame.scale;
-    const fillHeight = Math.max(element.w - inset * 2, (element.h - inset * 2) * level);
+    const minPillHeight = (element.w - inset * 2) * 1.5;
+    const fillHeight = Math.max(minPillHeight, (element.h - inset * 2) * level);
     const fillY = element.y + element.h - inset - fillHeight;
     ctx.save();
     ctx.beginPath();
@@ -732,6 +784,24 @@ function drawControlOverlay(ctx, frame, elements) {
     brightness.y + brightness.h * 0.74, brightness.w * 0.34, brightness.w * 0.34, '#f4c11b');
   drawPhoneIcon(ctx, 'volume', volume.x + volume.w * 0.31,
     volume.y + volume.h * 0.75, volume.w * 0.38, volume.w * 0.38, '#12a4d8');
+}
+
+/**
+ * Draw a Notification / Control Centre sheet that is sliding over the Home
+ * Screen. `offsetY` is how far the sheet still is from its resting place, so
+ * the artwork travels with the glass instead of being revealed by a mask.
+ */
+export function drawPhonePanelOverlay(ctx, kind, elements, width, height, version, offsetY) {
+  const frame = phoneFrame(width, height);
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(frame.screen.x, frame.screen.y, frame.screen.w, frame.screen.h, frame.screen.r);
+  ctx.clip();
+  ctx.translate(0, offsetY);
+  if (kind === 'notification') drawNotificationOverlay(ctx, frame, elements, version);
+  else drawControlOverlay(ctx, frame, elements);
+  drawPhoneChrome(ctx, frame, {});
+  ctx.restore();
 }
 
 /** Draw fixed iOS UI above the glass, including status glyphs and hardware. */

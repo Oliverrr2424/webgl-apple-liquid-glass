@@ -7,6 +7,31 @@ This package is framework-free and renders Apple-inspired translucent surfaces w
 
 ## V2 demos
 
+The latest V2 playground pass is shown first: a live Home Page / Notification Centre
+interaction, a glass-material motion study, and the finished phone screens on both
+wallpapers.
+
+<p align="center">
+  <img src="assets/readme/v2-home-interaction.gif" alt="Liquid Glass V2 iPhone Home Page and Notification Centre interaction" width="360">
+</p>
+
+<p align="center">
+  <img src="assets/readme/v2-glass-showcase.gif" alt="Liquid Glass V2 animated glass material showcase" width="720">
+</p>
+
+<table>
+  <tr>
+    <td><img src="assets/readme/v2-home-page-warm.png" alt="Liquid Glass V2 Home Page on warm fold wallpaper"></td>
+    <td><img src="assets/readme/v2-home-page-sunset.png" alt="Liquid Glass V2 Home Page on sunset lake wallpaper"></td>
+  </tr>
+  <tr>
+    <td><img src="assets/readme/v2-home-page-2.png" alt="Liquid Glass V2 second Home Page on sunset lake wallpaper"></td>
+    <td><img src="assets/readme/v2-night-city.png" alt="Liquid Glass V2 glass surfaces on a night city backdrop"></td>
+  </tr>
+</table>
+
+### Reference scenes
+
 ### Alpine Lake
 
 ![Liquid Glass V2 on Alpine Lake](https://unpkg.com/apple-liquid-glass-webgl@2.0.2/assets/readme/v2-alpine-lake.jpg)

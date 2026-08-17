@@ -54,7 +54,9 @@
     "src/v2-material.js",
     "src/v2-geometry.js",
     "assets/wallpapers/abstract-lines.webp",
-    "assets/readme/v2-*.jpg"
+    "assets/readme/v2-*.jpg",
+    "assets/readme/v2-*.png",
+    "assets/readme/v2-*.gif"
   ],
   "scripts": {
     "test": "npm run test:unit && npm run test:browser",

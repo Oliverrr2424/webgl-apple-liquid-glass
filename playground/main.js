@@ -8,19 +8,26 @@ import {
   LiquidGlassWebGL, LiquidGlassWebGLV2, connectedElementGroups,
   getDefaultMaterialV2, makeMaterial,
 } from '../src/index.js';
-import { SCENES, ICON_SOURCES, attachIconImages, isAnimated, sceneById } from './scenes.js?phone-scenes=6';
-import { drawSceneBackdrop } from './content.js?phone-scenes=3';
-import { drawGlassContents, drawLabel, drawBadge, drawSelection, drawPhoneSceneOverlay } from './overlay.js?phone-scenes=3';
+import {
+  SCENES, PHONE_WALLPAPER_PRESETS, ICON_SOURCES,
+  attachIconImages, isAnimated, sceneById,
+} from './scenes.js?phone-scenes=7';
+import { drawSceneBackdrop } from './content.js?phone-scenes=7';
+import {
+  drawGlassContents, drawLabel, drawBadge, drawSelection,
+  drawPhoneSceneOverlay, drawPhonePanelOverlay,
+} from './overlay.js?phone-scenes=7';
 import { createInspector } from './inspector.js';
-import { createComponentEditor } from './components.js?phone-scenes=2';
-import { attachStageInteractions } from './interactions.js?phone-scenes=2';
+import { createComponentEditor } from './components.js?phone-scenes=7';
+import { attachStageInteractions } from './interactions.js?phone-scenes=7';
 import { createStats } from './stats.js';
 import { decodeState, toCode, writeHash } from './permalink.js';
-import { PHONE_ICON_SOURCES, attachPhoneIconImages, phoneFrame } from './phone.js?phone-scenes=3';
+import { PHONE_ICON_SOURCES, attachPhoneIconImages, phoneFrame } from './phone.js?phone-scenes=7';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
 const contentCanvas = $('content');
+const scrimCanvas = $('scrim');
 const glCanvas = $('gl');
 const uiCanvas = $('ui');
 const liveRegion = $('announcer');
@@ -35,10 +42,11 @@ if (!LiquidGlassWebGL.isSupported()) {
 }
 
 const contentContext = contentCanvas.getContext('2d');
+const scrimContext = scrimCanvas.getContext('2d');
 const uiContext = uiCanvas.getContext('2d');
 
 const shared = decodeState();
-const initialVersion = shared?.version === 'v2' ? 'v2' : 'v1';
+const initialVersion = shared ? (shared.version === 'v2' ? 'v2' : 'v1') : 'v2';
 const materials = {
   v1: makeMaterial('regular'),
   v2: getDefaultMaterialV2(),
@@ -47,7 +55,7 @@ const materials = {
 const store = {
   version: initialVersion,
   materials,
-  sceneId: sceneById(shared?.sceneId ?? SCENES[0].id).id,
+  sceneId: sceneById(shared?.sceneId ?? 'tab-bar').id,
   material: materials[initialVersion],
   fusion: shared?.fusion ?? true,
   showIcons: shared?.showIcons ?? false,
@@ -58,9 +66,20 @@ const store = {
   movedElements: false,
   customScene: null,
   customObjectUrl: null,
-  customPhoneObjectUrls: new Map(),
+  customPhoneWallpapers: new Map(),
+  phoneWallpaperSelections: new Map([['tab-bar', 'warm-fold']]),
+  gestureTipVisibility: new Map([
+    ['page', true],
+    ['notification', true],
+    ['control', true],
+  ]),
   homePageIndex: 0,
   homePageOffset: 0,
+  // Pulling down beside Dynamic Island slides a live liquid-glass sheet over
+  // the Home Screen: 'notification', 'control-centre', or null when closed.
+  islandPanel: { type: null, progress: 0 },
+  // Home artwork is revealed underneath the sheet during its closing glide.
+  homeReveal: 1,
   stageSize: () => ({ width: stage.clientWidth, height: stage.clientHeight }),
 };
 Object.assign(store.material, shared?.material ?? {});
@@ -106,6 +125,71 @@ function allScenes() {
 }
 
 const PHONE_WALLPAPER_SCENES = new Set(['tab-bar', 'notification', 'control-centre']);
+const ORIGINAL_PHONE_BACKDROPS = new Map(
+  SCENES.filter((scene) => PHONE_WALLPAPER_SCENES.has(scene.id))
+    .map((scene) => [scene.id, { ...scene.backdrop }]),
+);
+
+function phoneWallpaperOptions(scene) {
+  const original = ORIGINAL_PHONE_BACKDROPS.get(scene.id);
+  const originalName = scene.id === 'tab-bar' ? 'Warm fold (scene default)' : 'Scene default';
+  return [
+    { id: 'scene-default', name: originalName, ...original },
+    ...PHONE_WALLPAPER_PRESETS,
+    ...store.customPhoneWallpapers.values(),
+  ];
+}
+
+function selectedPhoneWallpaperId(scene) {
+  if (!scene.phoneView) return null;
+  const explicit = store.phoneWallpaperSelections.get(scene.id);
+  if (explicit) return explicit;
+  const original = ORIGINAL_PHONE_BACKDROPS.get(scene.id);
+  if (scene.backdrop.src && scene.backdrop.src === original?.src) {
+    return scene.id === 'tab-bar' ? 'warm-fold' : 'scene-default';
+  }
+  const preset = PHONE_WALLPAPER_PRESETS.find((entry) => entry.src === scene.backdrop.src);
+  if (preset) return preset.id;
+  const custom = [...store.customPhoneWallpapers.values()].find((entry) => entry.src === scene.backdrop.src);
+  return custom?.id ?? 'scene-default';
+}
+
+const GESTURE_TIP_IDS = [
+  ['page', 'pageGestureTip'],
+  ['notification', 'notificationGestureTip'],
+  ['control', 'controlGestureTip'],
+];
+
+function syncGestureTips() {
+  const home = currentScene().phoneView === 'home' && !panelActive();
+  for (const [id, elementId] of GESTURE_TIP_IDS) {
+    $(elementId).hidden = !home || !store.gestureTipVisibility.get(id);
+  }
+  $('phoneGestureTips').hidden = !home
+    || !GESTURE_TIP_IDS.some(([id]) => store.gestureTipVisibility.get(id));
+  if (home) positionGestureTips();
+}
+
+/** Anchors the floating gesture tips to the Dynamic Island and the screen,
+ * so they read as call-outs for the phone mock rather than sidebar copy. */
+function positionGestureTips() {
+  const { width, height } = store.stageSize();
+  if (!width || !height) return;
+  const frame = phoneFrame(width, height);
+  const s = frame.scale;
+  const islandCenterY = frame.screen.y + (11 + 36 / 2) * s;
+  // The left/right tips sit just outside the bezel so they never cover the
+  // status bar or Dynamic Island itself, only point at their half of it.
+  const notification = $('notificationGestureTip');
+  notification.style.left = `${Math.max(150, frame.outer.x - 16)}px`;
+  notification.style.top = `${islandCenterY}px`;
+  const control = $('controlGestureTip');
+  control.style.left = `${Math.min(width - 150, frame.outer.x + frame.outer.w + 16)}px`;
+  control.style.top = `${islandCenterY}px`;
+  const page = $('pageGestureTip');
+  page.style.left = `${frame.screen.x + frame.screen.w / 2}px`;
+  page.style.top = `${frame.screen.y + 696 * s}px`;
+}
 
 function applyHomePageTransform() {
   if (currentScene().phoneView !== 'home') return;
@@ -197,6 +281,9 @@ let cancelHomePageAnimation = () => {};
 function selectScene(id, { fromShare = false } = {}) {
   const changed = store.sceneId !== id;
   cancelHomePageAnimation();
+  cancelHomeRevealAnimation();
+  store.islandPanel = { type: null, progress: 0 };
+  store.homeReveal = 1;
   store.sceneId = allScenes().some((scene) => scene.id === id) ? id : SCENES[0].id;
   const scene = currentScene();
   if (scene.phoneView === 'home' && changed) store.homePageIndex = 0;
@@ -214,11 +301,162 @@ function selectScene(id, { fromShare = false } = {}) {
   invalidate({ content: true });
 }
 
+function syncPhoneWallpaperUI() {
+  const scene = currentScene();
+  const enabled = PHONE_WALLPAPER_SCENES.has(scene.id);
+  $('phoneWallpaperUpload').hidden = !enabled;
+  if (!enabled) return;
+
+  const select = $('phoneWallpaperPreset');
+  select.replaceChildren();
+  for (const optionData of phoneWallpaperOptions(scene)) {
+    const option = document.createElement('option');
+    option.value = optionData.id;
+    option.textContent = optionData.name;
+    select.appendChild(option);
+  }
+  select.value = selectedPhoneWallpaperId(scene);
+  if (!select.value) select.value = 'scene-default';
+  const selected = phoneWallpaperOptions(scene).find((option) => option.id === select.value);
+  $('phoneWallpaperStatus').textContent = selected?.id === 'scene-default'
+    ? 'Scene wallpaper'
+    : `${selected?.name ?? 'Wallpaper'} selected`;
+}
+
+function setPhoneWallpaper(scene, wallpaperId, { announceChange = true } = {}) {
+  if (!PHONE_WALLPAPER_SCENES.has(scene.id)) return;
+  const original = ORIGINAL_PHONE_BACKDROPS.get(scene.id);
+  const option = phoneWallpaperOptions(scene).find((entry) => entry.id === wallpaperId);
+  if (!option) return;
+
+  if (wallpaperId === 'scene-default') {
+    store.phoneWallpaperSelections.delete(scene.id);
+    scene.backdrop = { ...original };
+  } else {
+    store.phoneWallpaperSelections.set(scene.id, wallpaperId);
+    scene.backdrop = {
+      ...scene.backdrop,
+      type: 'phone',
+      wallpaper: 'image',
+      src: option.src,
+      thumb: option.thumb ?? option.src,
+    };
+  }
+
+  ensureBackdropImage(scene);
+  renderScenePicker();
+  syncPhoneWallpaperUI();
+  syncBackdropMode();
+  sceneStart = performance.now();
+  invalidate({ content: true });
+  queueHash();
+  if (announceChange) announce(`${option.name} wallpaper applied to ${scene.name}.`);
+}
+
+// --------------------------------------------------------- island pull-down
+//
+// Notification Centre and Control Centre are not separate destinations any
+// more: they are live sheets that slide over the Home Screen. While a sheet is
+// on screen the home icons, widgets and dock are hidden, so the wallpaper (dim
+// in proportion to the pull) is the only thing left behind the glass.
+
+const PANEL_LAYOUTS = { notification: 'notification', 'control-centre': 'control-centre' };
+
+function panelActive() {
+  return Boolean(store.islandPanel.type) && store.islandPanel.progress > 0;
+}
+
+/** How far the sheet still has to travel, in stage pixels, at this progress. */
+function panelOffsetY(progress, frame) {
+  return -(1 - progress) * frame.screen.h;
+}
+
+/** The sheet's own glass components, slid down by the current progress. */
+function panelElements() {
+  const { type, progress } = store.islandPanel;
+  if (!type) return [];
+  const { width, height } = store.stageSize();
+  const frame = phoneFrame(width, height);
+  const offsetY = panelOffsetY(progress, frame);
+  return sceneById(PANEL_LAYOUTS[type]).layout(width, height)
+    .map((element) => ({ ...element, y: element.y + offsetY }));
+}
+
+function applyPanelElements() {
+  glass.setElements(panelElements(), false);
+}
+
+function setPanelProgress(progress) {
+  const next = Math.max(0, Math.min(1.08, progress));
+  if (Math.abs(next - store.islandPanel.progress) < 0.0005) return;
+  store.islandPanel.progress = next;
+  applyPanelElements();
+  // The sheet and its scrim are separate lightweight layers. Keep the static
+  // wallpaper upload untouched while the finger is moving.
+  invalidate();
+}
+
+function setHomeReveal(reveal) {
+  const next = Math.max(0, Math.min(1, reveal));
+  if (Math.abs(next - store.homeReveal) < 0.0005) return;
+  store.homeReveal = next;
+  invalidate();
+}
+
+function openPanel(type) {
+  // A tiny positive progress hides Home on the very first frame of the pull.
+  // The sheet is still visually off-screen, so the gesture starts with a clean
+  // wallpaper before the first meaningful panel pixels arrive.
+  cancelHomeRevealAnimation();
+  store.islandPanel = { type, progress: 0.001 };
+  store.homeReveal = 0;
+  syncGestureTips();
+  applyPanelElements();
+  invalidate();
+}
+
+function closePanel() {
+  store.islandPanel = { type: null, progress: 0 };
+  syncGestureTips();
+  applyElements();
+  animateHomeReveal(1, 220);
+  invalidate();
+}
+
 // -------------------------------------------------------------------- render
 let queued = false;
 let contentDirty = true;
 let sceneStart = performance.now();
 let lastSize = { width: 0, height: 0, dpr: 0 };
+let homeRevealAnimationFrame = 0;
+let homeRevealAnimationToken = 0;
+
+function cancelHomeRevealAnimation() {
+  homeRevealAnimationToken += 1;
+  if (homeRevealAnimationFrame) cancelAnimationFrame(homeRevealAnimationFrame);
+  homeRevealAnimationFrame = 0;
+}
+
+function animateHomeReveal(target = 1, duration = 220) {
+  cancelHomeRevealAnimation();
+  const start = store.homeReveal;
+  const reduceMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+  if (reduceMotion?.matches || Math.abs(target - start) < 0.01) {
+    setHomeReveal(target);
+    return;
+  }
+  const animationToken = homeRevealAnimationToken;
+  const startedAt = performance.now();
+  const tick = (now) => {
+    if (animationToken !== homeRevealAnimationToken) return;
+    const progress = Math.min(1, (now - startedAt) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    setHomeReveal(start + (target - start) * eased);
+    if (progress < 1) homeRevealAnimationFrame = requestAnimationFrame(tick);
+    else homeRevealAnimationFrame = 0;
+  };
+  homeRevealAnimationFrame = requestAnimationFrame(tick);
+}
 
 function invalidate({ content = false } = {}) {
   if (content) contentDirty = true;
@@ -233,7 +471,7 @@ function syncSizes() {
   const height = stage.clientHeight;
   const resized = width !== lastSize.width || height !== lastSize.height || dpr !== lastSize.dpr;
   if (resized) {
-    for (const canvas of [contentCanvas, uiCanvas]) {
+    for (const canvas of [contentCanvas, scrimCanvas, uiCanvas]) {
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       canvas.style.width = `${width}px`;
@@ -252,6 +490,7 @@ function syncSizes() {
   } else {
     glCanvas.style.clipPath = 'none';
   }
+  if (resized && scene.phoneView === 'home') positionGestureTips();
   return { width, height, dpr, resized };
 }
 
@@ -259,11 +498,37 @@ function drawOverlayLayer({ width, height, dpr }) {
   uiContext.setTransform(dpr, 0, 0, dpr, 0, 0);
   uiContext.clearRect(0, 0, width, height);
   const scene = currentScene();
-  if (scene.phoneView) {
+  const drawHomeScene = () => {
+    if (scene.phoneView !== 'home' || store.homeReveal >= 0.999) {
+      drawPhoneSceneOverlay(uiContext, scene, store.elements, width, height, store.version, {
+        pageIndex: store.homePageIndex,
+        pageOffset: store.homePageOffset,
+      });
+      return;
+    }
+    const frame = phoneFrame(width, height);
+    uiContext.save();
+    uiContext.globalAlpha = store.homeReveal;
+    uiContext.translate(0, (1 - store.homeReveal) * 10 * frame.scale);
     drawPhoneSceneOverlay(uiContext, scene, store.elements, width, height, store.version, {
       pageIndex: store.homePageIndex,
       pageOffset: store.homePageOffset,
     });
+    uiContext.restore();
+  };
+  if (panelActive()) {
+    const frame = phoneFrame(width, height);
+    // During the closing glide, restore Home underneath the sheet. The panel
+    // remains above it, so only the newly exposed area receives the fade and
+    // small upward settle instead of popping in after the panel is gone.
+    if (scene.phoneView === 'home' && store.homeReveal > 0) {
+      drawHomeScene();
+    }
+    drawPhonePanelOverlay(uiContext, store.islandPanel.type,
+      sceneById(PANEL_LAYOUTS[store.islandPanel.type]).layout(width, height),
+      width, height, store.version, panelOffsetY(store.islandPanel.progress, frame));
+  } else if (scene.phoneView) {
+    drawHomeScene();
   } else {
     for (const element of glass.elements) {
       if (store.showIcons) drawGlassContents(uiContext, element);
@@ -272,6 +537,23 @@ function drawOverlayLayer({ width, height, dpr }) {
     const selected = glass.elements.find((element) => element.id === store.selectedId);
     if (selected) drawSelection(uiContext, selected);
   }
+}
+
+/** The scrim follows the sheet without forcing a full wallpaper redraw. */
+function drawPanelScrim({ width, height, dpr }) {
+  scrimContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+  scrimContext.clearRect(0, 0, width, height);
+  if (!panelActive()) return;
+
+  const { progress } = store.islandPanel;
+  const frame = phoneFrame(width, height);
+  scrimContext.save();
+  scrimContext.beginPath();
+  scrimContext.roundRect(frame.screen.x, frame.screen.y, frame.screen.w, frame.screen.h, frame.screen.r);
+  scrimContext.clip();
+  scrimContext.fillStyle = `rgba(6,8,13,${0.46 * progress})`;
+  scrimContext.fillRect(frame.screen.x, frame.screen.y, frame.screen.w, frame.screen.h);
+  scrimContext.restore();
 }
 
 function frame(now) {
@@ -293,6 +575,7 @@ function frame(now) {
     contentDirty = false;
   }
 
+  drawPanelScrim(size);
   const willDraw = animating || size.resized || glass.dirty;
   glass.render();
   drawOverlayLayer(size);
@@ -392,6 +675,56 @@ function attachHomePager() {
     animationFrame = 0;
   };
 
+  let panelAnimationFrame = 0;
+  let panelAnimationToken = 0;
+  const cancelPanelAnimation = () => {
+    panelAnimationToken += 1;
+    if (panelAnimationFrame) cancelAnimationFrame(panelAnimationFrame);
+    panelAnimationFrame = 0;
+  };
+  const animateIslandPanel = (targetProgress, onDone) => {
+    cancelPanelAnimation();
+    const animationToken = panelAnimationToken;
+    const startProgress = store.islandPanel.progress;
+    const opening = targetProgress > startProgress;
+    // Never reveal Home while opening or while the user's finger is still
+    // dragging. It starts only once a close has been committed.
+    setHomeReveal(0);
+    if (reduceMotion?.matches || Math.abs(targetProgress - startProgress) < 0.01) {
+      setHomeReveal(opening ? 0 : 1);
+      setPanelProgress(targetProgress);
+      onDone?.();
+      return;
+    }
+    const startTime = performance.now();
+    const duration = opening ? 360 : 280;
+    const tick = (now) => {
+      if (animationToken !== panelAnimationToken) return;
+      const elapsed = Math.min(1, (now - startTime) / duration);
+      // A slightly softer opening and a quicker close feel closer to the
+      // springy sheet behavior of iOS than one generic ease for both ways.
+      const eased = opening
+        ? 1 - Math.pow(1 - elapsed, 4)
+        : 1 - Math.pow(1 - elapsed, 3);
+      // Leave the last part of the reveal for a short post-dismiss fade. This
+      // makes the handoff to the restored Home glass visibly continuous.
+      const reveal = opening ? 0 : eased * eased * (3 - 2 * eased) * 0.78;
+      setHomeReveal(reveal);
+      setPanelProgress(startProgress + (targetProgress - startProgress) * eased);
+      if (elapsed < 1) panelAnimationFrame = requestAnimationFrame(tick);
+      else {
+        panelAnimationFrame = 0;
+        onDone?.();
+      }
+    };
+    panelAnimationFrame = requestAnimationFrame(tick);
+  };
+  // Both directions of the sheet animation, so a release always lands on one
+  // of the two resting states instead of stopping wherever the finger did.
+  const settlePanel = (open) => animateIslandPanel(open ? 1 : 0, () => {
+    if (!open) closePanel();
+  });
+
   const animateTo = (pageIndex) => {
     cancelHomePageAnimation();
     const targetPage = Math.max(0, Math.min(1, pageIndex));
@@ -421,8 +754,59 @@ function attachHomePager() {
     if (!isActive() || drag) return;
     const point = glass.pointerPosition(event);
     const frame = currentFrame();
-    const withinScreen = point.x >= frame.screen.x && point.x <= frame.screen.x + frame.screen.w
-      && point.y >= frame.screen.y + 52 * frame.scale
+    const onScreen = point.x >= frame.screen.x && point.x <= frame.screen.x + frame.screen.w
+      && point.y >= frame.screen.y && point.y <= frame.screen.y + frame.screen.h;
+
+    // A sheet that is already out: anywhere on the screen drags it back up.
+    if (panelActive()) {
+      if (!onScreen) return;
+      event.preventDefault();
+      cancelPanelAnimation();
+      cancelHomeRevealAnimation();
+      // Re-grabbing a sheet cancels the post-dismiss Home fade. While the
+      // finger owns the panel, the two layers must never be shown together.
+      setHomeReveal(0);
+      drag = {
+        mode: 'panel',
+        pointerId: event.pointerId,
+        startY: point.y,
+        startProgress: store.islandPanel.progress,
+        lastY: point.y,
+        lastTime: performance.now(),
+        velocityY: 0,
+      };
+      uiCanvas.setPointerCapture(event.pointerId);
+      uiCanvas.style.cursor = 'grabbing';
+      return;
+    }
+
+    // The whole status bar row is the handle, split at the middle of Dynamic
+    // Island: pull down on the left for Notifications, on the right for
+    // Control Centre, exactly like iOS.
+    const inPullZone = onScreen && point.y <= frame.screen.y + 58 * frame.scale;
+    if (inPullZone) {
+      event.preventDefault();
+      cancelHomePageAnimation();
+      cancelPanelAnimation();
+      const zone = point.x < frame.screen.x + frame.screen.w / 2 ? 'notification' : 'control-centre';
+      drag = {
+        mode: 'island',
+        pointerId: event.pointerId,
+        startX: point.x,
+        startY: point.y,
+        startProgress: store.islandPanel.progress,
+        lastY: point.y,
+        lastTime: performance.now(),
+        velocityY: 0,
+        zone,
+      };
+      openPanel(zone);
+      uiCanvas.setPointerCapture(event.pointerId);
+      uiCanvas.focus({ preventScroll: true });
+      uiCanvas.style.cursor = 'grabbing';
+      return;
+    }
+    const withinScreen = onScreen && point.y >= frame.screen.y + 58 * frame.scale
       && point.y <= frame.screen.y + 720 * frame.scale;
     if (!withinScreen) return;
     event.preventDefault();
@@ -444,6 +828,27 @@ function attachHomePager() {
     if (!drag || event.pointerId !== drag.pointerId) return;
     event.preventDefault();
     const point = glass.pointerPosition(event);
+    if (drag.mode === 'island' || drag.mode === 'panel') {
+      uiCanvas.style.cursor = 'grabbing';
+      if (drag.mode === 'panel' && store.homeReveal > 0) setHomeReveal(0);
+      const now = performance.now();
+      const elapsed = Math.max(1, now - drag.lastTime);
+      const instantVelocity = (point.y - drag.lastY) / elapsed;
+      drag.velocityY = drag.velocityY * 0.65 + instantVelocity * 0.35;
+      drag.lastY = point.y;
+      drag.lastTime = now;
+      // The sheet translates in stage pixels, so using the screen height makes
+      // the visible panel follow the finger at roughly 1:1 instead of racing
+      // ahead by the old 852 / 260 ratio.
+      const travel = Math.max(currentFrame().screen.h, 1);
+      const dy = point.y - drag.startY;
+      const rawProgress = (drag.startProgress ?? 0) + dy / travel;
+      const dampedProgress = rawProgress > 1
+        ? 1 + (rawProgress - 1) * 0.18
+        : rawProgress;
+      setPanelProgress(dampedProgress);
+      return;
+    }
     const now = performance.now();
     const elapsed = Math.max(1, now - drag.lastTime);
     drag.velocity = (point.x - drag.lastX) / elapsed;
@@ -459,6 +864,25 @@ function attachHomePager() {
 
   const endDrag = (event, cancelled = false) => {
     if (!drag || event.pointerId !== drag.pointerId) return;
+    if (drag.mode === 'island' || drag.mode === 'panel') {
+      const opening = drag.mode === 'island';
+      const { type } = store.islandPanel;
+      const { progress } = store.islandPanel;
+      const flickedOpen = drag.velocityY > 0.45;
+      const flickedShut = drag.velocityY < -0.45;
+      const projectedProgress = progress + Math.max(-0.14, Math.min(0.14, drag.velocityY * 0.18));
+      const open = cancelled ? !opening
+        : flickedOpen ? true
+          : flickedShut ? false
+            : projectedProgress > (opening ? 0.34 : 0.58);
+      drag = null;
+      uiCanvas.style.cursor = 'grab';
+      settlePanel(open);
+      announce(open
+        ? (type === 'notification' ? 'Notification Centre open.' : 'Control Centre open.')
+        : 'Back to the Home Screen.');
+      return;
+    }
     const { velocity } = drag;
     drag = null;
     uiCanvas.style.cursor = 'grab';
@@ -476,13 +900,50 @@ function attachHomePager() {
   uiCanvas.addEventListener('pointerup', (event) => endDrag(event, false));
   uiCanvas.addEventListener('pointercancel', (event) => endDrag(event, true));
   uiCanvas.addEventListener('keydown', (event) => {
-    if (!isActive() || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+    if (!isActive()) return;
+    // The keyboard mirrors the gesture: down opens a sheet, up or Escape
+    // dismisses it, and paging only works while nothing is covering Home.
+    if (panelActive()) {
+      if (!['ArrowUp', 'Escape'].includes(event.key)) return;
+      event.preventDefault();
+      settlePanel(false);
+      announce('Back to the Home Screen.');
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      openPanel('notification');
+      settlePanel(true);
+      announce('Notification Centre open.');
+      return;
+    }
+    if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
     event.preventDefault();
     animateTo(store.homePageIndex + (event.key === 'ArrowRight' ? 1 : -1));
   });
 }
 
 attachHomePager();
+
+for (const tip of document.querySelectorAll('[data-gesture-tip]')) {
+  const id = tip.dataset.gestureTip;
+  const dismiss = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    store.gestureTipVisibility.set(id, false);
+    syncGestureTips();
+  };
+  const closeButton = tip.querySelector('.gestureTipClose');
+  closeButton?.addEventListener('pointerdown', (event) => event.stopPropagation());
+  closeButton?.addEventListener('click', dismiss);
+  let hoverTimer = 0;
+  tip.addEventListener('pointerenter', () => {
+    hoverTimer = window.setTimeout(dismiss, 500);
+  });
+  tip.addEventListener('pointerleave', () => {
+    window.clearTimeout(hoverTimer);
+  });
+}
 
 function syncPresetButtons(active) {
   for (const button of document.querySelectorAll('[data-preset]')) {
@@ -662,11 +1123,10 @@ function syncSceneUI() {
   const phoneWallpaperEnabled = PHONE_WALLPAPER_SCENES.has(scene.id);
   $('sceneUpload').classList.toggle('phoneMode', phoneWallpaperEnabled);
   $('phoneWallpaperUpload').hidden = !phoneWallpaperEnabled;
-  if (phoneWallpaperEnabled && store.customPhoneObjectUrls.has(scene.id)) {
-    phoneWallpaperStatus.textContent = 'Custom wallpaper loaded';
-  } else if (!phoneWallpaperEnabled) {
+  if (!phoneWallpaperEnabled) {
     phoneWallpaperStatus.textContent = 'Only for phone scenes';
   }
+  syncPhoneWallpaperUI();
   $('viewSection').hidden = locked;
   $('stageHud').hidden = locked;
   $('keyboardHelp').hidden = locked;
@@ -689,6 +1149,7 @@ function syncSceneUI() {
   }
   sceneStart = performance.now();
   syncToggleButtons();
+  syncGestureTips();
 }
 
 sceneSelect.addEventListener('change', () => selectScene(sceneSelect.value));
@@ -698,6 +1159,7 @@ const customInput = $('customMedia');
 const customStatus = $('customSceneStatus');
 const phoneWallpaperInput = $('phoneWallpaper');
 const phoneWallpaperStatus = $('phoneWallpaperStatus');
+const phoneWallpaperPreset = $('phoneWallpaperPreset');
 
 function loadMedia(url, kind) {
   return new Promise((resolve, reject) => {
@@ -765,6 +1227,11 @@ customInput.addEventListener('change', async () => {
   }
 });
 
+phoneWallpaperPreset.addEventListener('change', () => {
+  const scene = currentScene();
+  setPhoneWallpaper(scene, phoneWallpaperPreset.value);
+});
+
 phoneWallpaperInput.addEventListener('change', async () => {
   const [file] = phoneWallpaperInput.files || [];
   if (!file) return;
@@ -785,26 +1252,18 @@ phoneWallpaperInput.addEventListener('change', async () => {
       phoneWallpaperStatus.textContent = 'Select a phone scene first';
       return;
     }
-    const previous = store.customPhoneObjectUrls.get(targetScene.id);
-    store.customPhoneObjectUrls.set(targetScene.id, url);
-    images.set(url, source);
-
-    targetScene.backdrop = {
-      ...targetScene.backdrop,
-      type: 'phone',
-      wallpaper: 'image',
+    const wallpaperId = `upload-${Date.now()}`;
+    store.customPhoneWallpapers.set(wallpaperId, {
+      id: wallpaperId,
+      name: file.name,
       src: url,
       thumb: url,
-    };
-
-    if (previous && previous !== url) {
-      images.delete(previous);
-      URL.revokeObjectURL(previous);
-    }
-    renderScenePicker();
-    selectScene(targetScene.id);
-    phoneWallpaperStatus.textContent = `${file.name} · ${targetScene.name}`;
-    announce(`Custom wallpaper applied to ${targetScene.name}. The phone layout and glass components are unchanged.`);
+    });
+    images.set(url, source);
+    setPhoneWallpaper(targetScene, wallpaperId, { announceChange: false });
+    phoneWallpaperPreset.value = wallpaperId;
+    phoneWallpaperStatus.textContent = `${file.name} · selected`;
+    announce(`Custom wallpaper applied to ${targetScene.name}. It is now available in the wallpaper menu.`);
   } catch (error) {
     if (url) URL.revokeObjectURL(url);
     phoneWallpaperStatus.textContent = 'Could not load that image';
@@ -891,7 +1350,7 @@ document.addEventListener('visibilitychange', () => {
 
 window.addEventListener('beforeunload', () => {
   if (store.customObjectUrl) URL.revokeObjectURL(store.customObjectUrl);
-  for (const url of store.customPhoneObjectUrls.values()) URL.revokeObjectURL(url);
+  for (const wallpaper of store.customPhoneWallpapers.values()) URL.revokeObjectURL(wallpaper.src);
 });
 
 // ----------------------------------------------------------------- bootstrap
