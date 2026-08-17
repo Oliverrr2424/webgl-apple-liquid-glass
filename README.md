@@ -34,24 +34,6 @@ wallpapers.
   <img src="assets/readme/v2-night-city.png" alt="Liquid Glass V2 glass surfaces on a night city backdrop" width="720" height="527">
 </p>
 
-### Reference scenes
-
-### Alpine Lake
-
-![Liquid Glass V2 on Alpine Lake](https://unpkg.com/apple-liquid-glass-webgl@2.0.3/assets/readme/v2-alpine-lake.jpg)
-
-### iPhone Home Page
-
-<p align="center">
-  <img src="https://unpkg.com/apple-liquid-glass-webgl@2.0.3/assets/readme/v2-home-page.jpg" alt="Liquid Glass V2 iPhone Home Page" width="720">
-</p>
-
-### iPhone Control Centre
-
-<p align="center">
-  <img src="https://unpkg.com/apple-liquid-glass-webgl@2.0.3/assets/readme/v2-control-centre.jpg" alt="Liquid Glass V2 iPhone Control Centre" width="720">
-</p>
-
 ## Install
 
 ```bash
