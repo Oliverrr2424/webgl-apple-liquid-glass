@@ -41,16 +41,14 @@ const BASELINE_WIDTH = 500;
 const BASELINE_HEIGHT = 320;
 
 const CASES = [
-  { name: 'shape-set-lake', scene: 'alpine-lake' },
-  { name: 'shape-set-lines', scene: 'flow-lines' },
-  { name: 'fusion-colour-blocks', scene: 'color-blocks', set: { mergeRadius: 90 } },
-  { name: 'adaptive-tint-night', scene: 'night-city' },
-  { name: 'clear-preset-night', scene: 'night-city', preset: 'clear' },
-  { name: 'tab-bar', scene: 'tab-bar' },
-  { name: 'control-centre', scene: 'control-centre' },
-  { name: 'notification', scene: 'notification' },
-  { name: 'debug-normals', scene: 'flow-lines', set: { debug: 2 } },
-  { name: 'focus-folder', scene: 'alpine-lake', focus: [0, 2] },
+  { name: 'shape-set-lake', scene: 'scene' },
+  { name: 'shape-set-lines', scene: 'scene' },
+  { name: 'fusion-colour-blocks', scene: 'scene', set: { mergeRadius: 90 } },
+  { name: 'adaptive-tint-night', scene: 'scene' },
+  { name: 'clear-preset-night', scene: 'scene', preset: 'clear' },
+  { name: 'home', scene: 'home' },
+  { name: 'debug-normals', scene: 'scene', set: { debug: 2 } },
+  { name: 'focus-folder', scene: 'scene', focus: [0, 2] },
 ];
 
 const mimeTypes = {

@@ -12,7 +12,7 @@ test('V2 materials are independent copies with their own parameter ranges', () =
   assert.notEqual(a, b);
   assert.deepEqual(a, b);
   a.dispersion = 99;
-  assert.equal(b.dispersion, 0.7);
+  assert.equal(b.dispersion, 2.0);
   assert.equal(makeMaterialV2({ edgeWidth: 0.4 }).edgeWidth, 0.4);
   assert.throws(() => makeMaterialV2('clear'), /does not use V1 preset names/);
   assert.throws(() => makeMaterialV2({ blurRim: 4 }), /Unknown Liquid Glass V2/);

@@ -7,6 +7,7 @@ export interface LiquidGlassV2Material {
   edgeReach: number;
   edgeWidth: number;
   dispersion: number;
+  /** Dimensionless softness ratio, resolved against each component's short side. */
   frost: number;
   body: number;
   absorption: number;
@@ -34,6 +35,11 @@ export interface LiquidGlassV2Element {
   /** Override the material tint opacity for this surface. This lets a tinted
    * notification share a renderer with clear folders and controls. */
   tint?: number;
+  /** Override the dimensionless backdrop softness ratio for this surface. */
+  frost?: number;
+  /** Premultiplied surface opacity. Primarily useful for seamless transitions
+   * between a live glass pass and a cheaper resting representation. */
+  opacity?: number;
   /** Select a coherent light or dark tint for the whole surface. `auto`
    * derives it from the average backdrop below the component. */
   tintTone?: 'auto' | 'light' | 'dark';

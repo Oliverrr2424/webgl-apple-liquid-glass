@@ -3,7 +3,7 @@ import { MAX_GLASS_SHAPES } from './geometry.js';
 import {
   DEFAULT_MATERIAL_V2, REDUCED_TRANSPARENCY_MATERIAL_V2, SLIDERS_V2,
   getDefaultMaterialV2, makeMaterialV2,
-} from './v2-material.js';
+} from './v2-material.js?frost-ratio=1';
 import { distanceToElementsV2, hitTestElementsV2 } from './v2-geometry.js';
 
 const SHAPES = new Set(['folder', 'rect', 'pill', 'circle']);
@@ -32,6 +32,14 @@ function normalizeElement(input, index) {
   if (tint !== undefined && !Number.isFinite(tint)) {
     throw new TypeError('Liquid glass V2 element tint must be a finite number.');
   }
+  const frost = input.frost == null ? undefined : Number(input.frost);
+  if (frost !== undefined && !Number.isFinite(frost)) {
+    throw new TypeError('Liquid glass V2 element frost must be a finite number.');
+  }
+  const opacity = input.opacity == null ? undefined : Number(input.opacity);
+  if (opacity !== undefined && !Number.isFinite(opacity)) {
+    throw new TypeError('Liquid glass V2 element opacity must be a finite number.');
+  }
   const tintTone = input.tintTone ?? 'auto';
   if (!['auto', 'light', 'dark'].includes(tintTone)) {
     throw new TypeError(`Unknown liquid glass V2 tint tone: ${tintTone}`);
@@ -45,6 +53,8 @@ function normalizeElement(input, index) {
     w: width,
     h: height,
     ...(tint === undefined ? {} : { tint }),
+    ...(frost === undefined ? {} : { frost }),
+    ...(opacity === undefined ? {} : { opacity }),
     ...(input.tintTone == null ? {} : { tintTone }),
   };
 }

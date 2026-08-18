@@ -6,28 +6,32 @@
 
 import {
   LiquidGlassWebGL, LiquidGlassWebGLV2, connectedElementGroups,
-  getDefaultMaterialV2, makeMaterial,
-} from '../src/index.js';
+  makeMaterial,
+} from '../src/index.js?frost-ratio=1';
+import { getDefaultMaterialV2 } from '../src/v2-material.js?dispersion-default=2';
 import {
-  SCENES, PHONE_WALLPAPER_PRESETS, ICON_SOURCES,
-  attachIconImages, isAnimated, sceneById,
-} from './scenes.js?phone-scenes=7';
-import { drawSceneBackdrop } from './content.js?phone-scenes=7';
+  SCENES, PHONE_WALLPAPER_PRESETS, SCENE_WALLPAPER_PRESETS, ICON_SOURCES,
+  attachIconImages, isAnimated, sceneById, panelLayout,
+} from './scenes.js?phone-scenes=10';
+import { drawSceneBackdrop } from './content.js?phone-scenes=8';
 import {
-  drawGlassContents, drawLabel, drawBadge, drawSelection,
+  drawGlassContents, drawLabel, drawBadge, drawPressEffectsFrame,
+  drawPressEffectsOverlay,
   drawPhoneSceneOverlay, drawPhonePanelOverlay,
-} from './overlay.js?phone-scenes=7';
-import { createInspector } from './inspector.js';
-import { createComponentEditor } from './components.js?phone-scenes=7';
-import { attachStageInteractions } from './interactions.js?phone-scenes=7';
+} from './overlay.js?phone-scenes=8';
+import { createInspector } from './inspector.js?dispersion-default=2';
+import { createComponentEditor } from './components.js?phone-scenes=8';
+import { attachStageInteractions } from './interactions.js?phone-scenes=8';
+import { attachPressEffects } from './press-effects.js?phone-scenes=8';
 import { createStats } from './stats.js';
 import { decodeState, toCode, writeHash } from './permalink.js';
-import { PHONE_ICON_SOURCES, attachPhoneIconImages, phoneFrame } from './phone.js?phone-scenes=7';
+import { PHONE_ICON_SOURCES, attachPhoneIconImages, phoneFrame } from './phone.js?phone-scenes=8';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
 const contentCanvas = $('content');
 const scrimCanvas = $('scrim');
+const baseGlCanvas = $('baseGl');
 const glCanvas = $('gl');
 const uiCanvas = $('ui');
 const liveRegion = $('announcer');
@@ -55,19 +59,27 @@ const materials = {
 const store = {
   version: initialVersion,
   materials,
-  sceneId: sceneById(shared?.sceneId ?? 'tab-bar').id,
+  sceneId: sceneById(shared?.sceneId ?? 'home').id,
   material: materials[initialVersion],
   fusion: shared?.fusion ?? true,
   showIcons: shared?.showIcons ?? false,
   showLabels: shared?.showLabels ?? false,
   elements: [],
   selectedId: null,
+  // Ephemeral interaction state is deliberately kept out of share links: it
+  // changes every animation frame and never changes a component's authored
+  // geometry. Slider resting positions are kept separately per control.
+  press: null,
+  sliderPositions: new Map([
+    ['selection-track', 0],
+    ['green-toggle-track', 0],
+  ]),
   wallZoom: 1,
   movedElements: false,
-  customScene: null,
-  customObjectUrl: null,
   customPhoneWallpapers: new Map(),
-  phoneWallpaperSelections: new Map([['tab-bar', 'warm-fold']]),
+  sceneWallpaperUploads: new Map(),
+  phoneWallpaperSelections: new Map([['home', 'warm-fold']]),
+  sceneWallpaperSelection: 'natural-lake',
   gestureTipVisibility: new Map([
     ['page', true],
     ['notification', true],
@@ -88,7 +100,7 @@ function effectiveFusion() {
   return store.fusion && !currentScene().lockedComponents;
 }
 
-function createGlass() {
+function createGlass(targetCanvas = glCanvas) {
   const GlassClass = store.version === 'v2' ? LiquidGlassWebGLV2 : LiquidGlassWebGL;
   const options = {
     compositeMode: 'overlay',
@@ -101,12 +113,18 @@ function createGlass() {
     onContextRestored: () => announce('The GPU context was restored.'),
   };
   if (store.version === 'v1') options.fusion = effectiveFusion();
-  const instance = new GlassClass(glCanvas, options);
+  const instance = new GlassClass(targetCanvas, options);
   instance.setBackdrop(contentCanvas, { update: 'static', autoStart: false, shouldRender: false });
   return instance;
 }
 
 let glass = createGlass();
+let baseGlass = createGlass(baseGlCanvas);
+
+function applyMaterial() {
+  glass.setMaterial(store.material, false);
+  baseGlass.setMaterial(store.material, false);
+}
 
 const stats = createStats($('stats'));
 
@@ -115,16 +133,14 @@ const images = new Map();
 const pending = new Set();
 
 function currentScene() {
-  return store.customScene && store.sceneId === store.customScene.id
-    ? store.customScene
-    : sceneById(store.sceneId);
+  return sceneById(store.sceneId);
 }
 
 function allScenes() {
-  return store.customScene ? [...SCENES, store.customScene] : SCENES;
+  return SCENES;
 }
 
-const PHONE_WALLPAPER_SCENES = new Set(['tab-bar', 'notification', 'control-centre']);
+const PHONE_WALLPAPER_SCENES = new Set(['home']);
 const ORIGINAL_PHONE_BACKDROPS = new Map(
   SCENES.filter((scene) => PHONE_WALLPAPER_SCENES.has(scene.id))
     .map((scene) => [scene.id, { ...scene.backdrop }]),
@@ -132,7 +148,7 @@ const ORIGINAL_PHONE_BACKDROPS = new Map(
 
 function phoneWallpaperOptions(scene) {
   const original = ORIGINAL_PHONE_BACKDROPS.get(scene.id);
-  const originalName = scene.id === 'tab-bar' ? 'Warm fold (scene default)' : 'Scene default';
+  const originalName = scene.id === 'home' ? 'Warm fold (scene default)' : 'Scene default';
   return [
     { id: 'scene-default', name: originalName, ...original },
     ...PHONE_WALLPAPER_PRESETS,
@@ -146,12 +162,25 @@ function selectedPhoneWallpaperId(scene) {
   if (explicit) return explicit;
   const original = ORIGINAL_PHONE_BACKDROPS.get(scene.id);
   if (scene.backdrop.src && scene.backdrop.src === original?.src) {
-    return scene.id === 'tab-bar' ? 'warm-fold' : 'scene-default';
+    return scene.id === 'home' ? 'warm-fold' : 'scene-default';
   }
   const preset = PHONE_WALLPAPER_PRESETS.find((entry) => entry.src === scene.backdrop.src);
   if (preset) return preset.id;
   const custom = [...store.customPhoneWallpapers.values()].find((entry) => entry.src === scene.backdrop.src);
   return custom?.id ?? 'scene-default';
+}
+
+function sceneWallpaperOptions(scene) {
+  if (scene.id !== 'scene') return [];
+  return [...SCENE_WALLPAPER_PRESETS, ...store.sceneWallpaperUploads.values()];
+}
+
+function selectedSceneWallpaperId(scene) {
+  if (scene.id !== 'scene') return null;
+  const explicit = store.sceneWallpaperSelection;
+  if (sceneWallpaperOptions(scene).some((entry) => entry.id === explicit)) return explicit;
+  const current = sceneWallpaperOptions(scene).find((entry) => entry.src === scene.backdrop.src);
+  return current?.id ?? SCENE_WALLPAPER_PRESETS[0].id;
 }
 
 const GESTURE_TIP_IDS = [
@@ -239,6 +268,7 @@ function syncBackdropMode() {
   if (mode !== backdropMode) {
     backdropMode = mode;
     glass.setBackdrop(contentCanvas, { update: mode, autoStart: false, shouldRender: false });
+    baseGlass.setBackdrop(contentCanvas, { update: mode, autoStart: false, shouldRender: false });
   }
   const video = scene.backdrop.type === 'video' ? scene.backdrop.source : null;
   for (const other of allScenes()) {
@@ -262,6 +292,10 @@ function layoutScene({ keepEdits = false } = {}) {
   });
   applyHomePageTransform();
   if (!keepEdits) store.movedElements = false;
+  if (scene.interactionLab) {
+    store.sliderPositions.set('selection-track', 0);
+    store.sliderPositions.set('green-toggle-track', 0);
+  }
   if (!store.elements.some((element) => element.id === store.selectedId)) store.selectedId = null;
 }
 
@@ -279,12 +313,15 @@ function applySharedElements() {
 let cancelHomePageAnimation = () => {};
 
 function selectScene(id, { fromShare = false } = {}) {
-  const changed = store.sceneId !== id;
+  const resolvedScene = sceneById(id);
+  const nextId = resolvedScene?.id ?? SCENES[0].id;
+  const changed = store.sceneId !== nextId;
   cancelHomePageAnimation();
   cancelHomeRevealAnimation();
+  store.press = null;
   store.islandPanel = { type: null, progress: 0 };
   store.homeReveal = 1;
-  store.sceneId = allScenes().some((scene) => scene.id === id) ? id : SCENES[0].id;
+  store.sceneId = nextId;
   const scene = currentScene();
   if (scene.phoneView === 'home' && changed) store.homePageIndex = 0;
   store.homePageOffset = 0;
@@ -353,14 +390,52 @@ function setPhoneWallpaper(scene, wallpaperId, { announceChange = true } = {}) {
   if (announceChange) announce(`${option.name} wallpaper applied to ${scene.name}.`);
 }
 
+function syncSceneWallpaperUI() {
+  const scene = currentScene();
+  const enabled = scene.id === 'scene';
+  $('sceneWallpaperUpload').hidden = !enabled;
+  if (!enabled) return;
+
+  const select = $('sceneWallpaperPreset');
+  select.replaceChildren();
+  for (const optionData of sceneWallpaperOptions(scene)) {
+    const option = document.createElement('option');
+    option.value = optionData.id;
+    option.textContent = optionData.name;
+    select.appendChild(option);
+  }
+  select.value = selectedSceneWallpaperId(scene);
+  if (!select.value) select.value = SCENE_WALLPAPER_PRESETS[0].id;
+  const selected = sceneWallpaperOptions(scene).find((option) => option.id === select.value);
+  $('sceneWallpaperStatus').textContent = selected?.name ?? 'Choose a wallpaper';
+}
+
+function setSceneWallpaper(scene, wallpaperId, { announceChange = true } = {}) {
+  if (scene.id !== 'scene') return;
+  const option = sceneWallpaperOptions(scene).find((entry) => entry.id === wallpaperId);
+  if (!option) return;
+  store.sceneWallpaperSelection = wallpaperId;
+  scene.backdrop = {
+    type: 'image',
+    src: option.src,
+    thumb: option.thumb ?? option.src,
+  };
+  ensureBackdropImage(scene);
+  renderScenePicker();
+  syncSceneWallpaperUI();
+  syncBackdropMode();
+  sceneStart = performance.now();
+  invalidate({ content: true });
+  queueHash();
+  if (announceChange) announce(`${option.name} wallpaper applied to Scene.`);
+}
+
 // --------------------------------------------------------- island pull-down
 //
 // Notification Centre and Control Centre are not separate destinations any
 // more: they are live sheets that slide over the Home Screen. While a sheet is
 // on screen the home icons, widgets and dock are hidden, so the wallpaper (dim
 // in proportion to the pull) is the only thing left behind the glass.
-
-const PANEL_LAYOUTS = { notification: 'notification', 'control-centre': 'control-centre' };
 
 function panelActive() {
   return Boolean(store.islandPanel.type) && store.islandPanel.progress > 0;
@@ -371,19 +446,52 @@ function panelOffsetY(progress, frame) {
   return -(1 - progress) * frame.screen.h;
 }
 
-/** The sheet's own glass components, slid down by the current progress. */
-function panelElements() {
+/** The full-screen liquid surface that carries the sheet's backdrop. */
+function panelBaseElement() {
+  const { type, progress } = store.islandPanel;
+  if (!type) return null;
+  const { width, height } = store.stageSize();
+  const frame = phoneFrame(width, height);
+  const offsetY = panelOffsetY(progress, frame);
+  // Match the physical screen, including its radius, instead of relying on
+  // the material's generic roundness ratio. This keeps the lower edge and the
+  // outer corners flush with the phone mask at the fully-open resting state.
+  return {
+    id: `${type}-surface`, shape: 'rect', radius: frame.screen.r,
+    x: frame.screen.x, y: frame.screen.y + offsetY,
+    w: frame.screen.w, h: frame.screen.h,
+    tint: 0.08, tintTone: 'auto', frost: 0.22,
+  };
+}
+
+/**
+ * Independent glass controls painted above the full-screen sheet. They sample
+ * the already-rendered base surface, so cards and sliders retain their own
+ * optical edge instead of flattening into the backdrop.
+ */
+function panelGlassElements() {
   const { type, progress } = store.islandPanel;
   if (!type) return [];
   const { width, height } = store.stageSize();
   const frame = phoneFrame(width, height);
   const offsetY = panelOffsetY(progress, frame);
-  return sceneById(PANEL_LAYOUTS[type]).layout(width, height)
-    .map((element) => ({ ...element, y: element.y + offsetY }));
+  return panelLayout(type, width, height).map((element) => ({
+    ...element,
+    id: `${type}-${element.id}`,
+    y: element.y + offsetY,
+    // Panel controls use the neutral transparent material. The authored
+    // notification tint is for the text treatment; keeping it off the glass
+    // avoids a second opaque white veil over the full-screen surface.
+    tint: 0.02,
+    tintTone: 'auto',
+    frost: 0.16,
+  }));
 }
 
 function applyPanelElements() {
-  glass.setElements(panelElements(), false);
+  const base = panelBaseElement();
+  baseGlass.setElements(base ? [base] : [], false);
+  glass.setElements(panelGlassElements(), false);
 }
 
 function setPanelProgress(progress) {
@@ -479,6 +587,8 @@ function syncSizes() {
     }
     glCanvas.style.width = `${width}px`;
     glCanvas.style.height = `${height}px`;
+    baseGlCanvas.style.width = `${width}px`;
+    baseGlCanvas.style.height = `${height}px`;
     lastSize = { width, height, dpr };
   }
   const scene = currentScene();
@@ -500,7 +610,7 @@ function drawOverlayLayer({ width, height, dpr }) {
   const scene = currentScene();
   const drawHomeScene = () => {
     if (scene.phoneView !== 'home' || store.homeReveal >= 0.999) {
-      drawPhoneSceneOverlay(uiContext, scene, store.elements, width, height, store.version, {
+      drawPhoneSceneOverlay(uiContext, scene, glass.elements, width, height, store.version, {
         pageIndex: store.homePageIndex,
         pageOffset: store.homePageOffset,
       });
@@ -510,7 +620,7 @@ function drawOverlayLayer({ width, height, dpr }) {
     uiContext.save();
     uiContext.globalAlpha = store.homeReveal;
     uiContext.translate(0, (1 - store.homeReveal) * 10 * frame.scale);
-    drawPhoneSceneOverlay(uiContext, scene, store.elements, width, height, store.version, {
+    drawPhoneSceneOverlay(uiContext, scene, glass.elements, width, height, store.version, {
       pageIndex: store.homePageIndex,
       pageOffset: store.homePageOffset,
     });
@@ -518,24 +628,32 @@ function drawOverlayLayer({ width, height, dpr }) {
   };
   if (panelActive()) {
     const frame = phoneFrame(width, height);
-    // During the closing glide, restore Home underneath the sheet. The panel
-    // remains above it, so only the newly exposed area receives the fade and
-    // small upward settle instead of popping in after the panel is gone.
-    if (scene.phoneView === 'home' && store.homeReveal > 0) {
-      drawHomeScene();
-    }
     drawPhonePanelOverlay(uiContext, store.islandPanel.type,
-      sceneById(PANEL_LAYOUTS[store.islandPanel.type]).layout(width, height),
+      panelLayout(store.islandPanel.type, width, height),
       width, height, store.version, panelOffsetY(store.islandPanel.progress, frame));
   } else if (scene.phoneView) {
     drawHomeScene();
   } else {
-    for (const element of glass.elements) {
-      if (store.showIcons) drawGlassContents(uiContext, element);
-      if (store.showLabels) { drawLabel(uiContext, element); drawBadge(uiContext, element); }
+    if (scene.interactionLab) {
+      drawPressEffectsOverlay(
+        uiContext,
+        store.elements,
+        glass.elements,
+        store.sliderPositions,
+        store.press,
+        contentCanvas,
+      );
+      // The specimen always carries its own content; unlike the material
+      // comparison scenes it should remain legible with "Glass only" active.
+      for (const element of glass.elements) {
+        if (element.id === 'hold-button' || element.id === 'hold-orb') drawGlassContents(uiContext, element);
+      }
+    } else {
+      for (const element of glass.elements) {
+        if (store.showIcons) drawGlassContents(uiContext, element);
+        if (store.showLabels) { drawLabel(uiContext, element); drawBadge(uiContext, element); }
+      }
     }
-    const selected = glass.elements.find((element) => element.id === store.selectedId);
-    if (selected) drawSelection(uiContext, selected);
   }
 }
 
@@ -562,7 +680,12 @@ function frame(now) {
   const size = syncSizes();
   const scene = currentScene();
 
-  if (contentDirty || size.resized || animating) {
+  // A pulling sheet is a two-pass composition: redraw the wallpaper, render
+  // the full-screen base glass into the hidden buffer, composite that buffer
+  // into the backdrop, then let the upper cards sample the result. Redrawing
+  // the wallpaper for the active sheet avoids accumulating moved glass pixels
+  // in the 2D canvas while the finger is travelling.
+  if (contentDirty || size.resized || animating || panelActive()) {
     drawSceneBackdrop(contentContext, scene, {
       width: size.width,
       height: size.height,
@@ -571,7 +694,34 @@ function frame(now) {
       scroll: (now - sceneStart) * 0.055,
       image: backdropSourceFor(scene),
     });
-    if (!animating) glass.updateBackdrop(false);
+    if (scene.interactionLab) {
+      drawPressEffectsFrame(contentContext, store.elements, store.sliderPositions);
+      // First pass: render the Home/Discover glass into the backdrop. The
+      // moving selector is then a true second glass layer and samples the
+      // already-rendered pixels beneath it instead of the original wallpaper.
+      baseGlass.updateBackdrop(false);
+      baseGlass.render({ force: true });
+      contentContext.drawImage(baseGlCanvas, 0, 0, size.width, size.height);
+      glass.updateBackdrop(false);
+    } else if (panelActive()) {
+      baseGlass.updateBackdrop(false);
+      baseGlass.render({ force: true });
+      // baseGl is a full-stage buffer, so apply the same physical screen mask
+      // when compositing it. Without this second clip the hidden pass can
+      // bleed beyond the phone bezel even though the visible gl canvas is
+      // clipped correctly by CSS.
+      const frame = phoneFrame(size.width, size.height);
+      contentContext.save();
+      contentContext.beginPath();
+      contentContext.roundRect(
+        frame.screen.x, frame.screen.y,
+        frame.screen.w, frame.screen.h, frame.screen.r,
+      );
+      contentContext.clip();
+      contentContext.drawImage(baseGlCanvas, 0, 0, size.width, size.height);
+      contentContext.restore();
+      glass.updateBackdrop(false);
+    } else if (!animating) glass.updateBackdrop(false);
     contentDirty = false;
   }
 
@@ -596,10 +746,93 @@ function frame(now) {
   if (animating) invalidate();
 }
 
-// Elements are edited as plain objects here and pushed into the component,
-// which normalises and copies them.
+// Elements are authored as plain objects. While held, a presentation copy is
+// inflated around its centre before it reaches WebGL; releasing it restores
+// the untouched authored geometry through a spring in press-effects.js.
+function presentationElements() {
+  const byId = new Map(store.elements.map((element) => [element.id, element]));
+  const press = store.press;
+  return store.elements.filter((element) => !element.nonGlass).map((element) => {
+    let next = { ...element };
+    const track = element.sliderTrack ? byId.get(element.sliderTrack) : null;
+    if (track) {
+      const progress = store.sliderPositions.get(track.id) ?? 0;
+      const travel = Math.max(0, track.w - element.w - track.h * 0.16);
+      next.x = track.x + track.h * 0.08 + travel * progress;
+      next.y = track.y + track.h * 0.08;
+    }
+    if (!press || press.id !== element.id) return next;
+    const amount = Math.min(1, press.amount);
+    // The selector is intentionally much more elastic: at full hold it grows
+    // to one-and-a-third horizontally. Vertically it doubles, which makes the
+    // capsule clear the track by roughly one-third of the track height above
+    // and below, matching the reference interaction.
+    const scaleX = press.type === 'slider' ? 1 + amount * 0.33 : 1 + amount * 0.075;
+    const scaleY = press.type === 'slider' ? 1 + amount : 1 + amount * 0.075;
+    const w = next.w * scaleX;
+    const h = next.h * scaleY;
+    const centredX = next.x - (w - next.w) / 2;
+    let x = centredX;
+    // The reference control lets the selected glass travel a little beyond
+    // the coloured/tinted track at the active end. That outward overtravel is
+    // what keeps the two edges visually separate. An inward inset did the
+    // opposite and also shortened the apparent drag range.
+    if (press.type === 'slider' && track) {
+      const edgeOvertravel = Math.max(18, track.h * 0.42);
+      const progress = store.sliderPositions.get(track.id) ?? 0;
+      const leftX = track.x - edgeOvertravel;
+      const rightX = track.x + track.w + edgeOvertravel - w;
+      const anchoredX = leftX + (rightX - leftX) * progress;
+      // Blend into the endpoint correction with the press spring so the
+      // capsule never jumps sideways on pointer-down or release.
+      x = centredX + (anchoredX - centredX) * amount;
+    }
+    // Tint is part of the actual V2 material pass, not an overlay painted on
+    // top of it. Existing authored tints (for example the white message card)
+    // are preserved and briefly pushed toward the light material on press.
+    const authoredTint = Number(next.tint ?? store.material.tint ?? 0);
+    const authoredFrost = Number(next.frost ?? store.material.frost ?? 0);
+    // Slider thumbs start as gray frosted glass and shed all tint while held.
+    // Standalone glass controls keep the subtler light-tint bloom.
+    const pressedTint = press.type === 'slider' ? 0 : Math.max(authoredTint, 0.34);
+    const pressedFrost = press.type === 'slider'
+      ? Number(store.material.frost ?? 0)
+      : authoredFrost;
+    // Press-in follows the elastic scale. Release material is deliberately
+    // independent: Apple restores tint in a short, linear fade while the
+    // geometry is still completing its spring return.
+    const materialAmount = press.type === 'slider' && press.target === 0
+      ? 1 - Math.min(1, Math.max(0, press.releaseMix ?? 0))
+      : amount;
+    const releaseOpacity = press.type === 'slider' && press.target === 0
+      ? 1 - Math.min(1, Math.max(0, press.releaseMix ?? 0))
+      : 1;
+    return {
+      ...next,
+      x, y: next.y - (h - next.h) / 2, w, h,
+      tint: authoredTint + (pressedTint - authoredTint) * materialAmount,
+      frost: authoredFrost + (pressedFrost - authoredFrost) * materialAmount,
+      opacity: Number(next.opacity ?? 1) * releaseOpacity,
+      tintTone: press.type === 'slider' ? next.tintTone : 'light',
+    };
+  });
+}
+
 function applyElements() {
-  glass.setElements(store.elements, false);
+  const presented = presentationElements();
+  if (currentScene().interactionLab) {
+    baseGlass.setElements(presented.filter((element) => element.id === 'selection-track'), false);
+    // Resting slider thumbs are inexpensive 2D frosted controls. Only the
+    // thumb currently being held enters the liquid-glass pass.
+    const activeSliderId = store.press?.type === 'slider' ? store.press.id : null;
+    glass.setElements(presented.filter((element) => (
+      element.id !== 'selection-track'
+      && (!element.sliderTrack || element.id === activeSliderId)
+    )), false);
+  } else {
+    baseGlass.setElements([], false);
+    glass.setElements(presented, false);
+  }
 }
 
 function onSceneChange(reason) {
@@ -620,7 +853,7 @@ function rebuildInspector() {
     material: store.material,
     version: store.version,
     onChange: () => {
-      glass.setMaterial(store.material, false);
+      applyMaterial();
       syncPresetButtons(null);
       queueHash();
       invalidate();
@@ -646,6 +879,41 @@ attachStageInteractions({
   onChange: onSceneChange,
   announce,
   isLocked: () => Boolean(currentScene().lockedComponents),
+});
+
+// Fixed phone layouts are still selectable. Their regular editor remains
+// locked, but the glass itself gets the same held-state feedback as the
+// dedicated specimen. The capture listener in this controller runs before the
+// pager, so a press on a glass component does not accidentally page Home.
+attachPressEffects({
+  canvas: uiCanvas,
+  getGlass: () => glass,
+  getElements: () => store.elements,
+  getFallbackElement: ({ x, y }) => {
+    const scene = currentScene();
+    if (!scene.interactionLab) return null;
+    return store.elements.find((element) => element.sliderThumb
+      && x >= element.x && x <= element.x + element.w
+      && y >= element.y && y <= element.y + element.h) ?? null;
+  },
+  getSliderProgress: (trackId) => store.sliderPositions.get(trackId) ?? 0,
+  isActive: () => Boolean(currentScene().lockedComponents),
+  onSelect: (id) => {
+    store.selectedId = id;
+    onSceneChange('select');
+  },
+  onVisualChange: (press) => {
+    const previousTrack = store.press?.sliderTrackId;
+    store.press = press;
+    if (press?.type === 'slider' && press.sliderTrackId
+      && Number.isFinite(press.sliderProgress)) {
+      store.sliderPositions.set(press.sliderTrackId, press.sliderProgress);
+    }
+    applyElements();
+    const changedBackdrop = (press?.sliderTrackId ?? previousTrack) === 'green-toggle-track';
+    invalidate({ content: changedBackdrop });
+  },
+  announce,
 });
 
 function attachHomePager() {
@@ -955,7 +1223,7 @@ for (const button of document.querySelectorAll('[data-preset]')) {
   button.addEventListener('click', () => {
     if (store.version !== 'v1') return;
     Object.assign(store.material, makeMaterial(button.dataset.preset));
-    glass.setMaterial(store.material, false);
+    applyMaterial();
     inspector.sync();
     syncPresetButtons(button.dataset.preset);
     queueHash();
@@ -966,7 +1234,7 @@ for (const button of document.querySelectorAll('[data-preset]')) {
 $('resetMaterial').addEventListener('click', () => {
   const defaults = store.version === 'v2' ? getDefaultMaterialV2() : makeMaterial('regular');
   Object.assign(store.material, defaults);
-  glass.setMaterial(store.material, false);
+  applyMaterial();
   inspector.sync();
   syncPresetButtons(store.version === 'v1' ? 'regular' : null);
   announce(`${store.version.toUpperCase()} material reset to its own package defaults.`);
@@ -1004,9 +1272,11 @@ function setRendererVersion(version, { announceChange = true } = {}) {
   }
 
   glass.destroy();
+  baseGlass.destroy();
   store.version = version;
   store.material = store.materials[version];
   glass = createGlass();
+  baseGlass = createGlass(baseGlCanvas);
   applyElements();
   // The new renderer starts with a static upload; force the current scene's
   // actual live/static policy back onto it.
@@ -1072,7 +1342,7 @@ for (const button of document.querySelectorAll('[data-debug]')) {
   button.addEventListener('click', () => {
     if (store.version !== 'v1') return;
     store.material.debug = Number(button.dataset.debug);
-    glass.setMaterial(store.material, false);
+    applyMaterial();
     syncToggleButtons();
     queueHash();
     invalidate();
@@ -1117,31 +1387,43 @@ function syncSceneUI() {
   $('sceneKind').textContent = scene.kind;
   $('hudScene').textContent = scene.name;
   const locked = Boolean(scene.lockedComponents);
-  $('hudKind').textContent = locked ? `${scene.kind} / material parameters only`
+  const interactionLab = Boolean(scene.interactionLab);
+  $('hudKind').textContent = interactionLab ? `${scene.kind} / press and drag the glass`
+    : locked ? `${scene.kind} / tap any glass component to select it`
     : `${scene.kind} / drag the components, or select one and use the arrow keys`;
   $('componentSection').hidden = locked;
   const phoneWallpaperEnabled = PHONE_WALLPAPER_SCENES.has(scene.id);
-  $('sceneUpload').classList.toggle('phoneMode', phoneWallpaperEnabled);
+  const sceneWallpaperEnabled = scene.id === 'scene';
+  $('sceneUpload').classList.toggle('phoneMode', phoneWallpaperEnabled || sceneWallpaperEnabled);
   $('phoneWallpaperUpload').hidden = !phoneWallpaperEnabled;
   if (!phoneWallpaperEnabled) {
     phoneWallpaperStatus.textContent = 'Only for phone scenes';
   }
+  $('sceneWallpaperUpload').hidden = !sceneWallpaperEnabled;
+  if (!sceneWallpaperEnabled) {
+    $('sceneWallpaperStatus').textContent = 'Select Scene to choose a wallpaper';
+  }
   syncPhoneWallpaperUI();
+  syncSceneWallpaperUI();
   $('viewSection').hidden = locked;
-  $('stageHud').hidden = locked;
+  $('stageHud').hidden = locked && !interactionLab;
   $('keyboardHelp').hidden = locked;
-  $('materialTip').textContent = locked
-    ? 'This reference scene has a fixed iPhone layout. Switch between V1 and V2, then adjust only that renderer’s material parameters.'
+  $('materialTip').textContent = interactionLab
+    ? 'Press and drag either side of the selected capsule. It expands and brightens while it follows your finger. Hold the standalone glass controls to see their white bloom and spring-back.'
+    : locked
+      ? 'This reference scene has a fixed iPhone layout, but every liquid-glass component can be selected and pressed. Switch between V1 and V2, then adjust only that renderer’s material parameters.'
     : (store.version === 'v2'
       ? 'V2 keeps the centre nearly straight-through and captures nearby backdrop transitions only in the edge field. Roundness is a ratio; optical lengths are scaled independently.'
       : 'Drag components together: inside the fusion distance they form one surface, so the silhouette, refraction and highlight flow through a shared bridge. A gap only closes while it is narrower than about half the fusion distance.');
   $('debugSection').hidden = store.version === 'v2' || locked;
-  uiCanvas.setAttribute('aria-label', locked
-    ? (scene.phoneView === 'home'
+  uiCanvas.setAttribute('aria-label', interactionLab
+    ? 'Press effects. Drag the selected glass capsule to choose Home or Discover. Hold the other glass controls to make them bloom.'
+    : locked
+      ? (scene.phoneView === 'home'
       ? `${scene.name}. Swipe horizontally, or use the left and right arrow keys, to change home screen pages.`
-      : `${scene.name}. Components are fixed; use the inspector to adjust material parameters.`)
+      : `${scene.name}. Tap any liquid-glass component to select and press it. Use the inspector to adjust material parameters.`)
     : 'Liquid glass stage. Drag a component, or select one and move it with the arrow keys.');
-  uiCanvas.style.cursor = scene.phoneView === 'home' ? 'grab' : 'default';
+  uiCanvas.style.cursor = scene.phoneView === 'home' ? 'grab' : interactionLab ? 'pointer' : 'default';
   if (locked) store.selectedId = null;
   $('sceneCount').textContent = `${String(index + 1).padStart(2, '0')} / ${String(list.length).padStart(2, '0')}`;
   for (const card of scenePicker.querySelectorAll('[data-scene]')) {
@@ -1154,9 +1436,10 @@ function syncSceneUI() {
 
 sceneSelect.addEventListener('change', () => selectScene(sceneSelect.value));
 
-// ------------------------------------------------------------- custom uploads
-const customInput = $('customMedia');
-const customStatus = $('customSceneStatus');
+// ------------------------------------------------------------- wallpaper uploads
+const sceneWallpaperInput = $('sceneWallpaper');
+const sceneWallpaperStatus = $('sceneWallpaperStatus');
+const sceneWallpaperPreset = $('sceneWallpaperPreset');
 const phoneWallpaperInput = $('phoneWallpaper');
 const phoneWallpaperStatus = $('phoneWallpaperStatus');
 const phoneWallpaperPreset = $('phoneWallpaperPreset');
@@ -1170,60 +1453,52 @@ function loadMedia(url, kind) {
       image.src = url;
       return;
     }
-    const video = document.createElement('video');
-    Object.assign(video, { muted: true, loop: true, playsInline: true, preload: 'auto', src: url });
-    video.onloadeddata = () => resolve(video);
-    video.onerror = () => reject(new Error('The browser could not decode this video.'));
-    video.load();
+    reject(new Error('Only image wallpapers are supported.'));
   });
 }
 
-function videoThumb(video) {
-  const canvas = document.createElement('canvas');
-  const scale = Math.min(1, 480 / Math.max(video.videoWidth, 1));
-  canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
-  canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/jpeg', 0.8);
-}
+sceneWallpaperPreset.addEventListener('change', () => {
+  const scene = currentScene();
+  setSceneWallpaper(scene, sceneWallpaperPreset.value);
+});
 
-customInput.addEventListener('change', async () => {
-  const [file] = customInput.files || [];
+sceneWallpaperInput.addEventListener('change', async () => {
+  const [file] = sceneWallpaperInput.files || [];
   if (!file) return;
-  const kind = file.type.startsWith('video/') ? 'video' : file.type.startsWith('image/') ? 'image' : '';
-  if (!kind) {
-    customStatus.textContent = 'Choose an image or video file';
-    customInput.value = '';
+  if (!file.type.startsWith('image/')) {
+    sceneWallpaperStatus.textContent = 'Choose an image file';
+    sceneWallpaperInput.value = '';
     return;
   }
-  customStatus.textContent = kind === 'video' ? 'Loading video…' : 'Loading image…';
+  sceneWallpaperStatus.textContent = 'Loading wallpaper…';
   let url;
   try {
     url = URL.createObjectURL(file);
-    const source = await loadMedia(url, kind);
-    const previous = store.customObjectUrl;
-    store.customObjectUrl = url;
-    const id = 'custom';
-    store.customScene = {
-      id,
-      name: file.name.replace(/\.[^/.]+$/, '') || `Custom ${kind}`,
-      kind: kind === 'video' ? 'Your video, live' : 'Your image',
-      backdrop: kind === 'video'
-        ? { type: 'video', source, animated: true, thumb: videoThumb(source) }
-        : { type: 'image', src: url, thumb: url },
-      layout: sceneById('alpine-lake').layout,
-    };
-    if (kind === 'image') images.set(url, source);
-    if (previous && previous !== url) URL.revokeObjectURL(previous);
-    renderScenePicker();
-    selectScene(id);
-    customStatus.textContent = kind === 'video' ? 'Your video · live backdrop' : 'Your image · static backdrop';
+    const source = await loadMedia(url, 'image');
+    const targetScene = currentScene();
+    if (targetScene.id !== 'scene') {
+      URL.revokeObjectURL(url);
+      sceneWallpaperStatus.textContent = 'Select Scene first';
+      return;
+    }
+    const wallpaperId = `scene-upload-${Date.now()}`;
+    store.sceneWallpaperUploads.set(wallpaperId, {
+      id: wallpaperId,
+      name: file.name,
+      src: url,
+      thumb: url,
+    });
+    images.set(url, source);
+    setSceneWallpaper(targetScene, wallpaperId, { announceChange: false });
+    sceneWallpaperPreset.value = wallpaperId;
+    sceneWallpaperStatus.textContent = `${file.name} · selected`;
+    announce(`Custom wallpaper applied to Scene. It is now available in the wallpaper menu.`);
   } catch (error) {
     if (url) URL.revokeObjectURL(url);
-    customStatus.textContent = `Could not load that ${kind}`;
-    console.warn('Custom scene loading failed.', error);
+    sceneWallpaperStatus.textContent = 'Could not load that image';
+    console.warn('Scene wallpaper loading failed.', error);
   } finally {
-    customInput.value = '';
+    sceneWallpaperInput.value = '';
   }
 });
 
@@ -1349,8 +1624,8 @@ document.addEventListener('visibilitychange', () => {
 });
 
 window.addEventListener('beforeunload', () => {
-  if (store.customObjectUrl) URL.revokeObjectURL(store.customObjectUrl);
   for (const wallpaper of store.customPhoneWallpapers.values()) URL.revokeObjectURL(wallpaper.src);
+  for (const wallpaper of store.sceneWallpaperUploads.values()) URL.revokeObjectURL(wallpaper.src);
 });
 
 // ----------------------------------------------------------------- bootstrap
@@ -1385,7 +1660,7 @@ window.__lg = {
   ready: () => !pending.size && (currentScene().backdrop.type !== 'image' || Boolean(backdropSourceFor(currentScene()))),
   set(patch) {
     Object.assign(store.material, patch);
-    glass.setMaterial(store.material, false);
+    applyMaterial();
     inspector.sync();
     invalidate();
   },
@@ -1421,7 +1696,7 @@ window.__lg = {
     for (const key of scalable) {
       store.material[key] *= zoom;
     }
-    glass.setMaterial(store.material, false);
+    applyMaterial();
     applyElements();
     inspector.sync();
     componentEditor.render();

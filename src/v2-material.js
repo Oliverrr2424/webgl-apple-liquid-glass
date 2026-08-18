@@ -5,7 +5,10 @@ export const DEFAULT_MATERIAL_V2 = Object.freeze({
   refraction: 90,
   edgeReach: 0,
   edgeWidth: 0,
-  dispersion: 0.7,
+  dispersion: 2.0,
+  // Dimensionless softness ratio. The shader multiplies this by each
+  // component's short side, so the same value stays delicate on small icons
+  // and becomes denser on larger cards.
   frost: 0.18,
   body: 0.72,
   absorption: 0.58,
@@ -37,7 +40,7 @@ export const SLIDERS_V2 = Object.freeze([
   ['edgeReach', 0, 160, 1],
   ['edgeWidth', 0, 0.55, 0.01],
   ['dispersion', 0, 7, 0.1],
-  ['frost', 0, 3.5, 0.05],
+  ['frost', 0, 1, 0.01],
   ['body', 0, 1.5, 0.01],
   ['absorption', 0, 2, 0.01],
   ['tint', 0, 1.5, 0.01],
