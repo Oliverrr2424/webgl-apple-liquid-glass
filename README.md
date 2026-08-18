@@ -7,49 +7,23 @@ This package is framework-free and renders Apple-inspired translucent surfaces w
 
 ## V2 demos
 
-The latest V2 playground pass is shown first: a live Home Page / Notification Centre
-interaction, a glass-material motion study, and the finished phone screens on both
-wallpapers.
+The current playground interactions are captured below. The final recording is the
+live scrolling backdrop demo.
 
 <p align="center">
-  <img src="assets/readme/v2-home-interaction.gif" alt="Liquid Glass V2 iPhone Home Page and Notification Centre interaction" width="360">
+  <img src="assets/readme/v2-press-effects-interaction.gif" alt="Liquid Glass V2 press effects interaction" width="640">
 </p>
 
 <p align="center">
-  <img src="assets/readme/v2-glass-showcase.gif" alt="Liquid Glass V2 animated glass material showcase" width="720">
-</p>
-
-<table>
-  <tr>
-    <td align="center"><img src="assets/readme/v2-home-page-warm.png" alt="Liquid Glass V2 Home Page on warm fold wallpaper" width="360" height="752"></td>
-    <td align="center"><img src="assets/readme/v2-home-page-sunset.png" alt="Liquid Glass V2 Home Page on sunset lake wallpaper" width="360" height="752"></td>
-  </tr>
-</table>
-
-<p align="center">
-  <img src="assets/readme/v2-home-page-2.png" alt="Liquid Glass V2 second Home Page on sunset lake wallpaper" width="360" height="752">
+  <img src="assets/readme/v2-home-warm-interaction.gif" alt="Liquid Glass V2 Home screen interaction on the warm wallpaper" width="360">
 </p>
 
 <p align="center">
-  <img src="assets/readme/v2-night-city.png" alt="Liquid Glass V2 glass surfaces on a night city backdrop" width="720" height="527">
+  <img src="assets/readme/v2-home-sunset-interaction.gif" alt="Liquid Glass V2 Home screen interaction on the sunset wallpaper" width="360">
 </p>
 
-### Reference scenes
-
-### Alpine Lake
-
-![Liquid Glass V2 on Alpine Lake](https://unpkg.com/apple-liquid-glass-webgl@2.0.3/assets/readme/v2-alpine-lake.jpg)
-
-### iPhone Home Page
-
 <p align="center">
-  <img src="https://unpkg.com/apple-liquid-glass-webgl@2.0.3/assets/readme/v2-home-page.jpg" alt="Liquid Glass V2 iPhone Home Page" width="720">
-</p>
-
-### iPhone Control Centre
-
-<p align="center">
-  <img src="https://unpkg.com/apple-liquid-glass-webgl@2.0.3/assets/readme/v2-control-centre.jpg" alt="Liquid Glass V2 iPhone Control Centre" width="720">
+  <img src="assets/readme/v2-glass-showcase.gif" alt="Liquid Glass V2 live scrolling backdrop" width="720">
 </p>
 
 ## Install
@@ -177,8 +151,8 @@ both `edgeReach` and `edgeWidth` default to zero.
 | Transmission | `refraction` | `90.00` |
 | Transmission | `edgeReach` | `0.00` |
 | Transmission | `edgeWidth` | `0.00` |
-| Transmission | `dispersion` | `0.70` |
-| Transmission | `frost` | `0.18` |
+| Transmission | `dispersion` | `2.00` |
+| Transmission | `frost` | `0.18` ratio of the component short side |
 | Transmission | `body` | `0.72` |
 | Transmission | `absorption` | `0.58` |
 | Transmission | `tint` | `0.00` |

@@ -2,7 +2,7 @@ import {
   VS_FULLSCREEN, VS_GLASS, FS_BLIT, FS_DOWN, FS_UP, FS_WALLPAPER, FS_GLASS,
 } from './shaders.js';
 import { MAX_GLASS_SHAPES } from './geometry.js';
-import { FS_GLASS_V2 } from './v2-shaders.js';
+import { FS_GLASS_V2 } from './v2-shaders.js?frost-ratio=1';
 
 function compile(gl, type, src) {
   const s = gl.createShader(type);
@@ -553,13 +553,21 @@ export class GlassRenderer {
     const lights = new Float32Array(MAX_GLASS_SHAPES * 2);
     const tints = new Float32Array(MAX_GLASS_SHAPES);
     const tintTones = new Float32Array(MAX_GLASS_SHAPES);
+    const frosts = new Float32Array(MAX_GLASS_SHAPES);
+    const opacities = new Float32Array(MAX_GLASS_SHAPES);
     shapes.forEach((element, i) => {
       const short = Math.min(element.w, element.h);
       centers[i * 2] = (element.x + element.w / 2) * dpr;
       centers[i * 2 + 1] = this.h - (element.y + element.h / 2) * dpr;
       halves[i * 2] = element.w / 2 * dpr;
       halves[i * 2 + 1] = element.h / 2 * dpr;
-      radii[i] = short * 0.5 * m.roundness * dpr;
+      // V2 normally derives the corner from its dimensionless roundness
+      // ratio. An explicit element radius keeps surfaces such as a phone
+      // screen exactly aligned with their external clip path.
+      radii[i] = Math.min(
+        element.radius ?? short * 0.5 * m.roundness,
+        short * 0.5,
+      ) * dpr;
       types[i] = element.shape === 'pill' ? 1
         : element.shape === 'circle' ? 2 : 0;
       const direction = lightDirections[i] ?? [Math.SQRT1_2, Math.SQRT1_2];
@@ -567,6 +575,10 @@ export class GlassRenderer {
       lights[i * 2 + 1] = direction[1];
       tints[i] = element.tint ?? m.tint;
       tintTones[i] = tintLights[i] ?? 1;
+      // V2 frost is a dimensionless ratio resolved in the shader against the
+      // component short side. V1 keeps its authored CSS-pixel blur lengths.
+      frosts[i] = element.frost ?? m.frost;
+      opacities[i] = element.opacity ?? 1;
     });
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -594,12 +606,13 @@ export class GlassRenderer {
     gl.uniform1fv(loc.uShapeRadii, radii);
     gl.uniform1fv(loc.uShapeTints, tints);
     gl.uniform1fv(loc.uShapeTintLights, tintTones);
+    gl.uniform1fv(loc.uShapeFrosts, frosts);
+    gl.uniform1fv(loc.uShapeOpacities, opacities);
     gl.uniform2fv(loc.uLightDirs, lights);
     gl.uniform1f(loc.uRefraction, m.refraction * dpr);
     gl.uniform1f(loc.uEdgeReach, m.edgeReach * dpr);
     gl.uniform1f(loc.uEdgeWidth, m.edgeWidth);
     gl.uniform1f(loc.uDispersion, m.dispersion);
-    gl.uniform1f(loc.uFrost, m.frost * dpr);
     gl.uniform1f(loc.uBody, m.body);
     gl.uniform1f(loc.uAbsorption, m.absorption);
     gl.uniform1f(loc.uRim, m.rim);

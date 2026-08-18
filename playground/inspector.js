@@ -6,7 +6,7 @@
 // so a long session stays readable.
 
 import { DEFAULT_MATERIAL, SLIDERS } from '../src/material.js';
-import { DEFAULT_MATERIAL_V2, SLIDERS_V2 } from '../src/v2-material.js';
+import { DEFAULT_MATERIAL_V2, SLIDERS_V2 } from '../src/v2-material.js?dispersion-default=2';
 
 const GROUPS_V1 = {
   geometry: ['radius', 'squircle', 'mergeRadius', 'bevel', 'height', 'sizeAdaptation'],
@@ -40,7 +40,7 @@ const LABELS_V1 = {
 
 const LABELS_V2 = {
   refraction: 'Refraction', edgeReach: 'Capture reach',
-  edgeWidth: 'Pull width', dispersion: 'Dispersion', frost: 'Softness',
+  edgeWidth: 'Pull width', dispersion: 'Dispersion', frost: 'Softness ratio',
   body: 'Glass body', absorption: 'Absorption', tint: 'Tint opacity',
   rim: 'Edge light', reflection: 'Reflection', highlight: 'Highlight',
   lightAngle: 'Light fallback', echo: 'Inner echo', hairline: 'Hairline',

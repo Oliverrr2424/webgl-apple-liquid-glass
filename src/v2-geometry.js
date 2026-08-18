@@ -24,6 +24,13 @@ export function smoothUnionV2(d1, d2, radius) {
 export function cornerRadiusV2(element, roundness = 0.47) {
   const width = Number(element.w ?? element.width ?? element.size ?? 0);
   const height = Number(element.h ?? element.height ?? element.size ?? width);
+  // A caller may provide a CSS-pixel radius for surfaces that must register
+  // to an external frame (for example the iPhone screen mask).  Keep the V2
+  // material ratio as the default for authored components, but honour an
+  // explicit radius when exact geometry matters.
+  if (Number.isFinite(element.radius)) {
+    return Math.max(0, Math.min(Number(element.radius), Math.min(width, height) * 0.5));
+  }
   return Math.min(width, height) * 0.5 * roundness;
 }
 

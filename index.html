@@ -23,7 +23,8 @@
     font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
   #app { display: grid; grid-template-columns: minmax(0, 1fr) 364px; height: 100%; }
   #stage { position: relative; min-width: 0; overflow: hidden; background: #0b0c0f; }
-  #content, #scrim, #gl, #ui { position: absolute; inset: 0; display: block; }
+  #content, #scrim, #baseGl, #gl, #ui { position: absolute; inset: 0; display: block; }
+  #baseGl { visibility: hidden; pointer-events: none; }
   #scrim { pointer-events: none; }
   #ui { touch-action: none; cursor: default; }
   #ui:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -153,6 +154,7 @@
   <div id="stage">
     <canvas id="content" aria-hidden="true"></canvas>
     <canvas id="scrim" aria-hidden="true"></canvas>
+    <canvas id="baseGl" aria-hidden="true"></canvas>
     <canvas id="gl" aria-hidden="true"></canvas>
     <canvas id="ui" tabindex="0" role="application"
       aria-label="Liquid glass stage. Drag a component, or select one and move it with the arrow keys."></canvas>
@@ -218,17 +220,18 @@
         until something actually changes.</p>
     </div>
     <div class="section">
-      <div class="sectionHeader"><h2>Scene</h2><span class="sectionMeta" id="sceneCount">01 / 08</span></div>
+      <div class="sectionHeader"><h2>Scene</h2><span class="sectionMeta" id="sceneCount">01 / 04</span></div>
       <select class="srOnly" id="scene" aria-label="Scene"></select>
       <div class="sceneGrid" id="scenePicker"></div>
       <div class="sceneUpload" id="sceneUpload">
-        <div class="sceneUploadRow" id="testSceneUpload">
+        <div class="sceneUploadRow" id="sceneWallpaperUpload" hidden>
           <div class="wallpaperControl">
-            <label for="customMedia">Test scene</label>
+            <label for="sceneWallpaperPreset">Wallpaper</label>
+            <select id="sceneWallpaperPreset" aria-label="Choose a Scene wallpaper"></select>
           </div>
-          <label class="uploadButton" for="customMedia"><span aria-hidden="true">＋</span>Upload</label>
-          <input class="srOnly" id="customMedia" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" aria-label="Upload an image or video as a four-component test scene">
-          <span class="uploadStatus" id="customSceneStatus">Image or video</span>
+          <label class="uploadButton" for="sceneWallpaper"><span aria-hidden="true">＋</span>Upload wallpaper</label>
+          <input class="srOnly" id="sceneWallpaper" type="file" accept="image/*" aria-label="Upload a wallpaper for the selected Scene">
+          <span class="uploadStatus" id="sceneWallpaperStatus">Select Scene to choose a wallpaper</span>
         </div>
         <div class="sceneUploadRow" id="phoneWallpaperUpload" hidden>
           <div class="wallpaperControl">
@@ -295,6 +298,6 @@
   </div>
 </div>
 <div id="announcer" class="srOnly" role="status" aria-live="polite"></div>
-<script type="module" src="./playground/main.js?phone-scenes=7"></script>
+<script type="module" src="./playground/main.js?phone-scenes=13"></script>
 </body>
 </html>

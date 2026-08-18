@@ -1,6 +1,6 @@
 // Everything that sits ON TOP of the glass: app icons, folder label, badge.
 
-import { drawPhoneChrome, drawPhoneIcon, phoneFrame } from './phone.js?phone-scenes=7';
+import { drawPhoneChrome, drawPhoneIcon, phoneFrame } from './phone.js?phone-scenes=8';
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -116,10 +116,18 @@ export function handlesOf(f) {
 }
 
 /** Selection outline plus resize handles for the element being edited. */
-export function drawSelection(ctx, f) {
+export function drawSelection(ctx, f, { compact = false } = {}) {
   ctx.save();
   ctx.strokeStyle = 'rgba(154,186,255,0.95)';
   ctx.lineWidth = 1;
+  if (compact) {
+    const radius = f.shape === 'circle' ? Math.min(f.w, f.h) / 2 : Math.min(f.w, f.h) * 0.23;
+    roundRect(ctx, f.x - 2, f.y - 2, f.w + 4, f.h + 4, radius + 2);
+    ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
   ctx.setLineDash([5, 4]);
   ctx.strokeRect(f.x - 0.5, f.y - 0.5, f.w + 1, f.h + 1);
   ctx.setLineDash([]);
@@ -131,6 +139,154 @@ export function drawSelection(ctx, f) {
     ctx.strokeStyle = 'rgba(154,186,255,0.95)';
     ctx.stroke();
   }
+  ctx.restore();
+}
+
+/** The green toggle track is regular colour beneath its glass thumb. */
+export function drawPressEffectsFrame(ctx, elements, sliderPositions) {
+  const track = elements.find((element) => element.id === 'green-toggle-track');
+  if (!track) return;
+  const radius = track.h / 2;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.25)';
+  ctx.shadowBlur = track.h * 0.2;
+  ctx.shadowOffsetY = track.h * 0.1;
+  roundRect(ctx, track.x, track.y, track.w, track.h, radius);
+  const progress = sliderPositions?.get('green-toggle-track') ?? 1;
+  const gray = ctx.createLinearGradient(track.x, track.y, track.x + track.w, track.y + track.h);
+  gray.addColorStop(0, '#c2c3c7');
+  gray.addColorStop(1, '#a9abb0');
+  ctx.fillStyle = gray;
+  ctx.fill();
+  roundRect(ctx, track.x, track.y, track.w, track.h, radius);
+  const green = ctx.createLinearGradient(track.x, track.y, track.x + track.w, track.y + track.h);
+  green.addColorStop(0, '#34d86a');
+  green.addColorStop(1, '#25c653');
+  ctx.globalAlpha = progress * progress * (3 - 2 * progress);
+  ctx.fillStyle = green;
+  ctx.fill();
+  ctx.restore();
+}
+
+function restingThumb(layoutElements, id, sliderPositions) {
+  const thumb = layoutElements.find((element) => element.id === id);
+  const track = thumb?.sliderTrack
+    ? layoutElements.find((element) => element.id === thumb.sliderTrack)
+    : null;
+  if (!thumb || !track) return null;
+  const progress = sliderPositions?.get(track.id) ?? 0;
+  const travel = Math.max(0, track.w - thumb.w - track.h * 0.16);
+  return {
+    ...thumb,
+    x: track.x + track.h * 0.08 + travel * progress,
+    y: track.y + track.h * 0.08,
+  };
+}
+
+function drawRestingFrostedThumb(ctx, thumb, tone, opacity = 1, backdrop = null) {
+  if (!thumb) return;
+  const radius = thumb.h / 2;
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.shadowColor = tone === 'white' ? 'rgba(0,0,0,.18)' : 'rgba(0,0,0,.055)';
+  ctx.shadowBlur = thumb.h * (tone === 'white' ? 0.16 : 0.09);
+  ctx.shadowOffsetY = thumb.h * 0.045;
+  roundRect(ctx, thumb.x, thumb.y, thumb.w, thumb.h, radius);
+  if (tone === 'white') {
+    const fill = ctx.createLinearGradient(thumb.x, thumb.y, thumb.x, thumb.y + thumb.h);
+    fill.addColorStop(0, 'rgba(255,255,255,.97)');
+    fill.addColorStop(1, 'rgba(238,239,242,.94)');
+    ctx.fillStyle = fill;
+    ctx.fill();
+  } else {
+    // A real, inexpensive frosted resting state: blur the already-composited
+    // lower glass/background, then add one flat cool-gray veil. Its value now
+    // follows the pixels below it instead of an artificial vertical gradient.
+    ctx.clip();
+    if (backdrop) {
+      const blur = Math.max(5, thumb.h * 0.105);
+      const pad = blur * 2.5;
+      const cssWidth = backdrop.clientWidth || backdrop.width;
+      const cssHeight = backdrop.clientHeight || backdrop.height;
+      const scaleX = backdrop.width / Math.max(1, cssWidth);
+      const scaleY = backdrop.height / Math.max(1, cssHeight);
+      const cropX = Math.max(0, thumb.x - pad);
+      const cropY = Math.max(0, thumb.y - pad);
+      const cropRight = Math.min(cssWidth, thumb.x + thumb.w + pad);
+      const cropBottom = Math.min(cssHeight, thumb.y + thumb.h + pad);
+      ctx.filter = `blur(${blur}px)`;
+      ctx.drawImage(
+        backdrop,
+        cropX * scaleX,
+        cropY * scaleY,
+        (cropRight - cropX) * scaleX,
+        (cropBottom - cropY) * scaleY,
+        cropX,
+        cropY,
+        cropRight - cropX,
+        cropBottom - cropY,
+      );
+      ctx.filter = 'none';
+    }
+    // Neutralise most hue with a cheap colour blend. This preserves the
+    // backdrop's luminance without paying for a second full filter stage.
+    ctx.globalCompositeOperation = 'color';
+    ctx.fillStyle = 'rgba(148,150,155,.72)';
+    ctx.fillRect(thumb.x, thumb.y, thumb.w, thumb.h);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(142,145,152,.24)';
+    ctx.fillRect(thumb.x, thumb.y, thumb.w, thumb.h);
+  }
+  ctx.shadowColor = 'transparent';
+  if (tone === 'white') {
+    roundRect(ctx, thumb.x + 0.75, thumb.y + 0.75, thumb.w - 1.5, thumb.h - 1.5, radius - 0.75);
+    ctx.strokeStyle = 'rgba(83,85,91,.34)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Resting frosted controls and labels for the interaction specimen. */
+export function drawPressEffectsOverlay(
+  ctx,
+  layoutElements,
+  glassElements,
+  sliderPositions,
+  press,
+  backdrop,
+) {
+  const track = layoutElements.find((element) => element.id === 'selection-track');
+  const thumb = glassElements.find((element) => element.id === 'selection-thumb')
+    ?? restingThumb(layoutElements, 'selection-thumb', sliderPositions);
+  if (!track || !thumb) return;
+  const selectionIsLiquid = press?.type === 'slider' && press.id === 'selection-thumb';
+  const toggleIsLiquid = press?.type === 'slider' && press.id === 'green-toggle-thumb';
+  const releaseOpacity = press?.target === 0 ? Math.min(1, Math.max(0, press.releaseMix ?? 0)) : 0;
+  if (!selectionIsLiquid) drawRestingFrostedThumb(ctx, thumb, 'gray', 1, backdrop);
+  else if (releaseOpacity > 0) {
+    drawRestingFrostedThumb(ctx, thumb, 'gray', releaseOpacity, backdrop);
+  }
+  const toggleThumb = glassElements.find((element) => element.id === 'green-toggle-thumb')
+    ?? restingThumb(layoutElements, 'green-toggle-thumb', sliderPositions);
+  if (!toggleIsLiquid) {
+    drawRestingFrostedThumb(
+      ctx,
+      toggleThumb,
+      'white',
+    );
+  } else if (releaseOpacity > 0) {
+    drawRestingFrostedThumb(ctx, toggleThumb, 'white', releaseOpacity);
+  }
+  ctx.save();
+  ctx.fillStyle = 'rgba(22,25,31,.88)';
+  ctx.shadowColor = 'rgba(255,255,255,.65)';
+  ctx.shadowBlur = 4;
+  ctx.font = `650 ${Math.max(12, track.h * 0.2)}px -apple-system, "SF Pro Display", system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('⌂  Home', track.x + track.w * 0.25, track.y + track.h * 0.52);
+  ctx.fillText('⌕  Discover', track.x + track.w * 0.75, track.y + track.h * 0.52);
   ctx.restore();
 }
 
@@ -800,6 +956,9 @@ export function drawPhonePanelOverlay(ctx, kind, elements, width, height, versio
   ctx.translate(0, offsetY);
   if (kind === 'notification') drawNotificationOverlay(ctx, frame, elements, version);
   else drawControlOverlay(ctx, frame, elements);
+  // The sheet artwork travels, but the Dynamic Island/status chrome belongs
+  // to the phone frame and stays pinned to the physical screen edge.
+  ctx.translate(0, -offsetY);
   drawPhoneChrome(ctx, frame, {});
   ctx.restore();
 }
@@ -814,9 +973,9 @@ export function drawPhoneSceneOverlay(ctx, scene, elements, width, height, versi
   if (scene.phoneView === 'home') drawHomeOverlay(ctx, frame, elements, viewState);
   else if (scene.phoneView === 'notification') drawNotificationOverlay(ctx, frame, elements, version);
   else drawControlOverlay(ctx, frame, elements);
-  const chrome = scene.phoneView === 'home'
-    ? { time: '01:27', recording: true, statusIcon: 'location' }
-    : {};
-  drawPhoneChrome(ctx, frame, chrome);
+  // Keep the status treatment identical across Home, Notification Centre and
+  // Control Centre: the same 9:41 clock, cellular bars, Wi‑Fi and battery
+  // glyphs, with no recording/privacy variant on just the Home screen.
+  drawPhoneChrome(ctx, frame, {});
   ctx.restore();
 }

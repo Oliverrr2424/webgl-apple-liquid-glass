@@ -18,12 +18,13 @@ uniform int uShapeTypes[MAX_SHAPES];
 uniform float uShapeRadii[MAX_SHAPES];
 uniform float uShapeTints[MAX_SHAPES];
 uniform float uShapeTintLights[MAX_SHAPES];
+uniform float uShapeFrosts[MAX_SHAPES];
+uniform float uShapeOpacities[MAX_SHAPES];
 uniform vec2 uLightDirs[MAX_SHAPES];
 uniform float uRefraction;
 uniform float uEdgeReach;
 uniform float uEdgeWidth;
 uniform float uDispersion;
-uniform float uFrost;
 uniform float uBody;
 uniform float uAbsorption;
 uniform float uRim;
@@ -187,8 +188,17 @@ void main() {
   // becomes. Preserve the tuned reach=35 softness while preventing larger
   // reaches from silently doubling the blur radius.
   float causticBlur = min(0.7 + 1.13 * uDpr, 0.7 + captureDistance * 0.026);
-  float blurRadius = max(uFrost * (0.55 + depth * 1.3), causticBlur);
-  float blurMix = clamp(uFrost * 0.20 + causticShade * 0.18, 0.0, 0.84);
+  // Frost is a ratio, not a fixed pixel radius. Resolve it against the
+  // component's short side so a small icon stays clear while a larger card
+  // naturally becomes denser and more opaque at the same material setting.
+  float shapeFrost = clamp(uShapeFrosts[chosen], 0.0, 1.0);
+  float shortSideCss = minHalf * 2.0 / max(uDpr, 1.0);
+  float sizeRatio = clamp(shortSideCss / 96.0, 0.28, 2.25);
+  float blurRadius = max(shapeFrost * shortSideCss
+                         * (0.22 + depth * 0.55) * uDpr,
+                         causticBlur);
+  float blurMix = clamp(shapeFrost * (0.56 + sizeRatio * 0.34)
+                        + causticShade * 0.18, 0.0, 0.88);
   vec3 sr = mix(backdrop(uvR), softBackdrop(uvR, blurRadius), blurMix);
   vec3 sg = mix(backdrop(uvG), softBackdrop(uvG, blurRadius), blurMix);
   vec3 sb = mix(backdrop(uvB), softBackdrop(uvB, blurRadius), blurMix);
@@ -254,5 +264,6 @@ void main() {
   float hairAlpha = clamp(hairline * uHairline * (0.22 + uRim * 0.20), 0.0, 1.0);
   float alpha = hairAlpha + mask * (1.0 - hairAlpha);
   vec3 premultiplied = hairColor * hairAlpha + color * mask * (1.0 - hairAlpha);
-  outColor = vec4(premultiplied, alpha);
+  float surfaceOpacity = clamp(uShapeOpacities[chosen], 0.0, 1.0);
+  outColor = vec4(premultiplied * surfaceOpacity, alpha * surfaceOpacity);
 }`;
