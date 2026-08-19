@@ -22,7 +22,7 @@ live scrolling backdrop demo.
 </table>
 
 <p align="center">
-  <img src="assets/readme/v2-press-effects-interaction.gif" alt="Liquid Glass V2 press effects interaction" width="640">
+  <img src="assets/readme/v2-press-effects-interaction.gif" alt="Liquid Glass V2 press effects interaction" width="720">
 </p>
 
 <p align="center">
