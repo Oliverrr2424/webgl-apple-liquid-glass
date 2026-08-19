@@ -10,23 +10,23 @@ This package is framework-free and renders Apple-inspired translucent surfaces w
 The current playground interactions are captured below. The final recording is the
 live scrolling backdrop demo.
 
-<table>
+<table align="center" width="100%">
   <tr>
-    <td align="center">
-      <img src="assets/readme/v2-home-warm-interaction.gif" alt="Liquid Glass V2 Home screen interaction on the warm wallpaper" width="360">
+    <td align="center" width="50%">
+      <img src="assets/readme/v2-home-warm-interaction.gif" alt="Liquid Glass V2 Home screen interaction on the warm wallpaper" width="100%">
     </td>
-    <td align="center">
-      <img src="assets/readme/v2-home-sunset-interaction.gif" alt="Liquid Glass V2 Home screen interaction on the sunset wallpaper" width="360">
+    <td align="center" width="50%">
+      <img src="assets/readme/v2-home-sunset-interaction.gif" alt="Liquid Glass V2 Home screen interaction on the sunset wallpaper" width="100%">
     </td>
   </tr>
 </table>
 
 <p align="center">
-  <img src="assets/readme/v2-press-effects-interaction.gif" alt="Liquid Glass V2 press effects interaction" width="720">
+  <img src="assets/readme/v2-press-effects-interaction.gif" alt="Liquid Glass V2 press effects interaction" width="100%">
 </p>
 
 <p align="center">
-  <img src="assets/readme/v2-glass-showcase.gif" alt="Liquid Glass V2 live scrolling backdrop" width="720">
+  <img src="assets/readme/v2-glass-showcase.gif" alt="Liquid Glass V2 live scrolling backdrop" width="100%">
 </p>
 
 ## Install
