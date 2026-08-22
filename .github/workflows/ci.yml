@@ -1,16 +1,27 @@
 name: CI
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
+  workflow_dispatch:
   # Called by the publish workflow so a release cannot skip the gate.
   workflow_call:
 
 permissions:
   contents: read
 
+# A newer commit supersedes an older run. This keeps the required check useful
+# on active pull requests instead of queueing several identical Chromium jobs.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -27,28 +38,31 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Unit tests
+      # These are the blocking checks. They do not depend on a GPU and cover
+      # the package logic, the browser/WebGL lifecycle, and the npm contents.
+      - name: Run unit tests
         run: npm run test:unit
 
-      - name: Browser tests
+      - name: Run browser tests
         run: npm run test:browser
-
-      # The visual runner forces deterministic SwiftShader rendering. Its Linux
-      # Subzero baseline remains distinct from macOS's LLVM rounding output.
-      # Keep snapshots advisory: GPU/driver changes can move pixels without a
-      # functional regression, while unit and browser tests remain blocking.
-      - name: Visual regression
-        id: visual
-        continue-on-error: true
-        run: npm run test:visual
 
       - name: Verify the published file list
         run: npm run pack:check
 
+      # The visual runner forces deterministic SwiftShader rendering. Its Linux
+      # Subzero baseline remains distinct from macOS's LLVM rounding output.
+      # Keep snapshots advisory: GPU/driver changes and font rasterisation can
+      # move pixels without a functional regression. The rejected frames are
+      # still uploaded for review against the supplied reference screenshots.
+      - name: Compare visual references
+        id: visual
+        continue-on-error: true
+        run: npm run test:visual
+
       - name: Upload rejected frames
-        if: steps.visual.outcome == 'failure'
+        if: always() && steps.visual.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: rejected-frames
+          name: visual-regression-review
           path: shots/tmp-*.png
           if-no-files-found: ignore

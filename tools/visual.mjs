@@ -41,14 +41,17 @@ const BASELINE_WIDTH = 500;
 const BASELINE_HEIGHT = 320;
 
 const CASES = [
-  { name: 'shape-set-lake', scene: 'scene' },
-  { name: 'shape-set-lines', scene: 'scene' },
-  { name: 'fusion-colour-blocks', scene: 'scene', set: { mergeRadius: 90 } },
-  { name: 'adaptive-tint-night', scene: 'scene' },
-  { name: 'clear-preset-night', scene: 'scene', preset: 'clear' },
-  { name: 'home', scene: 'home' },
-  { name: 'debug-normals', scene: 'scene', set: { debug: 2 } },
-  { name: 'focus-folder', scene: 'scene', focus: [0, 2] },
+  // Keep the renderer explicit. V1 and V2 intentionally reject each other's
+  // material keys, so a visual case must never inherit the previous case's
+  // renderer or accidentally send mergeRadius/debug to V2.
+  { name: 'shape-set-lake', version: 'v1', scene: 'scene', wallpaper: 'natural-lake' },
+  { name: 'shape-set-lines', version: 'v1', scene: 'scene', wallpaper: 'abstract-lines' },
+  { name: 'fusion-colour-blocks', version: 'v1', scene: 'scene', wallpaper: 'color-blocks', set: { mergeRadius: 90 } },
+  { name: 'adaptive-tint-night', version: 'v1', scene: 'scene', wallpaper: 'night-city' },
+  { name: 'clear-preset-night', version: 'v1', scene: 'scene', wallpaper: 'night-city', preset: 'clear' },
+  { name: 'home', version: 'v2', scene: 'home' },
+  { name: 'debug-normals', version: 'v1', scene: 'scene', wallpaper: 'abstract-lines', set: { debug: 2 } },
+  { name: 'focus-folder', version: 'v1', scene: 'scene', wallpaper: 'natural-lake', focus: [0, 2] },
 ];
 
 const mimeTypes = {
@@ -193,7 +196,13 @@ try {
   for (const testCase of CASES) {
     await page.evaluate(async (spec) => {
       const lg = window.__lg;
+      lg.setVersion(spec.version);
       lg.setScene(spec.scene);
+      if (spec.wallpaper) {
+        const picker = document.querySelector('#sceneWallpaperPreset');
+        picker.value = spec.wallpaper;
+        picker.dispatchEvent(new Event('change', { bubbles: true }));
+      }
       if (spec.preset) document.querySelector(`[data-preset="${spec.preset}"]`).click();
       else document.querySelector('#resetMaterial').click();
       if (spec.set) lg.set(spec.set);

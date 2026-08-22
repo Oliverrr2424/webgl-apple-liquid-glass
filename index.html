@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,30 +9,60 @@
   * { box-sizing: border-box; }
   :root {
     color-scheme: dark;
-    --panel: #101318;
-    --surface: #171b22;
-    --surface-raised: #1d222b;
-    --line: rgba(255,255,255,.10);
+    --panel: #0f1217;
+    --panel-header: rgba(15,18,23,.82);
+    --surface: #171b23;
+    --surface-raised: #1e242f;
+    --surface-inset: rgba(255,255,255,.035);
+    --line: rgba(255,255,255,.09);
     --line-strong: rgba(255,255,255,.18);
     --muted: #8e97a8;
-    --text: #eff2f8;
-    --accent: #9abaff;
-    --success: #82dea3;
+    --faint: #6c7688;
+    --text: #eef1f7;
+    --accent: #93b6ff;
+    --accent-text: #d9e6ff;
+    --accent-soft: rgba(147,182,255,.15);
+    --accent-line: rgba(147,182,255,.55);
+    --track: rgba(255,255,255,.14);
+    --danger: #ff8d8d;
+    --shadow-pop: 0 10px 28px rgba(0,0,0,.34);
+    --radius: 12px;
+    --radius-sm: 9px;
+  }
+  [data-theme="light"] {
+    color-scheme: light;
+    --panel: #f4f5f8;
+    --panel-header: rgba(244,245,248,.85);
+    --surface: #ffffff;
+    --surface-raised: #eef1f6;
+    --surface-inset: rgba(18,28,45,.045);
+    --line: rgba(18,28,45,.10);
+    --line-strong: rgba(18,28,45,.20);
+    --muted: #5f6b7d;
+    --faint: #8a94a5;
+    --text: #1a2231;
+    --accent: #2f66e0;
+    --accent-text: #1d4fc0;
+    --accent-soft: rgba(47,102,224,.11);
+    --accent-line: rgba(47,102,224,.5);
+    --track: rgba(18,28,45,.14);
+    --danger: #c94343;
+    --shadow-pop: 0 10px 28px rgba(18,28,45,.12);
   }
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d10; color: var(--text);
     font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
-  #app { display: grid; grid-template-columns: minmax(0, 1fr) 364px; height: 100%; }
+  #app { display: grid; grid-template-columns: minmax(0, 1fr) 372px; height: 100%; }
   #stage { position: relative; min-width: 0; overflow: hidden; background: #0b0c0f; }
   #content, #scrim, #baseGl, #gl, #ui { position: absolute; inset: 0; display: block; }
   #baseGl { visibility: hidden; pointer-events: none; }
   #scrim { pointer-events: none; }
   #ui { touch-action: none; cursor: default; }
   #ui:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  #stageHud { position: absolute; left: 24px; bottom: 22px; pointer-events: none; text-shadow: 0 2px 16px rgba(0,0,0,.48); }
+  #stageHud { position: absolute; left: 24px; bottom: 22px; pointer-events: none; text-shadow: 0 2px 16px rgba(0,0,0,.48); color: #fff; }
   #stageHud .eyebrow { color: rgba(255,255,255,.68); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
   #stageHud strong { display: block; margin-top: 4px; font-size: 21px; letter-spacing: -.03em; }
   #stageHud span { color: rgba(255,255,255,.72); font-size: 11px; }
-  #loadState { position: absolute; top: 18px; left: 20px; padding: 6px 9px; color: rgba(255,255,255,.75); font-size: 10px; border: 1px solid rgba(255,255,255,.16); background: rgba(9,11,16,.40); border-radius: 999px; backdrop-filter: blur(10px); transition: opacity .3s ease; }
+  #loadState { position: absolute; top: 18px; left: 20px; padding: 6px 10px; color: rgba(255,255,255,.78); font-size: 10px; border: 1px solid rgba(255,255,255,.16); background: rgba(9,11,16,.40); border-radius: 999px; backdrop-filter: blur(10px); transition: opacity .3s ease; }
   body.wallpapers-ready #loadState { opacity: 0; }
   #phoneGestureTips { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
   #phoneGestureTips[hidden] { display: none; }
@@ -53,95 +83,148 @@
   .gestureTip--notification:nth-child(2) { animation-delay: -2.1s; }
   .gestureTip--control:nth-child(3) { animation-delay: -4.2s; }
   @keyframes gestureTipFade { 0%, 100% { opacity: .34; } 35%, 65% { opacity: .78; } }
-  #unsupported { position: absolute; inset: 0; z-index: 5; display: grid; place-content: center; gap: 8px; padding: 40px; text-align: center; background: #0b0d10; }
+  #unsupported { position: absolute; inset: 0; z-index: 5; display: grid; place-content: center; gap: 8px; padding: 40px; text-align: center; background: #0b0d10; color: #eff2f8; }
   /* An id selector outranks the user agent's [hidden] rule, so say it here. */
   #unsupported[hidden] { display: none; }
-  #unsupported h2 { font-size: 16px; }
-  #unsupported p { max-width: 42ch; margin: 0 auto; color: var(--muted); font-size: 12px; }
+  #unsupported h2 { font-size: 16px; margin: 0; }
+  #unsupported p { max-width: 42ch; margin: 0 auto; color: #8e97a8; font-size: 12px; }
   body.unsupported #panel { opacity: .35; pointer-events: none; }
-  #showPanel { position: absolute; z-index: 4; top: 18px; right: 20px; display: none; min-height: 32px; padding: 0 12px; color: var(--text); border-color: rgba(255,255,255,.24); background: rgba(12,15,20,.62); backdrop-filter: blur(14px); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  #showPanel { position: absolute; z-index: 4; top: 18px; right: 20px; display: none; min-height: 32px; padding: 0 14px; color: #eef1f7; border: 1px solid rgba(255,255,255,.24); border-radius: 999px; background: rgba(12,15,20,.62); backdrop-filter: blur(14px); box-shadow: 0 8px 24px rgba(0,0,0,.18); font-size: 11px; }
   body.hide-panel #showPanel { display: inline-flex; align-items: center; justify-content: center; }
-  #panel { width: auto; height: 100%; overflow-y: auto; padding: 22px 20px 26px; background: var(--panel); border-left: 1px solid var(--line); }
+
+  /* ------------------------------------------------------------------ panel */
+  #panel { height: 100%; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line);
+    transition: background-color .25s ease, border-color .25s ease; scrollbar-width: thin; }
   body.hide-panel #panel { display: none; }
   body.hide-panel #app { grid-template-columns: 1fr; }
-  .panelHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
-  .iconButton { flex: 0 0 30px; width: 30px; min-height: 30px; padding: 0; border-radius: 50%; color: var(--muted); font-size: 22px; line-height: 1; }
-  .iconButton span { display: block; transform: translateY(-1px); }
-  h1 { font-size: 20px; line-height: 1.1; margin: 0; letter-spacing: -.04em; }
-  h2 { font-size: 12px; line-height: 1; margin: 0; color: var(--text); font-weight: 600; letter-spacing: -.01em; }
-  .kicker { color: var(--accent); font-size: 10px; text-transform: uppercase; letter-spacing: .18em; margin-bottom: 7px; }
-  .subhead { color: var(--muted); font-size: 11px; margin: 7px 0 0; }
-  .toolbar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 16px; }
+  .panelHead { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    padding: 18px 20px 14px; background: var(--panel-header); backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--line); transition: background-color .25s ease, border-color .25s ease; }
+  .panelActions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+  .iconButton { display: grid; place-items: center; flex: 0 0 30px; width: 30px; min-height: 30px; padding: 0;
+    border-radius: 50%; color: var(--muted); }
+  .iconButton:hover { color: var(--text); }
+  .iconButton > span { display: block; font-size: 19px; line-height: 1; transform: translateY(-1px); }
+  .themeToggle svg { width: 15px; height: 15px; }
+  [data-theme="dark"] .iconMoon, [data-theme="light"] .iconSun { display: none; }
+  .langToggle { display: flex; padding: 2px; gap: 2px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-inset); }
+  .langToggle button { min-height: 24px; padding: 0 9px; border: 0; border-radius: 999px; background: transparent;
+    color: var(--muted); font-size: 10.5px; font-weight: 600; }
+  .langToggle button:hover { background: transparent; color: var(--text); }
+  .langToggle button.active { background: var(--surface-raised); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+  [data-theme="light"] .langToggle button.active { background: #fff; box-shadow: 0 1px 3px rgba(18,28,45,.16); }
+  h1 { font-size: 19px; line-height: 1.1; margin: 0; letter-spacing: -.03em; }
+  h2 { font-size: 12px; line-height: 1; margin: 0; color: var(--text); font-weight: 600; letter-spacing: .01em; }
+  .kicker { color: var(--accent); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .18em; margin-bottom: 6px; }
+  .subhead { color: var(--muted); font-size: 11px; margin: 6px 0 0; }
+  .panelBody { padding: 4px 20px 26px; }
+  .toolbar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 14px; }
   .toolbar[hidden], .segmented[hidden], .section[hidden] { display: none; }
-  button { min-height: 32px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); font: inherit; font-size: 11px; cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
+  button { min-height: 32px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface);
+    color: var(--text); font: inherit; font-size: 11px; cursor: pointer;
+    transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease; }
   button:hover { background: var(--surface-raised); border-color: var(--line-strong); }
   button:active { transform: translateY(1px) scale(.99); }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  button.active { background: rgba(154,186,255,.16); border-color: rgba(154,186,255,.55); color: #d9e6ff; }
-  select { min-height: 30px; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 11px; }
-  .section { padding-top: 20px; }
-  .sectionHeader { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
-  .sectionMeta { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
-  .sceneGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
-  .sceneCard { position: relative; min-height: 68px; overflow: hidden; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; text-align: left; isolation: isolate; border-color: rgba(255,255,255,.12); }
+  button.active { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-text); font-weight: 600; }
+  select { min-height: 30px; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+    background: var(--surface); color: var(--text); font: inherit; font-size: 11px; }
+  .section { padding: 18px 0 2px; margin-top: 16px; border-top: 1px solid var(--line); transition: border-color .25s ease; }
+  .section:first-child { border-top: 0; margin-top: 0; }
+  .sectionHeader { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 11px; }
+  .sectionMeta { color: var(--faint); font-size: 10px; font-variant-numeric: tabular-nums; }
+  .sceneGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .sceneCard { position: relative; min-height: 72px; overflow: hidden; padding: 10px; display: flex; flex-direction: column;
+    justify-content: flex-end; align-items: flex-start; text-align: left; isolation: isolate;
+    border-radius: var(--radius); border-color: rgba(255,255,255,.12); color: #fff; }
   .sceneCard::before, .sceneCard::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
-  .sceneCard::before { z-index: -2; background-color: var(--scene-tint, #1d2430); background-image: var(--scene-image, none); background-size: cover; background-position: center; transition: transform .3s ease; }
+  .sceneCard::before { z-index: -2; background-color: var(--scene-tint, #1d2430); background-image: var(--scene-image, none);
+    background-size: cover; background-position: center; transition: transform .3s ease; }
   .sceneCard::after { z-index: -1; background: linear-gradient(180deg, rgba(0,0,0,.02), rgba(0,0,0,.72)); }
   .sceneCard:hover::before { transform: scale(1.06); }
   .sceneCard span, .sceneCard small { position: relative; z-index: 1; }
   .sceneCard span { font-size: 11px; font-weight: 600; }
   .sceneCard small { margin-top: 2px; color: rgba(255,255,255,.72); font-size: 9px; }
-  .sceneCard.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px rgba(154,186,255,.45); }
-  .sceneUpload { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 8px; }
+  .sceneCard.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-line), 0 0 0 3px var(--accent-soft); }
+  .sceneUpload { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 10px; }
   .sceneUpload.phoneMode { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .sceneUploadRow { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .sceneUploadRow { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
   .sceneUploadRow[hidden] { display: none; }
   .wallpaperControl { display: grid; gap: 4px; }
   .wallpaperControl label { color: var(--muted); font-size: 9px; }
   .wallpaperControl select { width: 100%; min-width: 0; }
-  .uploadButton { width: 100%; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 30px; padding: 0 8px; border: 1px dashed rgba(255,255,255,.22); border-radius: 8px; color: #cbd5e8; background: rgba(255,255,255,.025); font-size: 10px; cursor: pointer; transition: background .16s ease, border-color .16s ease; }
-  .uploadButton:hover { background: var(--surface-raised); border-color: var(--line-strong); }
+  .uploadButton { width: 100%; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
+    gap: 5px; min-height: 30px; padding: 0 8px; border: 1px dashed var(--line-strong); border-radius: var(--radius-sm);
+    color: var(--muted); background: var(--surface-inset); font-size: 10px; cursor: pointer;
+    transition: background .16s ease, border-color .16s ease, color .16s ease; }
+  .uploadButton:hover { background: var(--surface-raised); border-color: var(--accent-line); color: var(--text); }
   .uploadButton span { color: var(--accent); font-size: 14px; line-height: 1; }
-  .uploadStatus { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-  .segmented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.025); }
+  .uploadButton i { font-style: normal; }
+  .uploadStatus { overflow: hidden; color: var(--faint); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+  .segmented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; padding: 3px;
+    border: 1px solid var(--line); border-radius: 11px; background: var(--surface-inset); }
   .segmented + .segmented { margin-top: 6px; }
-  .segmented button { min-height: 30px; border: 0; background: transparent; color: var(--muted); }
-  .segmented button.active { background: var(--surface-raised); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.22); }
-  .versionNote { min-height: 30px; margin: 8px 1px 0; color: var(--muted); font-size: 10px; }
+  .segmented button { min-height: 29px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); }
+  .segmented button:hover { background: transparent; color: var(--text); }
+  .segmented button.active { background: var(--surface-raised); color: var(--text); font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,.22); }
+  [data-theme="light"] .segmented button.active { background: #fff; box-shadow: 0 1px 3px rgba(18,28,45,.14); }
+  .versionNote { min-height: 30px; margin: 8px 2px 0; color: var(--muted); font-size: 10px; }
   .debugGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .debugGrid button { padding: 0 4px; font-size: 10px; }
-  .statGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-  .stat { padding: 8px 9px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255,255,255,.02); }
-  .stat dt { color: var(--muted); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
-  .stat dd { margin: 3px 0 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .statGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0; }
+  .stat { padding: 9px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-inset);
+    transition: background .25s ease, border-color .25s ease; }
+  .stat dt { color: var(--faint); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+  .stat dd { margin: 4px 0 0; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .componentRow { display: grid; grid-template-columns: minmax(0, 1fr) 88px 30px; gap: 6px; margin-bottom: 6px; }
-  .componentName { overflow: hidden; text-align: left; padding: 0 9px; text-overflow: ellipsis; white-space: nowrap; }
-  .componentRow.active .componentName { background: rgba(154,186,255,.16); border-color: rgba(154,186,255,.55); color: #d9e6ff; }
-  .componentRemove { font-size: 15px; line-height: 1; }
+  .componentName { overflow: hidden; text-align: left; padding: 0 10px; text-overflow: ellipsis; white-space: nowrap; }
+  .componentRow.active .componentName { background: var(--accent-soft); border-color: var(--accent-line);
+    color: var(--accent-text); font-weight: 600; }
+  .componentRemove { font-size: 15px; line-height: 1; color: var(--muted); }
+  .componentRemove:hover { color: var(--danger); }
   .componentAdd { display: grid; grid-template-columns: minmax(0, 1fr) 88px; gap: 6px; margin-top: 8px; }
   #sliders { display: grid; gap: 6px; }
-  .sliderGroup { border-top: 1px solid var(--line); padding-top: 9px; }
-  .sliderGroup summary { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; cursor: pointer; list-style: none; }
+  .sliderGroup { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-inset);
+    padding: 0 10px; transition: background .25s ease, border-color .25s ease; }
+  .sliderGroup summary { display: flex; justify-content: space-between; align-items: center; min-height: 36px;
+    color: var(--muted); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em;
+    cursor: pointer; list-style: none; user-select: none; }
   .sliderGroup summary::-webkit-details-marker { display: none; }
-  .sliderGroup summary span::after { content: '+'; color: var(--muted); font-size: 14px; line-height: 1; }
-  .sliderGroup[open] summary span::after { content: '−'; }
-  .sliderRows { display: grid; gap: 6px; padding-top: 9px; }
-  .row { display: grid; grid-template-columns: 116px minmax(0, 1fr) 56px; align-items: center; gap: 8px; }
-  .rowLabel { overflow: hidden; min-height: 20px; padding: 0; border: 0; background: none; color: #aeb7c8; font-size: 10px; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .sliderGroupChevron::after { content: '+'; color: var(--faint); font-size: 14px; font-weight: 400; line-height: 1; }
+  .sliderGroup[open] .sliderGroupChevron::after { content: '−'; }
+  .sliderGroup[open] summary { color: var(--text); }
+  .sliderRows { display: grid; gap: 6px; padding: 2px 0 10px; }
+  .row { display: grid; grid-template-columns: 108px minmax(0, 1fr) 54px; align-items: center; gap: 8px; }
+  .rowLabel { overflow: hidden; min-height: 20px; padding: 0; border: 0; background: none; color: var(--muted);
+    font-size: 10px; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
   .rowLabel:hover { background: none; color: var(--text); }
-  .row.modified .rowLabel { color: var(--accent); }
+  .row.modified .rowLabel { color: var(--accent); font-weight: 600; }
   .row.modified .rowLabel::after { content: '•'; margin-left: 4px; }
-  input[type=range] { width: 100%; height: 14px; accent-color: var(--accent); }
-  input[type=number] { width: 100%; min-height: 24px; padding: 0 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: #dce3f2; font: inherit; font-size: 10px; font-variant-numeric: tabular-nums; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 16px; margin: 0; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--track); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 13px; height: 13px; margin-top: -4.5px;
+    border: 0; border-radius: 50%; background: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,.35);
+    transition: transform .12s ease; }
+  input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.15); }
+  input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--track); }
+  input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 50%; background: var(--accent); }
+  input[type=number] { width: 100%; min-height: 24px; padding: 0 4px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--surface); color: var(--text); font: inherit; font-size: 10px; font-variant-numeric: tabular-nums;
+    transition: border-color .16s ease, background .25s ease; }
   input[type=number]:focus-visible { outline: 1px solid var(--accent); }
-  .tip { margin-top: 17px; padding: 10px 11px; border-left: 2px solid var(--accent); background: rgba(154,186,255,.06); color: #b7c5dd; font-size: 10px; }
-  .tip kbd { padding: 1px 4px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); font: inherit; font-size: 9px; }
-  .note { color: #737e91; font-size: 10px; margin-top: 14px; }
+  .tip { margin-top: 18px; padding: 10px 12px; border: 1px solid var(--accent-line); border-radius: var(--radius);
+    background: var(--accent-soft); color: var(--muted); font-size: 10px; line-height: 1.5;
+    transition: background .25s ease, border-color .25s ease; }
+  .note { color: var(--faint); font-size: 10px; margin-top: 14px; line-height: 1.6; }
+  .note kbd, .tip kbd { padding: 1px 4px; border: 1px solid var(--line-strong); border-radius: 4px;
+    background: var(--surface); color: var(--muted); font: inherit; font-size: 9px; }
   .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
   @media (max-width: 900px) {
     html, body { overflow: auto; }
     #app { min-height: 100dvh; height: auto; grid-template-columns: 1fr; grid-template-rows: minmax(420px, 60dvh) auto; }
     #panel { height: auto; max-height: none; border-top: 1px solid var(--line); border-left: 0; }
+    .panelHead { position: static; }
     .row { grid-template-columns: 96px minmax(0, 1fr) 52px; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -159,145 +242,167 @@
     <canvas id="ui" tabindex="0" role="application"
       aria-label="Liquid glass stage. Drag a component, or select one and move it with the arrow keys."></canvas>
     <div id="phoneGestureTips" hidden aria-live="polite">
-      <div class="gestureTip gestureTip--page" id="pageGestureTip" data-gesture-tip="page" title="Swipe left or right to change the home screen page">
+      <div class="gestureTip gestureTip--page" id="pageGestureTip" data-gesture-tip="page" data-i18n-title="title.tipSwipe" title="Swipe left or right to change the home screen page">
         <span class="gestureTipIcon" aria-hidden="true">↔</span>
-        <span><strong>Swipe pages</strong><small>Drag left or right</small></span>
-        <button class="gestureTipClose" type="button" aria-label="Dismiss swipe pages tip">×</button>
+        <span><strong data-i18n="gesture.swipePages">Swipe pages</strong><small data-i18n="gesture.swipePagesHint">Drag left or right</small></span>
+        <button class="gestureTipClose" type="button" data-i18n-aria="gesture.dismissSwipe" aria-label="Dismiss swipe pages tip">×</button>
       </div>
-      <div class="gestureTip gestureTip--notification" id="notificationGestureTip" data-gesture-tip="notification" title="Pull down from the top-left of the screen, then swipe up to close">
+      <div class="gestureTip gestureTip--notification" id="notificationGestureTip" data-gesture-tip="notification" data-i18n-title="title.tipNotification" title="Pull down from the top-left of the screen, then swipe up to close">
         <span class="gestureTipIcon" aria-hidden="true">↓</span>
-        <span><strong>Notifications</strong><small>Pull down, top-left</small></span>
-        <button class="gestureTipClose" type="button" aria-label="Dismiss notifications tip">×</button>
+        <span><strong data-i18n="gesture.notifications">Notifications</strong><small data-i18n="gesture.notificationsHint">Pull down, top-left</small></span>
+        <button class="gestureTipClose" type="button" data-i18n-aria="gesture.dismissNotifications" aria-label="Dismiss notifications tip">×</button>
       </div>
-      <div class="gestureTip gestureTip--control" id="controlGestureTip" data-gesture-tip="control" title="Pull down from the top-right of the screen, then swipe up to close">
+      <div class="gestureTip gestureTip--control" id="controlGestureTip" data-gesture-tip="control" data-i18n-title="title.tipControl" title="Pull down from the top-right of the screen, then swipe up to close">
         <span class="gestureTipIcon" aria-hidden="true">↓</span>
-        <span><strong>Control Centre</strong><small>Pull down, top-right</small></span>
-        <button class="gestureTipClose" type="button" aria-label="Dismiss control centre tip">×</button>
+        <span><strong data-i18n="gesture.control">Control Centre</strong><small data-i18n="gesture.controlHint">Pull down, top-right</small></span>
+        <button class="gestureTipClose" type="button" data-i18n-aria="gesture.dismissControl" aria-label="Dismiss control centre tip">×</button>
       </div>
     </div>
-    <button id="showPanel" type="button" aria-label="Show inspector" title="Show inspector">Inspector</button>
-    <div id="loadState">Loading source imagery</div>
+    <button id="showPanel" type="button" data-i18n="panel.inspector" data-i18n-aria="panel.show" aria-label="Show inspector" title="Show inspector">Inspector</button>
+    <div id="loadState" data-i18n="loadState">Loading source imagery</div>
     <div id="stageHud"><div class="eyebrow" id="hudVersion">LIQUID GLASS / V1</div><strong id="hudScene">Alpine Lake</strong><span id="hudKind">Natural landscape</span></div>
     <div id="unsupported" hidden>
-      <h2>WebGL2 is unavailable</h2>
-      <p>This playground needs a WebGL2 context. The material cannot be rendered here, but
-        <code>LiquidGlassWebGL.isSupported()</code> and <code>LiquidGlassWebGLV2.isSupported()</code>
-        report the same thing in your own app so you
-        can fall back to a CSS surface.</p>
+      <h2 data-i18n="unsupported.title">WebGL2 is unavailable</h2>
+      <p><span data-i18n="unsupported.bodyA">This playground needs a WebGL2 context. The material cannot be rendered here, but</span>
+        <code>LiquidGlassWebGL.isSupported()</code> <span data-i18n="unsupported.bodyB">and</span>
+        <code>LiquidGlassWebGLV2.isSupported()</code>
+        <span data-i18n="unsupported.bodyC">report the same thing in your own app so you
+        can fall back to a CSS surface.</span></p>
     </div>
   </div>
   <div id="panel">
-    <div class="panelHead"><div><div class="kicker">Material lab</div><h1>Liquid Glass</h1><p class="subhead">A small physics playground for translucent surfaces.</p></div><button id="togglePanel" class="iconButton" type="button" aria-label="Hide inspector" title="Hide inspector"><span aria-hidden="true">×</span></button></div>
-    <div class="section">
-      <div class="sectionHeader"><h2>Renderer</h2><span class="sectionMeta" id="rendererVersion">V1 original</span></div>
-      <div class="segmented">
-        <button type="button" data-renderer-version="v1">V1 Original</button>
-        <button type="button" data-renderer-version="v2">V2 Transparent</button>
+    <header class="panelHead">
+      <div>
+        <div class="kicker" data-i18n="kicker">Material lab</div>
+        <h1>Liquid Glass</h1>
+        <p class="subhead" data-i18n="subhead">A small physics playground for translucent surfaces.</p>
       </div>
-      <p class="versionNote" id="versionNote">The original frosted material with smooth-union fusion.</p>
-    </div>
-    <div class="toolbar" id="presetToolbar">
-      <button type="button" data-preset="regular">Regular</button>
-      <button type="button" data-preset="clear">Clear</button>
-      <button type="button" data-preset="lens">Lens</button>
-    </div>
-    <div class="toolbar">
-      <button type="button" id="copyLink" title="Copy a link that reproduces this exact material">Copy link</button>
-      <button type="button" id="copyCode" title="Copy the code that reproduces this material">Copy code</button>
-      <button type="button" id="resetMaterial" title="Back to the package defaults">Reset all</button>
-    </div>
-    <div class="section">
-      <div class="sectionHeader"><h2>Performance</h2><span class="sectionMeta">this frame</span></div>
-      <dl class="statGrid" id="stats">
-        <div class="stat"><dt>Frame rate</dt><dd data-stat="fps">idle</dd></div>
-        <div class="stat"><dt>CPU per frame</dt><dd data-stat="cpu">—</dd></div>
-        <div class="stat"><dt>Drawing buffer</dt><dd data-stat="size">—</dd></div>
-        <div class="stat"><dt>Device ratio</dt><dd data-stat="dpr">—</dd></div>
-        <div class="stat"><dt>Components</dt><dd data-stat="shapes">—</dd></div>
-        <div class="stat"><dt>Backdrop</dt><dd data-stat="backdrop">—</dd></div>
-      </dl>
-      <p class="note">A static scene reports <code>idle</code>: dirty tracking skips the GPU entirely
-        until something actually changes.</p>
-    </div>
-    <div class="section">
-      <div class="sectionHeader"><h2>Scene</h2><span class="sectionMeta" id="sceneCount">01 / 04</span></div>
-      <select class="srOnly" id="scene" aria-label="Scene"></select>
-      <div class="sceneGrid" id="scenePicker"></div>
-      <div class="sceneUpload" id="sceneUpload">
-        <div class="sceneUploadRow" id="sceneWallpaperUpload" hidden>
-          <div class="wallpaperControl">
-            <label for="sceneWallpaperPreset">Wallpaper</label>
-            <select id="sceneWallpaperPreset" aria-label="Choose a Scene wallpaper"></select>
-          </div>
-          <label class="uploadButton" for="sceneWallpaper"><span aria-hidden="true">＋</span>Upload wallpaper</label>
-          <input class="srOnly" id="sceneWallpaper" type="file" accept="image/*" aria-label="Upload a wallpaper for the selected Scene">
-          <span class="uploadStatus" id="sceneWallpaperStatus">Select Scene to choose a wallpaper</span>
+      <div class="panelActions">
+        <div class="langToggle" id="langToggle" role="group" aria-label="Switch language / 切换语言">
+          <button type="button" data-lang="en" class="active">EN</button>
+          <button type="button" data-lang="zh">中</button>
         </div>
-        <div class="sceneUploadRow" id="phoneWallpaperUpload" hidden>
-          <div class="wallpaperControl">
-            <label for="phoneWallpaperPreset">Wallpaper</label>
-            <select id="phoneWallpaperPreset" aria-label="Choose a phone wallpaper"></select>
+        <button id="themeToggle" class="iconButton themeToggle" type="button" aria-label="Switch theme" title="Switch theme">
+          <svg class="iconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="iconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+        <button id="togglePanel" class="iconButton" type="button" data-i18n-aria="panel.hide" aria-label="Hide inspector" data-i18n-title="panel.hide" title="Hide inspector"><span aria-hidden="true">×</span></button>
+      </div>
+    </header>
+    <div class="panelBody">
+      <div class="section">
+        <div class="sectionHeader"><h2 data-i18n="section.renderer">Renderer</h2><span class="sectionMeta" id="rendererVersion">V1 original</span></div>
+        <div class="segmented">
+          <button type="button" data-renderer-version="v1" data-i18n="renderer.v1">V1 Original</button>
+          <button type="button" data-renderer-version="v2" data-i18n="renderer.v2">V2 Transparent</button>
+        </div>
+        <p class="versionNote" id="versionNote">The original frosted material with smooth-union fusion.</p>
+      </div>
+      <div class="toolbar" id="presetToolbar">
+        <button type="button" data-preset="regular" data-i18n="preset.regular">Regular</button>
+        <button type="button" data-preset="clear" data-i18n="preset.clear">Clear</button>
+        <button type="button" data-preset="lens" data-i18n="preset.lens">Lens</button>
+      </div>
+      <div class="toolbar">
+        <button type="button" id="copyLink" data-i18n="action.copyLink" data-i18n-title="title.copyLink" title="Copy a link that reproduces this exact material">Copy link</button>
+        <button type="button" id="copyCode" data-i18n="action.copyCode" data-i18n-title="title.copyCode" title="Copy the code that reproduces this material">Copy code</button>
+        <button type="button" id="resetMaterial" data-i18n="action.reset" data-i18n-title="title.reset" title="Back to the package defaults">Reset all</button>
+      </div>
+      <div class="section">
+        <div class="sectionHeader"><h2 data-i18n="section.performance">Performance</h2><span class="sectionMeta" data-i18n="meta.thisFrame">this frame</span></div>
+        <dl class="statGrid" id="stats">
+          <div class="stat"><dt data-i18n="stat.fps">Frame rate</dt><dd data-stat="fps">idle</dd></div>
+          <div class="stat"><dt data-i18n="stat.cpu">CPU per frame</dt><dd data-stat="cpu">—</dd></div>
+          <div class="stat"><dt data-i18n="stat.size">Drawing buffer</dt><dd data-stat="size">—</dd></div>
+          <div class="stat"><dt data-i18n="stat.dpr">Device ratio</dt><dd data-stat="dpr">—</dd></div>
+          <div class="stat"><dt data-i18n="stat.shapes">Components</dt><dd data-stat="shapes">—</dd></div>
+          <div class="stat"><dt data-i18n="stat.backdrop">Backdrop</dt><dd data-stat="backdrop">—</dd></div>
+        </dl>
+        <p class="note" data-i18n="perf.note">A static scene reports <code>idle</code>: dirty tracking skips the GPU entirely
+          until something actually changes.</p>
+      </div>
+      <div class="section">
+        <div class="sectionHeader"><h2 data-i18n="section.scene">Scene</h2><span class="sectionMeta" id="sceneCount">01 / 04</span></div>
+        <select class="srOnly" id="scene" data-i18n-aria="aria.scene" aria-label="Scene"></select>
+        <div class="sceneGrid" id="scenePicker"></div>
+        <div class="sceneUpload" id="sceneUpload">
+          <div class="sceneUploadRow" id="sceneWallpaperUpload" hidden>
+            <div class="wallpaperControl">
+              <label for="sceneWallpaperPreset" data-i18n="scene.wallpaper">Wallpaper</label>
+              <select id="sceneWallpaperPreset" data-i18n-aria="aria.sceneWallpaperPreset" aria-label="Choose a Scene wallpaper"></select>
+            </div>
+            <label class="uploadButton" for="sceneWallpaper"><span aria-hidden="true">＋</span><i data-i18n="scene.uploadWallpaper">Upload wallpaper</i></label>
+            <input class="srOnly" id="sceneWallpaper" type="file" accept="image/*" data-i18n-aria="aria.sceneWallpaperUpload" aria-label="Upload a wallpaper for the selected Scene">
+            <span class="uploadStatus" id="sceneWallpaperStatus">Select Scene to choose a wallpaper</span>
           </div>
-          <label class="uploadButton" for="phoneWallpaper"><span aria-hidden="true">＋</span>Add wallpaper</label>
-          <input class="srOnly" id="phoneWallpaper" type="file" accept="image/*" aria-label="Upload a custom wallpaper for the selected phone scene">
-          <span class="uploadStatus" id="phoneWallpaperStatus">Choose a phone scene first</span>
+          <div class="sceneUploadRow" id="phoneWallpaperUpload" hidden>
+            <div class="wallpaperControl">
+              <label for="phoneWallpaperPreset" data-i18n="scene.wallpaper">Wallpaper</label>
+              <select id="phoneWallpaperPreset" data-i18n-aria="aria.phoneWallpaperPreset" aria-label="Choose a phone wallpaper"></select>
+            </div>
+            <label class="uploadButton" for="phoneWallpaper"><span aria-hidden="true">＋</span><i data-i18n="scene.addWallpaper">Add wallpaper</i></label>
+            <input class="srOnly" id="phoneWallpaper" type="file" accept="image/*" data-i18n-aria="aria.phoneWallpaperUpload" aria-label="Upload a custom wallpaper for the selected phone scene">
+            <span class="uploadStatus" id="phoneWallpaperStatus">Choose a phone scene first</span>
+          </div>
         </div>
       </div>
-    </div>
-    <div class="section" id="componentSection">
-      <div class="sectionHeader"><h2>Components</h2><span class="sectionMeta">select, then arrow keys</span></div>
-      <div id="componentList"></div>
-      <div class="componentAdd">
-        <button type="button" id="addComponent">Add component</button>
-        <select id="addComponentShape" aria-label="Shape of the component to add">
-          <option value="folder">folder</option>
-          <option value="rect">rect</option>
-          <option value="pill">pill</option>
-          <option value="circle">circle</option>
-        </select>
+      <div class="section" id="componentSection">
+        <div class="sectionHeader"><h2 data-i18n="section.components">Components</h2><span class="sectionMeta" data-i18n="meta.selectThenArrows">select, then arrow keys</span></div>
+        <div id="componentList"></div>
+        <div class="componentAdd">
+          <button type="button" id="addComponent" data-i18n="component.add">Add component</button>
+          <select id="addComponentShape" data-i18n-aria="aria.addShape" aria-label="Shape of the component to add">
+            <option value="folder">folder</option>
+            <option value="rect">rect</option>
+            <option value="pill">pill</option>
+            <option value="circle">circle</option>
+          </select>
+        </div>
       </div>
-    </div>
-    <div class="section" id="viewSection">
-      <div class="sectionHeader"><h2>View</h2><span class="sectionMeta" id="sceneKind">Natural landscape</span></div>
-      <div class="segmented" id="fusionControl">
-        <button type="button" data-fusion-mode="on">Smooth union</button>
-        <button type="button" data-fusion-mode="off">Separate layers</button>
+      <div class="section" id="viewSection">
+        <div class="sectionHeader"><h2 data-i18n="section.view">View</h2><span class="sectionMeta" id="sceneKind">Natural landscape</span></div>
+        <div class="segmented" id="fusionControl">
+          <button type="button" data-fusion-mode="on" data-i18n="view.fusionOn">Smooth union</button>
+          <button type="button" data-fusion-mode="off" data-i18n="view.fusionOff">Separate layers</button>
+        </div>
+        <div class="segmented">
+          <button type="button" data-icon-mode="on" data-i18n="view.iconsOn">With icons</button>
+          <button type="button" data-icon-mode="off" data-i18n="view.iconsOff">Glass only</button>
+        </div>
+        <div class="segmented">
+          <button type="button" data-label-mode="on" data-i18n="view.labelsOn">Show labels</button>
+          <button type="button" data-label-mode="off" data-i18n="view.labelsOff">Clean stage</button>
+        </div>
       </div>
-      <div class="segmented">
-        <button type="button" data-icon-mode="on">With icons</button>
-        <button type="button" data-icon-mode="off">Glass only</button>
+      <div class="section" id="debugSection">
+        <div class="sectionHeader"><h2 data-i18n="section.debug">Debug view</h2><span class="sectionMeta" data-i18n="meta.shaderOutput">shader output</span></div>
+        <div class="segmented debugGrid">
+          <button type="button" data-debug="0" data-i18n="debug.final">Final</button>
+          <button type="button" data-debug="1" data-i18n="debug.thickness">Thickness</button>
+          <button type="button" data-debug="2" data-i18n="debug.normals">Normals</button>
+          <button type="button" data-debug="3" data-i18n="debug.dispersion">Dispersion</button>
+        </div>
       </div>
-      <div class="segmented">
-        <button type="button" data-label-mode="on">Show labels</button>
-        <button type="button" data-label-mode="off">Clean stage</button>
+      <div class="section">
+        <div class="sectionHeader"><h2 data-i18n="section.material">Material</h2><span class="sectionMeta" id="materialVersion">V1 parameters</span></div>
+        <div id="sliders"></div>
       </div>
-    </div>
-    <div class="section" id="debugSection">
-      <div class="sectionHeader"><h2>Debug view</h2><span class="sectionMeta">shader output</span></div>
-      <div class="segmented debugGrid">
-        <button type="button" data-debug="0">Final</button>
-        <button type="button" data-debug="1">Thickness</button>
-        <button type="button" data-debug="2">Normals</button>
-        <button type="button" data-debug="3">Dispersion</button>
+      <div class="tip" id="materialTip">
+        Drag components together: inside the fusion distance they form one surface, so the silhouette,
+        refraction and highlight flow through a shared bridge. A gap only closes while it is narrower
+        than about half the fusion distance.
       </div>
-    </div>
-    <div class="section">
-      <div class="sectionHeader"><h2>Material</h2><span class="sectionMeta" id="materialVersion">V1 parameters</span></div>
-      <div id="sliders"></div>
-    </div>
-    <div class="tip" id="materialTip">
-      Drag components together: inside the fusion distance they form one surface, so the silhouette,
-      refraction and highlight flow through a shared bridge. A gap only closes while it is narrower
-      than about half the fusion distance.
-    </div>
-    <div class="note" id="keyboardHelp">
-      Keyboard: <kbd>Tab</kbd> to the stage, <kbd>[</kbd> <kbd>]</kbd> to cycle components,
-      arrows to move, <kbd>Shift</kbd> for ten pixels, <kbd>Alt</kbd> to resize,
-      <kbd>Delete</kbd> to remove. Double click a parameter name to reset just that one.
+      <div class="note" id="keyboardHelp">
+        <span data-i18n="kb.prefix">Keyboard:</span> <kbd>Tab</kbd> <span data-i18n="kb.toStage">to the stage,</span>
+        <kbd>[</kbd> <kbd>]</kbd> <span data-i18n="kb.cycle">to cycle components, arrows to move,</span>
+        <kbd>Shift</kbd> <span data-i18n="kb.tenPixels">for ten pixels,</span> <kbd>Alt</kbd>
+        <span data-i18n="kb.resize">to resize,</span> <kbd>Delete</kbd> <span data-i18n="kb.remove">to remove.</span>
+        <span data-i18n="kb.resetOne">Double click a parameter name to reset just that one.</span>
+      </div>
     </div>
   </div>
 </div>
 <div id="announcer" class="srOnly" role="status" aria-live="polite"></div>
-<script type="module" src="./playground/main.js?phone-scenes=13"></script>
+<script type="module" src="./playground/main.js?phone-scenes=14"></script>
 </body>
 </html>

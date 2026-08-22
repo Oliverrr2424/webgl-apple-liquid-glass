@@ -5,6 +5,8 @@
 // doubles as the place to add, retype and delete components without editing the
 // scene source.
 
+import { t } from './i18n.js';
+
 const SHAPES = ['folder', 'rect', 'pill', 'circle'];
 
 export function createComponentEditor({ container, addButton, addShape, store, onChange, announce, isLocked = () => false }) {
@@ -32,7 +34,7 @@ export function createComponentEditor({ container, addButton, addShape, store, o
     store.elements.push(element);
     store.selectedId = element.id;
     onChange('add');
-    announce(`Added ${shape} ${element.id}`);
+    announce(t('announce.added', { shape, id: element.id }));
     render();
   }
 
@@ -41,7 +43,7 @@ export function createComponentEditor({ container, addButton, addShape, store, o
     store.elements = store.elements.filter((element) => element.id !== id);
     if (store.selectedId === id) store.selectedId = store.elements.at(-1)?.id ?? null;
     onChange('remove');
-    announce(`Removed ${id}`);
+    announce(t('announce.removed', { id }));
     render();
   }
 
@@ -54,7 +56,7 @@ export function createComponentEditor({ container, addButton, addShape, store, o
     if (shape === 'circle' || shape === 'folder') element.h = element.w;
     if (shape === 'pill' && element.w < element.h * 1.6) element.w = element.h * 1.9;
     onChange('retype');
-    announce(`${id} is now a ${shape}`);
+    announce(t('announce.retyped', { id, shape }));
     render();
   }
 
@@ -63,7 +65,8 @@ export function createComponentEditor({ container, addButton, addShape, store, o
     if (!store.elements.length) {
       const empty = document.createElement('p');
       empty.className = 'note';
-      empty.textContent = 'No components. Add one to start.';
+      empty.dataset.i18n = 'component.empty';
+      empty.textContent = t('component.empty');
       container.appendChild(empty);
       return;
     }
@@ -77,7 +80,7 @@ export function createComponentEditor({ container, addButton, addShape, store, o
       select.className = 'componentName';
       select.textContent = element.id;
       select.setAttribute('aria-pressed', String(element.id === store.selectedId));
-      select.title = 'Select, then move with the arrow keys';
+      select.title = t('component.selectTitle');
       select.addEventListener('click', () => {
         store.selectedId = element.id;
         onChange('select');
@@ -86,7 +89,7 @@ export function createComponentEditor({ container, addButton, addShape, store, o
 
       const shape = document.createElement('select');
       shape.className = 'componentShape';
-      shape.setAttribute('aria-label', `${element.id} shape`);
+      shape.setAttribute('aria-label', t('aria.componentShape', { id: element.id }));
       for (const name of SHAPES) {
         const option = document.createElement('option');
         option.value = name;
@@ -99,7 +102,7 @@ export function createComponentEditor({ container, addButton, addShape, store, o
       const destroy = document.createElement('button');
       destroy.type = 'button';
       destroy.className = 'componentRemove';
-      destroy.setAttribute('aria-label', `Remove ${element.id}`);
+      destroy.setAttribute('aria-label', t('aria.removeComponent', { id: element.id }));
       destroy.textContent = '−';
       destroy.addEventListener('click', () => remove(element.id));
 
