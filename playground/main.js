@@ -26,6 +26,7 @@ import { attachPressEffects } from './press-effects.js?phone-scenes=8';
 import { createStats } from './stats.js';
 import { decodeState, toCode, writeHash } from './permalink.js';
 import { PHONE_ICON_SOURCES, attachPhoneIconImages, phoneFrame } from './phone.js?phone-scenes=8';
+import { t, applyI18n, initPreferences, onLanguageChange } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -37,11 +38,15 @@ const uiCanvas = $('ui');
 const liveRegion = $('announcer');
 const announce = (message) => { liveRegion.textContent = message; };
 
+// Theme and language are applied before anything renders so the panel never
+// flashes in the wrong preference.
+initPreferences();
+
 // ------------------------------------------------------------------ support
 if (!LiquidGlassWebGL.isSupported()) {
   document.body.classList.add('unsupported');
   $('unsupported').hidden = false;
-  announce('This browser cannot run WebGL2.');
+  announce(t('announce.webglUnavailable'));
   throw new Error('WebGL2 is unavailable; the playground cannot start.');
 }
 
@@ -109,8 +114,8 @@ function createGlass(targetCanvas = glCanvas) {
     // read the drawing buffer back.
     autoResize: false,
     preserveDrawingBuffer: true,
-    onContextLost: () => announce('The GPU context was lost. Waiting for the browser to restore it.'),
-    onContextRestored: () => announce('The GPU context was restored.'),
+    onContextLost: () => announce(t('announce.contextLost')),
+    onContextRestored: () => announce(t('announce.contextRestored')),
   };
   if (store.version === 'v1') options.fusion = effectiveFusion();
   const instance = new GlassClass(targetCanvas, options);
@@ -276,7 +281,7 @@ function syncBackdropMode() {
     if (source && source !== video) source.pause();
   }
   if (video && video.paused) {
-    video.play().catch(() => announce('The browser blocked video playback. Interact with the page and pick the scene again.'));
+    video.play().catch(() => announce(t('announce.videoBlocked')));
   }
 }
 
@@ -356,8 +361,8 @@ function syncPhoneWallpaperUI() {
   if (!select.value) select.value = 'scene-default';
   const selected = phoneWallpaperOptions(scene).find((option) => option.id === select.value);
   $('phoneWallpaperStatus').textContent = selected?.id === 'scene-default'
-    ? 'Scene wallpaper'
-    : `${selected?.name ?? 'Wallpaper'} selected`;
+    ? t('status.sceneWallpaper')
+    : t('status.wallpaperSelected', { name: selected?.name ?? 'Wallpaper' });
 }
 
 function setPhoneWallpaper(scene, wallpaperId, { announceChange = true } = {}) {
@@ -387,7 +392,7 @@ function setPhoneWallpaper(scene, wallpaperId, { announceChange = true } = {}) {
   sceneStart = performance.now();
   invalidate({ content: true });
   queueHash();
-  if (announceChange) announce(`${option.name} wallpaper applied to ${scene.name}.`);
+  if (announceChange) announce(t('announce.wallpaperApplied', { name: option.name, scene: scene.name }));
 }
 
 function syncSceneWallpaperUI() {
@@ -407,7 +412,7 @@ function syncSceneWallpaperUI() {
   select.value = selectedSceneWallpaperId(scene);
   if (!select.value) select.value = SCENE_WALLPAPER_PRESETS[0].id;
   const selected = sceneWallpaperOptions(scene).find((option) => option.id === select.value);
-  $('sceneWallpaperStatus').textContent = selected?.name ?? 'Choose a wallpaper';
+  $('sceneWallpaperStatus').textContent = selected?.name ?? t('status.chooseWallpaper');
 }
 
 function setSceneWallpaper(scene, wallpaperId, { announceChange = true } = {}) {
@@ -427,7 +432,7 @@ function setSceneWallpaper(scene, wallpaperId, { announceChange = true } = {}) {
   sceneStart = performance.now();
   invalidate({ content: true });
   queueHash();
-  if (announceChange) announce(`${option.name} wallpaper applied to Scene.`);
+  if (announceChange) announce(t('announce.wallpaperApplied', { name: option.name, scene: 'Scene' }));
 }
 
 // --------------------------------------------------------- island pull-down
@@ -859,6 +864,9 @@ function rebuildInspector() {
       invalidate();
     },
   });
+  // The freshly built rows start from the English fallbacks; re-apply the
+  // active language immediately.
+  applyI18n($('sliders'));
 }
 rebuildInspector();
 
@@ -935,7 +943,7 @@ function attachHomePager() {
   const commitPage = (pageIndex) => {
     store.homePageIndex = Math.max(0, Math.min(1, pageIndex));
     updateOffset(0);
-    announce(`Home screen page ${store.homePageIndex + 1} of 2.`);
+    announce(t('announce.page', { page: store.homePageIndex + 1 }));
   };
 
   cancelHomePageAnimation = () => {
@@ -1147,8 +1155,8 @@ function attachHomePager() {
       uiCanvas.style.cursor = 'grab';
       settlePanel(open);
       announce(open
-        ? (type === 'notification' ? 'Notification Centre open.' : 'Control Centre open.')
-        : 'Back to the Home Screen.');
+        ? t(type === 'notification' ? 'announce.notifOpen' : 'announce.controlOpen')
+        : t('announce.backHome'));
       return;
     }
     const { velocity } = drag;
@@ -1175,14 +1183,14 @@ function attachHomePager() {
       if (!['ArrowUp', 'Escape'].includes(event.key)) return;
       event.preventDefault();
       settlePanel(false);
-      announce('Back to the Home Screen.');
+      announce(t('announce.backHome'));
       return;
     }
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       openPanel('notification');
       settlePanel(true);
-      announce('Notification Centre open.');
+      announce(t('announce.notifOpen'));
       return;
     }
     if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
@@ -1237,7 +1245,7 @@ $('resetMaterial').addEventListener('click', () => {
   applyMaterial();
   inspector.sync();
   syncPresetButtons(store.version === 'v1' ? 'regular' : null);
-  announce(`${store.version.toUpperCase()} material reset to its own package defaults.`);
+  announce(t('announce.reset', { version: store.version.toUpperCase() }));
   queueHash();
   invalidate();
 });
@@ -1248,17 +1256,13 @@ function syncVersionUI() {
   for (const button of document.querySelectorAll('[data-renderer-version]')) {
     button.classList.toggle('active', button.dataset.rendererVersion === store.version);
   }
-  $('rendererVersion').textContent = isV2 ? 'V2 transparent' : 'V1 original';
-  $('materialVersion').textContent = isV2 ? 'V2 parameters' : 'V1 parameters';
-  $('versionNote').textContent = isV2
-    ? 'Clear edge-capture optics. Its values are independent from V1, including same-named controls.'
-    : 'The original frosted material with smooth-union fusion.';
+  $('rendererVersion').textContent = t(isV2 ? 'meta.v2' : 'meta.v1');
+  $('materialVersion').textContent = t(isV2 ? 'meta.v2params' : 'meta.v1params');
+  $('versionNote').textContent = t(isV2 ? 'note.v2' : 'note.v1');
   $('hudVersion').textContent = isV2 ? 'LIQUID GLASS / V2 TRANSPARENT' : 'LIQUID GLASS / V1 ORIGINAL';
   $('materialTip').textContent = locked
-    ? 'This reference scene has a fixed iPhone layout. Switch between V1 and V2, then adjust only that renderer’s material parameters.'
-    : (isV2
-      ? 'V2 keeps the centre nearly straight-through and captures nearby backdrop transitions only in the edge field. Roundness is a ratio; optical lengths are scaled independently.'
-      : 'Drag components together: inside the fusion distance they form one surface, so the silhouette, refraction and highlight flow through a shared bridge. A gap only closes while it is narrower than about half the fusion distance.');
+    ? t('tip.locked')
+    : t(isV2 ? 'tip.v2' : 'tip.v1');
   $('presetToolbar').hidden = isV2;
   $('fusionControl').hidden = isV2;
   $('debugSection').hidden = isV2 || locked;
@@ -1288,7 +1292,7 @@ function setRendererVersion(version, { announceChange = true } = {}) {
   syncToggleButtons();
   queueHash();
   invalidate({ content: true });
-  if (announceChange) announce(`Switched to ${version === 'v2' ? 'V2 transparent' : 'V1 original'} renderer.`);
+  if (announceChange) announce(t('announce.switched', { version: t(version === 'v2' ? 'meta.v2' : 'meta.v1') }));
 }
 
 for (const button of document.querySelectorAll('[data-renderer-version]')) {
@@ -1388,20 +1392,20 @@ function syncSceneUI() {
   $('hudScene').textContent = scene.name;
   const locked = Boolean(scene.lockedComponents);
   const interactionLab = Boolean(scene.interactionLab);
-  $('hudKind').textContent = interactionLab ? `${scene.kind} / press and drag the glass`
-    : locked ? `${scene.kind} / tap any glass component to select it`
-    : `${scene.kind} / drag the components, or select one and use the arrow keys`;
+  $('hudKind').textContent = interactionLab ? t('hud.interaction', { kind: scene.kind })
+    : locked ? t('hud.locked', { kind: scene.kind })
+    : t('hud.free', { kind: scene.kind });
   $('componentSection').hidden = locked;
   const phoneWallpaperEnabled = PHONE_WALLPAPER_SCENES.has(scene.id);
   const sceneWallpaperEnabled = scene.id === 'scene';
   $('sceneUpload').classList.toggle('phoneMode', phoneWallpaperEnabled || sceneWallpaperEnabled);
   $('phoneWallpaperUpload').hidden = !phoneWallpaperEnabled;
   if (!phoneWallpaperEnabled) {
-    phoneWallpaperStatus.textContent = 'Only for phone scenes';
+    phoneWallpaperStatus.textContent = t('status.onlyPhoneScenes');
   }
   $('sceneWallpaperUpload').hidden = !sceneWallpaperEnabled;
   if (!sceneWallpaperEnabled) {
-    $('sceneWallpaperStatus').textContent = 'Select Scene to choose a wallpaper';
+    $('sceneWallpaperStatus').textContent = t('status.selectSceneForWallpaper');
   }
   syncPhoneWallpaperUI();
   syncSceneWallpaperUI();
@@ -1409,20 +1413,16 @@ function syncSceneUI() {
   $('stageHud').hidden = locked && !interactionLab;
   $('keyboardHelp').hidden = locked;
   $('materialTip').textContent = interactionLab
-    ? 'Press and drag either side of the selected capsule. It expands and brightens while it follows your finger. Hold the standalone glass controls to see their white bloom and spring-back.'
+    ? t('tip.interaction')
     : locked
-      ? 'This reference scene has a fixed iPhone layout, but every liquid-glass component can be selected and pressed. Switch between V1 and V2, then adjust only that renderer’s material parameters.'
-    : (store.version === 'v2'
-      ? 'V2 keeps the centre nearly straight-through and captures nearby backdrop transitions only in the edge field. Roundness is a ratio; optical lengths are scaled independently.'
-      : 'Drag components together: inside the fusion distance they form one surface, so the silhouette, refraction and highlight flow through a shared bridge. A gap only closes while it is narrower than about half the fusion distance.');
+      ? t('tip.locked')
+    : t(store.version === 'v2' ? 'tip.v2' : 'tip.v1');
   $('debugSection').hidden = store.version === 'v2' || locked;
   uiCanvas.setAttribute('aria-label', interactionLab
-    ? 'Press effects. Drag the selected glass capsule to choose Home or Discover. Hold the other glass controls to make them bloom.'
+    ? t('aria.stageInteraction')
     : locked
-      ? (scene.phoneView === 'home'
-      ? `${scene.name}. Swipe horizontally, or use the left and right arrow keys, to change home screen pages.`
-      : `${scene.name}. Tap any liquid-glass component to select and press it. Use the inspector to adjust material parameters.`)
-    : 'Liquid glass stage. Drag a component, or select one and move it with the arrow keys.');
+      ? t(scene.phoneView === 'home' ? 'aria.stageLockedHome' : 'aria.stageLocked', { name: scene.name })
+    : t('aria.stage'));
   uiCanvas.style.cursor = scene.phoneView === 'home' ? 'grab' : interactionLab ? 'pointer' : 'default';
   if (locked) store.selectedId = null;
   $('sceneCount').textContent = `${String(index + 1).padStart(2, '0')} / ${String(list.length).padStart(2, '0')}`;
@@ -1466,11 +1466,11 @@ sceneWallpaperInput.addEventListener('change', async () => {
   const [file] = sceneWallpaperInput.files || [];
   if (!file) return;
   if (!file.type.startsWith('image/')) {
-    sceneWallpaperStatus.textContent = 'Choose an image file';
+    sceneWallpaperStatus.textContent = t('status.chooseImage');
     sceneWallpaperInput.value = '';
     return;
   }
-  sceneWallpaperStatus.textContent = 'Loading wallpaper…';
+  sceneWallpaperStatus.textContent = t('status.loading');
   let url;
   try {
     url = URL.createObjectURL(file);
@@ -1478,7 +1478,7 @@ sceneWallpaperInput.addEventListener('change', async () => {
     const targetScene = currentScene();
     if (targetScene.id !== 'scene') {
       URL.revokeObjectURL(url);
-      sceneWallpaperStatus.textContent = 'Select Scene first';
+      sceneWallpaperStatus.textContent = t('status.selectSceneFirst');
       return;
     }
     const wallpaperId = `scene-upload-${Date.now()}`;
@@ -1491,11 +1491,11 @@ sceneWallpaperInput.addEventListener('change', async () => {
     images.set(url, source);
     setSceneWallpaper(targetScene, wallpaperId, { announceChange: false });
     sceneWallpaperPreset.value = wallpaperId;
-    sceneWallpaperStatus.textContent = `${file.name} · selected`;
-    announce(`Custom wallpaper applied to Scene. It is now available in the wallpaper menu.`);
+    sceneWallpaperStatus.textContent = t('status.fileSelected', { name: file.name });
+    announce(t('announce.customWallpaper', { scene: 'Scene' }));
   } catch (error) {
     if (url) URL.revokeObjectURL(url);
-    sceneWallpaperStatus.textContent = 'Could not load that image';
+    sceneWallpaperStatus.textContent = t('status.loadFailed');
     console.warn('Scene wallpaper loading failed.', error);
   } finally {
     sceneWallpaperInput.value = '';
@@ -1511,12 +1511,12 @@ phoneWallpaperInput.addEventListener('change', async () => {
   const [file] = phoneWallpaperInput.files || [];
   if (!file) return;
   if (!file.type.startsWith('image/')) {
-    phoneWallpaperStatus.textContent = 'Choose an image file';
+    phoneWallpaperStatus.textContent = t('status.chooseImage');
     phoneWallpaperInput.value = '';
     return;
   }
 
-  phoneWallpaperStatus.textContent = 'Loading wallpaper…';
+  phoneWallpaperStatus.textContent = t('status.loading');
   let url;
   try {
     url = URL.createObjectURL(file);
@@ -1524,7 +1524,7 @@ phoneWallpaperInput.addEventListener('change', async () => {
     const targetScene = currentScene();
     if (!PHONE_WALLPAPER_SCENES.has(targetScene.id)) {
       URL.revokeObjectURL(url);
-      phoneWallpaperStatus.textContent = 'Select a phone scene first';
+      phoneWallpaperStatus.textContent = t('status.choosePhoneScene');
       return;
     }
     const wallpaperId = `upload-${Date.now()}`;
@@ -1537,11 +1537,11 @@ phoneWallpaperInput.addEventListener('change', async () => {
     images.set(url, source);
     setPhoneWallpaper(targetScene, wallpaperId, { announceChange: false });
     phoneWallpaperPreset.value = wallpaperId;
-    phoneWallpaperStatus.textContent = `${file.name} · selected`;
-    announce(`Custom wallpaper applied to ${targetScene.name}. It is now available in the wallpaper menu.`);
+    phoneWallpaperStatus.textContent = t('status.fileSelected', { name: file.name });
+    announce(t('announce.customWallpaper', { scene: targetScene.name }));
   } catch (error) {
     if (url) URL.revokeObjectURL(url);
-    phoneWallpaperStatus.textContent = 'Could not load that image';
+    phoneWallpaperStatus.textContent = t('status.loadFailed');
     console.warn('Phone wallpaper loading failed.', error);
   } finally {
     phoneWallpaperInput.value = '';
@@ -1565,7 +1565,7 @@ async function copy(text, message) {
     announce(message);
     return true;
   } catch {
-    announce('The browser blocked clipboard access.');
+    announce(t('announce.clipboardBlocked'));
     return false;
   }
 }
@@ -1581,7 +1581,7 @@ function flash(button, label) {
 // once the handler resumes.
 $('copyLink').addEventListener('click', async ({ currentTarget: button }) => {
   const url = writeHash({ ...store });
-  if (await copy(url, 'Share link copied.')) flash(button, 'Link copied');
+  if (await copy(url, t('announce.shareCopied'))) flash(button, t('action.linkCopied'));
 });
 
 $('copyCode').addEventListener('click', async ({ currentTarget: button }) => {
@@ -1595,7 +1595,7 @@ $('copyCode').addEventListener('click', async ({ currentTarget: button }) => {
       ? scene.backdrop.src
       : null,
   });
-  if (await copy(code, 'Code copied to the clipboard.')) flash(button, 'Code copied');
+  if (await copy(code, t('announce.codeCopied'))) flash(button, t('action.codeCopied'));
 });
 
 // ---------------------------------------------------------------------- panel
@@ -1639,6 +1639,13 @@ Promise.all([...ICON_SOURCES, ...PHONE_ICON_SOURCES].map((src) => new Promise((r
   attachIconImages(decodedImages);
   attachPhoneIconImages(decodedImages);
   invalidate();
+});
+
+// Dynamic copy (HUD, tips, statuses) follows the language switch.
+onLanguageChange(() => {
+  syncVersionUI();
+  syncSceneUI();
+  componentEditor.render();
 });
 
 renderScenePicker();

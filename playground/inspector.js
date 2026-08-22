@@ -64,7 +64,7 @@ export function createInspector({ container, material, version = 'v1', onChange 
     const group = document.createElement('details');
     group.className = 'sliderGroup';
     group.open = version === 'v2' ? name === 'transmission' : name === 'geometry' || name === 'optics';
-    group.innerHTML = `<summary>${name}<span></span></summary><div class="sliderRows"></div>`;
+    group.innerHTML = `<summary><span class="sliderGroupName" data-i18n="group.${name}">${name}</span><span class="sliderGroupChevron" aria-hidden="true"></span></summary><div class="sliderRows"></div>`;
     container.appendChild(group);
     bodies[name] = group.querySelector('.sliderRows');
   }
@@ -74,7 +74,7 @@ export function createInspector({ container, material, version = 'v1', onChange 
     const row = document.createElement('div');
     row.className = 'row';
     row.innerHTML = `
-      <button type="button" class="rowLabel" title="${key} - double click to reset to ${defaults[key]}">${label}</button>
+      <button type="button" class="rowLabel" data-i18n="slider.${version}.${key}" title="${key} - double click to reset to ${defaults[key]}">${label}</button>
       <input type="range" aria-label="${label}" min="${min}" max="${max}" step="${step}">
       <input type="number" aria-label="${label} value" class="num" min="${min}" max="${max}" step="${step}">`;
     const range = row.querySelector('input[type=range]');
