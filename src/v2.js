@@ -40,7 +40,10 @@ function normalizeElement(input, index) {
   if (opacity !== undefined && !Number.isFinite(opacity)) {
     throw new TypeError('Liquid glass V2 element opacity must be a finite number.');
   }
-  const tintTone = input.tintTone ?? 'auto';
+  // The public tint control follows the light material used by the demo
+  // switch. Content-aware polarity remains available as an explicit opt-in,
+  // but changing a component's size must not silently change its tint.
+  const tintTone = input.tintTone ?? 'light';
   if (!['auto', 'light', 'dark'].includes(tintTone)) {
     throw new TypeError(`Unknown liquid glass V2 tint tone: ${tintTone}`);
   }
@@ -55,7 +58,7 @@ function normalizeElement(input, index) {
     ...(tint === undefined ? {} : { tint }),
     ...(frost === undefined ? {} : { frost }),
     ...(opacity === undefined ? {} : { opacity }),
-    ...(input.tintTone == null ? {} : { tintTone }),
+    tintTone,
   };
 }
 
@@ -429,12 +432,18 @@ export class LiquidGlassWebGLV2 {
   tintLightForElement(element, width, height) {
     if (element.tintTone === 'light') return 1;
     if (element.tintTone === 'dark') return 0;
-    const positions = [-0.34, 0, 0.34];
+    // `auto` samples one fixed-size neighbourhood around the component
+    // centre. The previous proportional offsets covered more backdrop as a
+    // component grew, so resizing the same surface could flip its tint tone.
+    // A fixed probe keeps the decision content-aware but size-independent.
+    const positions = [-24, 0, 24];
+    const centerX = element.x + element.w * 0.5;
+    const centerY = element.y + element.h * 0.5;
     let luminance = 0;
     for (const sampleY of positions) {
       for (const sampleX of positions) {
-        const x = (element.x + element.w * (0.5 + sampleX)) / Math.max(width, 1);
-        const y = (element.y + element.h * (0.5 + sampleY)) / Math.max(height, 1);
+        const x = (centerX + sampleX) / Math.max(width, 1);
+        const y = (centerY + sampleY) / Math.max(height, 1);
         luminance += this.sampleLuminance(x, y);
       }
     }
@@ -447,7 +456,8 @@ export class LiquidGlassWebGLV2 {
     if (this.renderer.lost) return this;
     const width = this.canvas.clientWidth || this.canvas.width || 1;
     const height = this.canvas.clientHeight || this.canvas.height || 1;
-    const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
+    const requestedDpr = Number(options.dpr ?? globalThis.devicePixelRatio ?? 1);
+    const dpr = Math.max(0.5, Math.min(Number.isFinite(requestedDpr) ? requestedDpr : 1, 2));
     const resized = width !== this.lastFrame.width || height !== this.lastFrame.height
       || dpr !== this.lastFrame.dpr;
     const liveBackdrop = this.renderer.hasLiveBackdrop();

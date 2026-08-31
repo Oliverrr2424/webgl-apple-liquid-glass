@@ -193,7 +193,9 @@ export declare class LiquidGlassWebGL {
   start(): this;
   stop(): this;
   resize(width?: number, height?: number, dpr?: number): { width: number; height: number; dpr: number };
-  render(options?: { force?: boolean }): this;
+  /** Draw a frame. `dpr` can temporarily lower the rendering resolution for
+   * an expensive live transition without changing CSS-space geometry. */
+  render(options?: { force?: boolean; dpr?: number }): this;
   destroy(): void;
 }
 

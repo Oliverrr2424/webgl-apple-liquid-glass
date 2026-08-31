@@ -68,8 +68,36 @@
         if (glass.elements[0].tint !== undefined) {
           throw new Error('the element tint override leaked onto the clear surface');
         }
+        if (glass.elements[0].tintTone !== 'light') {
+          throw new Error('the default tint tone no longer matches the light switch material');
+        }
         if (glass.elements[1].tintTone !== 'light') {
           throw new Error('the element tint tone was not preserved');
+        }
+        // A hard split makes the old proportional probe see bright pixels for
+        // the large surface but not the small one, despite their shared centre.
+        // The fixed-size auto probe must return the same tone for both.
+        const probeSize = glass.lightSampleSize;
+        const probePixels = new Uint8ClampedArray(probeSize * probeSize * 4);
+        for (let y = 0; y < probeSize; y++) {
+          for (let x = 0; x < probeSize; x++) {
+            const value = x >= probeSize / 2 ? 255 : 0;
+            const index = (y * probeSize + x) * 4;
+            probePixels[index] = value;
+            probePixels[index + 1] = value;
+            probePixels[index + 2] = value;
+            probePixels[index + 3] = 255;
+          }
+        }
+        glass.lightPixels = probePixels;
+        const smallAuto = glass.tintLightForElement(
+          { x: 108, y: 80, w: 40, h: 40, tintTone: 'auto' }, 320, 200,
+        );
+        const largeAuto = glass.tintLightForElement(
+          { x: -12, y: 20, w: 280, h: 160, tintTone: 'auto' }, 320, 200,
+        );
+        if (Math.abs(smallAuto - largeAuto) > 0.0001) {
+          throw new Error(`auto tint changed with component size: ${smallAuto} vs ${largeAuto}`);
         }
         let rejected = false;
         try {
@@ -86,6 +114,7 @@
             `clear=${Math.round(clearContrast)}`,
             `tinted=${Math.round(tintedContrast)}`,
             'per-element light tint',
+            'size-independent auto tint',
           ],
         };
       };
