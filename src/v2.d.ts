@@ -40,8 +40,9 @@ export interface LiquidGlassV2Element {
   /** Premultiplied surface opacity. Primarily useful for seamless transitions
    * between a live glass pass and a cheaper resting representation. */
   opacity?: number;
-  /** Select a coherent light or dark tint for the whole surface. `auto`
-   * derives it from the average backdrop below the component. */
+  /** Select a coherent light or dark tint for the whole surface. The default
+   * is `light`, matching the switch material. `auto` derives its tone from a
+   * fixed-size backdrop probe below the component, independent of its size. */
   tintTone?: 'auto' | 'light' | 'dark';
   [key: string]: unknown;
 }
@@ -138,6 +139,8 @@ export declare class LiquidGlassWebGLV2 {
   start(): this;
   stop(): this;
   resize(width?: number, height?: number, dpr?: number): { width: number; height: number; dpr: number };
-  render(options?: { force?: boolean }): this;
+  /** Draw a frame. `dpr` can temporarily lower the rendering resolution for
+   * an expensive live transition without changing CSS-space geometry. */
+  render(options?: { force?: boolean; dpr?: number }): this;
   destroy(): void;
 }

@@ -409,7 +409,8 @@ export class LiquidGlassWebGL {
     if (this.renderer.lost) return this;
     const width = this.canvas.clientWidth || this.canvas.width || 1;
     const height = this.canvas.clientHeight || this.canvas.height || 1;
-    const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
+    const requestedDpr = Number(options.dpr ?? globalThis.devicePixelRatio ?? 1);
+    const dpr = Math.max(0.5, Math.min(Number.isFinite(requestedDpr) ? requestedDpr : 1, 2));
     const resized = width !== this.lastFrame.width
       || height !== this.lastFrame.height
       || dpr !== this.lastFrame.dpr;

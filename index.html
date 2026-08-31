@@ -183,6 +183,16 @@
     color: var(--accent-text); font-weight: 600; }
   .componentRemove { font-size: 15px; line-height: 1; color: var(--muted); }
   .componentRemove:hover { color: var(--danger); }
+  .componentInspector { display: grid; gap: 7px; margin: 10px 0 12px; padding: 10px;
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-inset); }
+  .componentInspectorHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .componentInspectorHeader strong { overflow: hidden; color: var(--text); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+  .componentInspectorHeader span { flex: 0 0 auto; padding: 2px 6px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent-text); font-size: 8px; font-weight: 600; }
+  .componentControl { display: grid; grid-template-columns: 42px minmax(0, 1fr) 54px; align-items: center; gap: 7px; }
+  .componentControl > span { color: var(--muted); font-size: 9px; }
+  .componentControl input[type=number] { min-width: 0; text-align: right; }
+  .componentInspector p { margin: 1px 0 0; color: var(--faint); font-size: 8.5px; line-height: 1.45; }
   .componentAdd { display: grid; grid-template-columns: minmax(0, 1fr) 88px; gap: 6px; margin-top: 8px; }
   #sliders { display: grid; gap: 6px; }
   .sliderGroup { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-inset);
@@ -403,6 +413,6 @@
   </div>
 </div>
 <div id="announcer" class="srOnly" role="status" aria-live="polite"></div>
-<script type="module" src="./playground/main.js?phone-scenes=14"></script>
+<script type="module" src="./playground/main.js?size-controls=2"></script>
 </body>
 </html>

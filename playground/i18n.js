@@ -85,8 +85,18 @@ const STRINGS = {
     'component.add': 'Add component',
     'component.empty': 'No components. Add one to start.',
     'component.selectTitle': 'Select, then move with the arrow keys',
+    'component.sizeTitle': '{id} · Size',
+    'component.size': 'Size',
+    'component.width': 'Width',
+    'component.height': 'Height',
+    'component.linked': '1:1 linked',
+    'component.resizeHint': 'Drag a corner handle on the canvas, or use these sliders for precise sizing.',
     'aria.addShape': 'Shape of the component to add',
     'aria.componentShape': '{id} shape',
+    'aria.componentWidth': '{id} width',
+    'aria.componentHeight': '{id} height',
+    'aria.componentWidthSlider': '{id} width slider',
+    'aria.componentHeightSlider': '{id} height slider',
     'aria.removeComponent': 'Remove {id}',
 
     'view.fusionOn': 'Smooth union',
@@ -218,6 +228,7 @@ const STRINGS = {
     'announce.added': 'Added {shape} {id}',
     'announce.removed': 'Removed {id}',
     'announce.retyped': '{id} is now a {shape}',
+    'announce.resized': '{id} resized to {width} by {height}',
   },
 
   zh: {
@@ -296,8 +307,18 @@ const STRINGS = {
     'component.add': '添加组件',
     'component.empty': '暂无组件，添加一个开始吧。',
     'component.selectTitle': '选中后可用方向键移动',
+    'component.sizeTitle': '{id} · 尺寸',
+    'component.size': '尺寸',
+    'component.width': '宽度',
+    'component.height': '高度',
+    'component.linked': '1:1 联动',
+    'component.resizeHint': '可直接拖动画布上的四角控制点，也可用拉条精确调整。',
     'aria.addShape': '要添加的组件形状',
     'aria.componentShape': '{id} 的形状',
+    'aria.componentWidth': '{id} 的宽度',
+    'aria.componentHeight': '{id} 的高度',
+    'aria.componentWidthSlider': '{id} 的宽度拉条',
+    'aria.componentHeightSlider': '{id} 的高度拉条',
     'aria.removeComponent': '移除 {id}',
 
     'view.fusionOn': '平滑融合',
@@ -429,6 +450,7 @@ const STRINGS = {
     'announce.added': '已添加 {shape} {id}',
     'announce.removed': '已移除 {id}',
     'announce.retyped': '{id} 现在是 {shape}',
+    'announce.resized': '{id} 已调整为 {width} × {height}',
   },
 };
 

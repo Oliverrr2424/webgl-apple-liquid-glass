@@ -10,6 +10,27 @@ import { HANDLE_SIZE, handlesOf } from './overlay.js';
 
 const MIN_SIZE = 28;
 
+/** Resize from the inspector while keeping the component visually centred.
+ * Circles and folders share one side length, matching stage-handle behavior. */
+export function resizeElementFromEditor(element, dimension, rawValue) {
+  const value = Number(rawValue);
+  if (!Number.isFinite(value) || !['width', 'height'].includes(dimension)) return false;
+  const next = Math.max(MIN_SIZE, value);
+  const centerX = element.x + element.w / 2;
+  const centerY = element.y + element.h / 2;
+  if (element.shape === 'circle' || element.shape === 'folder') {
+    element.w = next;
+    element.h = next;
+  } else if (dimension === 'width') {
+    element.w = next;
+  } else {
+    element.h = next;
+  }
+  element.x = centerX - element.w / 2;
+  element.y = centerY - element.h / 2;
+  return true;
+}
+
 function handleUnder(element, x, y) {
   if (!element) return null;
   const reach = HANDLE_SIZE;

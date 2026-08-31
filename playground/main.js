@@ -15,18 +15,18 @@ import {
 } from './scenes.js?phone-scenes=10';
 import { drawSceneBackdrop } from './content.js?phone-scenes=8';
 import {
-  drawGlassContents, drawLabel, drawBadge, drawPressEffectsFrame,
+  drawGlassContents, drawLabel, drawBadge, drawSelection, drawPressEffectsFrame,
   drawPressEffectsOverlay,
   drawPhoneSceneOverlay, drawPhonePanelOverlay,
 } from './overlay.js?phone-scenes=8';
 import { createInspector } from './inspector.js?dispersion-default=2';
-import { createComponentEditor } from './components.js?phone-scenes=8';
+import { createComponentEditor } from './components.js?size-controls=2';
 import { attachStageInteractions } from './interactions.js?phone-scenes=8';
 import { attachPressEffects } from './press-effects.js?phone-scenes=8';
 import { createStats } from './stats.js';
 import { decodeState, toCode, writeHash } from './permalink.js';
 import { PHONE_ICON_SOURCES, attachPhoneIconImages, phoneFrame } from './phone.js?phone-scenes=8';
-import { t, applyI18n, initPreferences, onLanguageChange } from './i18n.js';
+import { t, applyI18n, initPreferences, onLanguageChange } from './i18n.js?size-controls=2';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -265,6 +265,7 @@ function backdropSourceFor(scene) {
 
 let animating = false;
 let backdropMode = 'static';
+let panelMotionActive = false;
 
 function syncBackdropMode() {
   const scene = currentScene();
@@ -323,6 +324,7 @@ function selectScene(id, { fromShare = false } = {}) {
   const changed = store.sceneId !== nextId;
   cancelHomePageAnimation();
   cancelHomeRevealAnimation();
+  panelMotionActive = false;
   store.press = null;
   store.islandPanel = { type: null, progress: 0 };
   store.homeReveal = 1;
@@ -521,6 +523,7 @@ function openPanel(type) {
   // The sheet is still visually off-screen, so the gesture starts with a clean
   // wallpaper before the first meaningful panel pixels arrive.
   cancelHomeRevealAnimation();
+  panelMotionActive = true;
   store.islandPanel = { type, progress: 0.001 };
   store.homeReveal = 0;
   syncGestureTips();
@@ -529,6 +532,7 @@ function openPanel(type) {
 }
 
 function closePanel() {
+  panelMotionActive = false;
   store.islandPanel = { type: null, progress: 0 };
   syncGestureTips();
   applyElements();
@@ -539,8 +543,9 @@ function closePanel() {
 // -------------------------------------------------------------------- render
 let queued = false;
 let contentDirty = true;
+let baseBackdropInvalid = true;
 let sceneStart = performance.now();
-let lastSize = { width: 0, height: 0, dpr: 0 };
+let lastSize = { width: 0, height: 0, dpr: 0, renderDpr: 0 };
 let homeRevealAnimationFrame = 0;
 let homeRevealAnimationToken = 0;
 
@@ -571,22 +576,40 @@ function animateHomeReveal(target = 1, duration = 220) {
   homeRevealAnimationFrame = requestAnimationFrame(tick);
 }
 
-function invalidate({ content = false } = {}) {
+function invalidate({ content = false, baseBackdrop = content } = {}) {
   if (content) contentDirty = true;
+  if (baseBackdrop) baseBackdropInvalid = true;
   if (queued) return;
   queued = true;
   requestAnimationFrame(frame);
 }
 
+/** Expensive frames use a CSS-pixel drawing buffer while they are moving.
+ * Static frames immediately return to the device ratio, so the quality loss
+ * is confined to motion and high-DPI Windows GPUs avoid processing 2.25–4×
+ * as many pixels for every live backdrop rebuild. */
+function glassPixelRatio() {
+  const deviceDpr = Math.min(window.devicePixelRatio || 1, 2);
+  const liveHeavyFrame = animating || panelMotionActive
+    || store.press?.sliderTrackId === 'green-toggle-track';
+  return liveHeavyFrame ? Math.min(deviceDpr, 1) : deviceDpr;
+}
+
 function syncSizes() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const renderDpr = glassPixelRatio();
   const width = stage.clientWidth;
   const height = stage.clientHeight;
-  const resized = width !== lastSize.width || height !== lastSize.height || dpr !== lastSize.dpr;
+  const resized = width !== lastSize.width || height !== lastSize.height
+    || dpr !== lastSize.dpr || renderDpr !== lastSize.renderDpr;
   if (resized) {
-    for (const canvas of [contentCanvas, scrimCanvas, uiCanvas]) {
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
+    for (const [canvas, ratio] of [
+      [contentCanvas, renderDpr], [scrimCanvas, dpr], [uiCanvas, dpr],
+    ]) {
+      const pixelWidth = Math.round(width * ratio);
+      const pixelHeight = Math.round(height * ratio);
+      if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+      if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
     }
@@ -594,7 +617,7 @@ function syncSizes() {
     glCanvas.style.height = `${height}px`;
     baseGlCanvas.style.width = `${width}px`;
     baseGlCanvas.style.height = `${height}px`;
-    lastSize = { width, height, dpr };
+    lastSize = { width, height, dpr, renderDpr };
   }
   const scene = currentScene();
   if (scene.phoneView) {
@@ -606,7 +629,7 @@ function syncSizes() {
     glCanvas.style.clipPath = 'none';
   }
   if (resized && scene.phoneView === 'home') positionGestureTips();
-  return { width, height, dpr, resized };
+  return { width, height, dpr, renderDpr, resized };
 }
 
 function drawOverlayLayer({ width, height, dpr }) {
@@ -658,6 +681,8 @@ function drawOverlayLayer({ width, height, dpr }) {
         if (store.showIcons) drawGlassContents(uiContext, element);
         if (store.showLabels) { drawLabel(uiContext, element); drawBadge(uiContext, element); }
       }
+      const selected = glass.elements.find((element) => element.id === store.selectedId);
+      if (selected) drawSelection(uiContext, selected);
     }
   }
 }
@@ -694,7 +719,7 @@ function frame(now) {
     drawSceneBackdrop(contentContext, scene, {
       width: size.width,
       height: size.height,
-      dpr: size.dpr,
+      dpr: size.renderDpr,
       zoom: store.wallZoom,
       scroll: (now - sceneStart) * 0.055,
       image: backdropSourceFor(scene),
@@ -704,13 +729,24 @@ function frame(now) {
       // First pass: render the Home/Discover glass into the backdrop. The
       // moving selector is then a true second glass layer and samples the
       // already-rendered pixels beneath it instead of the original wallpaper.
-      baseGlass.updateBackdrop(false);
-      baseGlass.render({ force: true });
+      // The lower selection track samples the wallpaper above it, which does
+      // not change when the distant green switch animates. Reuse that mip
+      // chain instead of rebuilding a second full-screen pyramid every frame.
+      if (baseBackdropInvalid || size.resized) {
+        baseGlass.updateBackdrop(false);
+        baseBackdropInvalid = false;
+      }
+      baseGlass.render({ force: true, dpr: size.renderDpr });
       contentContext.drawImage(baseGlCanvas, 0, 0, size.width, size.height);
       glass.updateBackdrop(false);
     } else if (panelActive()) {
-      baseGlass.updateBackdrop(false);
-      baseGlass.render({ force: true });
+      // The full-screen sheet moves over a static wallpaper. Only its geometry
+      // changes; its source texture and blur pyramid can stay cached.
+      if (baseBackdropInvalid || size.resized) {
+        baseGlass.updateBackdrop(false);
+        baseBackdropInvalid = false;
+      }
+      baseGlass.render({ force: true, dpr: size.renderDpr });
       // baseGl is a full-stage buffer, so apply the same physical screen mask
       // when compositing it. Without this second clip the hidden pass can
       // bleed beyond the phone bezel even though the visible gl canvas is
@@ -732,7 +768,7 @@ function frame(now) {
 
   drawPanelScrim(size);
   const willDraw = animating || size.resized || glass.dirty;
-  glass.render();
+  glass.render({ dpr: size.renderDpr });
   drawOverlayLayer(size);
   if (willDraw) stats.frame(performance.now() - started);
 
@@ -742,8 +778,8 @@ function frame(now) {
       ? connectedElementGroups(glass.elements, glass.material.mergeRadius).length
       : glass.elements.length;
   stats.info({
-    size: `${Math.round(size.width * size.dpr)}×${Math.round(size.height * size.dpr)}`,
-    dpr: `${size.dpr}×`,
+    size: `${Math.round(size.width * size.renderDpr)}×${Math.round(size.height * size.renderDpr)}`,
+    dpr: `${size.renderDpr}×`,
     shapes: `${glass.elements.length} in ${groups} pass${groups === 1 ? '' : 'es'}`,
     backdrop: animating ? 'live upload' : 'static upload',
   });
@@ -841,11 +877,11 @@ function applyElements() {
 }
 
 function onSceneChange(reason) {
-  if (['drag', 'nudge', 'add', 'remove', 'retype', 'dragend'].includes(reason)) {
+  if (['drag', 'nudge', 'resize', 'add', 'remove', 'retype', 'dragend'].includes(reason)) {
     store.movedElements = true;
   }
   applyElements();
-  if (['add', 'remove', 'retype', 'select', 'deselect'].includes(reason)) componentEditor.render();
+  if (['add', 'remove', 'retype', 'select', 'deselect', 'dragend'].includes(reason)) componentEditor.render();
   queueHash();
   invalidate();
 }
@@ -919,7 +955,10 @@ attachPressEffects({
     }
     applyElements();
     const changedBackdrop = (press?.sliderTrackId ?? previousTrack) === 'green-toggle-track';
-    invalidate({ content: changedBackdrop });
+    // The green colour changes the upper glass backdrop, but it is far below
+    // the selection track rendered by baseGlass. Keep the lower renderer's
+    // cached wallpaper pyramid while the switch is moving.
+    invalidate({ content: changedBackdrop, baseBackdrop: false });
   },
   announce,
 });
@@ -960,6 +999,7 @@ function attachHomePager() {
   };
   const animateIslandPanel = (targetProgress, onDone) => {
     cancelPanelAnimation();
+    panelMotionActive = true;
     const animationToken = panelAnimationToken;
     const startProgress = store.islandPanel.progress;
     const opening = targetProgress > startProgress;
@@ -967,9 +1007,11 @@ function attachHomePager() {
     // dragging. It starts only once a close has been committed.
     setHomeReveal(0);
     if (reduceMotion?.matches || Math.abs(targetProgress - startProgress) < 0.01) {
+      panelMotionActive = false;
       setHomeReveal(opening ? 0 : 1);
       setPanelProgress(targetProgress);
       onDone?.();
+      invalidate();
       return;
     }
     const startTime = performance.now();
@@ -990,7 +1032,10 @@ function attachHomePager() {
       if (elapsed < 1) panelAnimationFrame = requestAnimationFrame(tick);
       else {
         panelAnimationFrame = 0;
+        panelMotionActive = false;
         onDone?.();
+        // Redraw the resting sheet once at the full device ratio.
+        invalidate();
       }
     };
     panelAnimationFrame = requestAnimationFrame(tick);
@@ -1039,6 +1084,7 @@ function attachHomePager() {
       event.preventDefault();
       cancelPanelAnimation();
       cancelHomeRevealAnimation();
+      panelMotionActive = true;
       // Re-grabbing a sheet cancels the post-dismiss Home fade. While the
       // finger owns the panel, the two layers must never be shown together.
       setHomeReveal(0);
