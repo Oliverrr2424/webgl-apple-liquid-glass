@@ -209,8 +209,12 @@ export class GlassRenderer {
     if (!forceAllocation && entry.ready && entry.width === width && entry.height === height) {
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, entry.source);
     } else {
+      // Plain RGBA8, decoded to linear in FS_WALLPAPER. An SRGB8_ALPHA8
+      // destination knocks Chrome's canvas/video upload off the GPU-to-GPU
+      // copy path on Windows (ANGLE/D3D11), turning every live backdrop frame
+      // into a full readback and re-upload that costs ~10 ms of GPU time.
       gl.texImage2D(
-        gl.TEXTURE_2D, 0, gl.SRGB8_ALPHA8, gl.RGBA, gl.UNSIGNED_BYTE, entry.source,
+        gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, entry.source,
       );
     }
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
