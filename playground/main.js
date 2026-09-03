@@ -265,7 +265,6 @@ function backdropSourceFor(scene) {
 
 let animating = false;
 let backdropMode = 'static';
-let panelMotionActive = false;
 
 function syncBackdropMode() {
   const scene = currentScene();
@@ -324,7 +323,6 @@ function selectScene(id, { fromShare = false } = {}) {
   const changed = store.sceneId !== nextId;
   cancelHomePageAnimation();
   cancelHomeRevealAnimation();
-  panelMotionActive = false;
   store.press = null;
   store.islandPanel = { type: null, progress: 0 };
   store.homeReveal = 1;
@@ -523,7 +521,6 @@ function openPanel(type) {
   // The sheet is still visually off-screen, so the gesture starts with a clean
   // wallpaper before the first meaningful panel pixels arrive.
   cancelHomeRevealAnimation();
-  panelMotionActive = true;
   store.islandPanel = { type, progress: 0.001 };
   store.homeReveal = 0;
   syncGestureTips();
@@ -532,7 +529,6 @@ function openPanel(type) {
 }
 
 function closePanel() {
-  panelMotionActive = false;
   store.islandPanel = { type: null, progress: 0 };
   syncGestureTips();
   applyElements();
@@ -584,20 +580,13 @@ function invalidate({ content = false, baseBackdrop = content } = {}) {
   requestAnimationFrame(frame);
 }
 
-/** Expensive frames use a CSS-pixel drawing buffer while they are moving.
- * Static frames immediately return to the device ratio, so the quality loss
- * is confined to motion and high-DPI Windows GPUs avoid processing 2.25–4×
- * as many pixels for every live backdrop rebuild. */
-function glassPixelRatio() {
-  const deviceDpr = Math.min(window.devicePixelRatio || 1, 2);
-  const liveHeavyFrame = animating || panelMotionActive
-    || store.press?.sliderTrackId === 'green-toggle-track';
-  return liveHeavyFrame ? Math.min(deviceDpr, 1) : deviceDpr;
-}
-
 function syncSizes() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const renderDpr = glassPixelRatio();
+  // Live and interactive frames render at the full device ratio. Dropping to
+  // 1x during motion used to hide a slow canvas upload path on Windows, which
+  // is fixed in the renderer; the downsample only left visible blur and
+  // pixelation on high-DPI displays.
+  const renderDpr = dpr;
   const width = stage.clientWidth;
   const height = stage.clientHeight;
   const resized = width !== lastSize.width || height !== lastSize.height
@@ -999,7 +988,6 @@ function attachHomePager() {
   };
   const animateIslandPanel = (targetProgress, onDone) => {
     cancelPanelAnimation();
-    panelMotionActive = true;
     const animationToken = panelAnimationToken;
     const startProgress = store.islandPanel.progress;
     const opening = targetProgress > startProgress;
@@ -1007,7 +995,6 @@ function attachHomePager() {
     // dragging. It starts only once a close has been committed.
     setHomeReveal(0);
     if (reduceMotion?.matches || Math.abs(targetProgress - startProgress) < 0.01) {
-      panelMotionActive = false;
       setHomeReveal(opening ? 0 : 1);
       setPanelProgress(targetProgress);
       onDone?.();
@@ -1032,9 +1019,7 @@ function attachHomePager() {
       if (elapsed < 1) panelAnimationFrame = requestAnimationFrame(tick);
       else {
         panelAnimationFrame = 0;
-        panelMotionActive = false;
         onDone?.();
-        // Redraw the resting sheet once at the full device ratio.
         invalidate();
       }
     };
@@ -1084,7 +1069,6 @@ function attachHomePager() {
       event.preventDefault();
       cancelPanelAnimation();
       cancelHomeRevealAnimation();
-      panelMotionActive = true;
       // Re-grabbing a sheet cancels the post-dismiss Home fade. While the
       // finger owns the panel, the two layers must never be shown together.
       setHomeReveal(0);
