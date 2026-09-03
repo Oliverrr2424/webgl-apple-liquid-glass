@@ -221,9 +221,9 @@ void main() {
   vec2 uv = (vUV - 0.5) / max(uZoom, 0.01) + 0.5;
   vec3 col;
   if (uUseImage == 1) {
-    // Wallpaper textures use SRGB8_ALPHA8, so texture() already returns linear
-    // radiance here.
-    col = texture(uWallpaper, coverUV(uv)).rgb;
+    // Wallpaper textures are plain RGBA8 holding display/sRGB values; decode
+    // to linear radiance here.
+    col = srgbToLinear(texture(uWallpaper, coverUV(uv)).rgb);
   } else {
     // Procedural palette constants are authored as display/sRGB colours. The
     // SRGB render target expects linear shader output and encodes it on write.

@@ -130,11 +130,20 @@ void main() {
   vec2 point = vUV * uRes;
   int chosen = -1;
   float chosenD = 1e6;
+  float nearestD = 1e6;
   for (int i = 0; i < MAX_SHAPES; i++) {
     if (i >= uShapeCount) break;
     float d = shapeSdf(i, point);
+    nearestD = min(nearestD, d);
     if (d <= 2.1) { chosen = i; chosenD = d; }
   }
+
+  // Screen-space derivatives are only defined in uniform control flow. Past
+  // the early return below, a neighbouring lane in the 2x2 quad may have
+  // exited with chosenD still at its 1e6 sentinel, so fwidth(chosenD) there
+  // is garbage on some GPUs and blows the hairline up into stray pixels just
+  // outside the silhouette. nearestD is continuous across the whole quad.
+  float edgeAA = max(fwidth(nearestD), 0.72);
 
   if (chosen < 0) {
     outColor = vec4(0.0);
@@ -247,7 +256,6 @@ void main() {
   vec3 echoColor = backdrop((point - normal * 11.0) / uRes);
   color = mix(color, echoColor * 1.12, echo * 0.075 * uRim * uEcho);
 
-  float edgeAA = max(fwidth(chosenD), 0.72);
   float lineWidth = mix(0.34, 1.08, clamp(uHairWidth, 0.0, 1.0));
   float strokeDistance = abs(chosenD + 0.10) - lineWidth * 0.5;
   float hairline = 1.0 - smoothstep(-edgeAA * 0.72, edgeAA * 0.72, strokeDistance);
@@ -263,6 +271,12 @@ void main() {
   // the same shader to work in overlay mode over a DOM/canvas backdrop.
   float hairAlpha = clamp(hairline * uHairline * (0.22 + uRim * 0.20), 0.0, 1.0);
   float alpha = hairAlpha + mask * (1.0 - hairAlpha);
+  // The rim, key highlight and echo terms can push the body colour past 1.0.
+  // Inside the surface the drawing buffer clamps that anyway, but on the
+  // anti-aliased fringe a premultiplied rgb larger than alpha composites
+  // brighter than either the glass or the backdrop, sprinkling over-bright
+  // pixels along the outer edge. Saturate before premultiplying.
+  color = clamp(color, 0.0, 1.0);
   vec3 premultiplied = hairColor * hairAlpha + color * mask * (1.0 - hairAlpha);
   float surfaceOpacity = clamp(uShapeOpacities[chosen], 0.0, 1.0);
   outColor = vec4(premultiplied * surfaceOpacity, alpha * surfaceOpacity);

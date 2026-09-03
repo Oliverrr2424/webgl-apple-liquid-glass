@@ -3,8 +3,8 @@
 // (notably dispersion and edgeWidth) use different units and shader maths.
 export const DEFAULT_MATERIAL_V2 = Object.freeze({
   refraction: 90,
-  edgeReach: 0,
-  edgeWidth: 0,
+  edgeReach: 33,
+  edgeWidth: 0.09,
   dispersion: 2.0,
   // Dimensionless softness ratio. The shader multiplies this by each
   // component's short side, so the same value stays delicate on small icons
