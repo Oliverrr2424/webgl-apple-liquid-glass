@@ -119,8 +119,26 @@ test('same-named parameters are decoded against the selected version only', () =
 
 test('legacy V2 edge pull links collapse into capture reach', () => {
   const decoded = decodeState('#scene=tab-bar&version=v2&m=edgePull:0.31|edgeReach:44');
-  assert.deepEqual(decoded.material, { edgeReach: 11 });
+  assert.deepEqual(decoded.material, { edgeReach: 0.11 });
 
   const inherited = decodeState('#scene=tab-bar&version=v2&m=edgePull:1.24');
-  assert.deepEqual(inherited.material, { edgeReach: 62 });
+  assert.deepEqual(inherited.material, { edgeReach: 0.62 });
+});
+
+test('capture ratios round-trip while old pixel values migrate once', () => {
+  const state = session({ version: 'v2', material: { ...getDefaultMaterialV2(), edgeReach: 0.45 } });
+  assert.equal(decodeState(encodeState(state)).material.edgeReach, 0.45);
+  assert.equal(decodeState('#version=v2&m=edgeReach:45').material.edgeReach, 0.45);
+});
+
+test('glass appearance and pre-blur round-trip independently of UI theme and softness', () => {
+  const state = session({ version: 'v2', glassTone: 'dark',
+    material: { ...getDefaultMaterialV2(), backdropBlur: 12, frost: 0.18 } });
+  const decoded = decodeState(encodeState(state));
+  assert.equal(decoded.glassTone, 'dark');
+  assert.equal(decoded.material.backdropBlur, 12);
+  assert.equal(decoded.material.frost, undefined);
+  assert.match(toCode(state), /tintTone: 'dark'/);
+  assert.match(toCode(state), /material.backdropBlur = 12/);
+  assert.equal(decodeState('#version=v2').glassTone, 'light');
 });

@@ -4,8 +4,8 @@
 // tuning session lives in the URL hash and can be copied out as the exact code
 // that reproduces it.
 
-import { DEFAULT_MATERIAL, getDefaultMaterial } from '../src/index.js';
-import { DEFAULT_MATERIAL_V2, getDefaultMaterialV2 } from '../src/v2.js';
+import { DEFAULT_MATERIAL, getDefaultMaterial } from '../src/index.js?press-lens=1';
+import { DEFAULT_MATERIAL_V2, getDefaultMaterialV2 } from '../src/v2.js?press-lens=1';
 
 const round = (value) => Math.round(value * 1000) / 1000;
 
@@ -31,8 +31,9 @@ export function encodeState(state) {
   const defaults = defaultsFor(version);
   const params = new URLSearchParams();
   params.set('scene', state.sceneId);
-  if (version === 'v2') params.set('version', 'v2');
+  if (version === 'v2') { params.set('version', 'v2'); params.set('reachUnits', 'ratio'); }
   else params.set('fusion', state.fusion ? '1' : '0');
+  if (version === 'v2' && state.glassTone === 'dark') params.set('glassTone', 'dark');
   if (state.showIcons) params.set('icons', '1');
   if (state.showLabels) params.set('labels', '1');
   if (version === 'v1' && state.material.debug) params.set('debug', String(state.material.debug));
@@ -69,6 +70,12 @@ export function decodeState(hash = globalThis.location?.hash ?? '') {
     const legacyReach = material.edgeReach ?? 62;
     material.edgeReach = round(legacyReach * legacyEdgePull / 1.24);
   }
+  // Pixel-era links migrate at a 100px reference short side. A single ratio
+  // cannot preserve one fixed reach across differently sized components.
+  if (version === 'v2' && params.get('reachUnits') !== 'ratio'
+      && material.edgeReach !== undefined) {
+    material.edgeReach = round(material.edgeReach / 100);
+  }
   const debug = Number(params.get('debug'));
   if (version === 'v1' && debug >= 1 && debug <= 3) material.debug = debug;
 
@@ -79,6 +86,7 @@ export function decodeState(hash = globalThis.location?.hash ?? '') {
 
   return {
     version,
+    glassTone: params.get('glassTone') === 'dark' ? 'dark' : 'light',
     sceneId: params.get('scene') ?? null,
     fusion: params.get('fusion') === null ? null : params.get('fusion') === '1',
     showIcons: params.get('icons') === '1',
@@ -110,7 +118,9 @@ export function toCode(state) {
 
   const elements = state.elements.map((e) => `  { id: '${e.id}', shape: '${e.shape}', `
     + `x: ${Math.round(e.x)}, y: ${Math.round(e.y)}, `
-    + `width: ${Math.round(e.w)}, height: ${Math.round(e.h)} },`);
+    + `width: ${Math.round(e.w)}, height: ${Math.round(e.h)}`
+    + (version === 'v2' ? `, tintTone: '${state.glassTone === 'dark' ? 'dark' : 'light'}'` : '')
+    + ' },');
 
   const backdrop = state.backdropSrc
     ? `await glass.loadBackdrop('${state.backdropSrc}');`

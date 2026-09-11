@@ -1,0 +1,77 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>canvas { width: 320px; height: 240px; }</style>
+<canvas id="output"></canvas>
+<script type="module">
+import { LiquidGlassWebGLV2 } from '../src/v2.js';
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+window.runTest = async () => {
+  const output = document.querySelector('#output');
+  const backdrop = document.createElement('canvas');
+  backdrop.width = 640; backdrop.height = 480;
+  const ctx = backdrop.getContext('2d');
+  const paint = (offset) => {
+    const gradient = ctx.createLinearGradient(offset, 0, 640 + offset, 480);
+    gradient.addColorStop(0, '#fff'); gradient.addColorStop(1, '#000');
+    ctx.fillStyle = gradient; ctx.fillRect(0, 0, 640, 480);
+  };
+  const glass = new LiquidGlassWebGLV2(output, { autoResize: false, preserveDrawingBuffer: true });
+  glass.setElements([{ id: 'a', shape: 'rect', x: 40, y: 40, w: 200, h: 140 }], false);
+  let readbacks = 0;
+  const getImageData = CanvasRenderingContext2D.prototype.getImageData;
+  CanvasRenderingContext2D.prototype.getImageData = function counted(...args) {
+    readbacks++;
+    return getImageData.apply(this, args);
+  };
+  const settle = async () => {
+    const deadline = performance.now() + 4000;
+    while ((glass.lightProbePending || glass.settledRenderFrame) && performance.now() < deadline) await wait(16);
+    if (glass.lightProbePending) throw new Error('Off-thread light probe never completed');
+  };
+  const syncProbe = () => {
+    glass.updateLightField();
+    return Array.from(glass.lightPixels ?? []);
+  };
+  const maxDifference = (a, b) => a.reduce((max, value, i) => Math.max(max, Math.abs(value - b[i])), 0);
+  try {
+    // Live backdrop: the first frame probes synchronously, later cadence
+    // refreshes never read back on the main thread.
+    paint(0);
+    glass.setBackdrop(backdrop, { update: 'live', autoStart: false, shouldRender: false });
+    glass.render();
+    if (!glass.lightPixels) throw new Error('Initial light probe missing');
+    paint(-240);
+    readbacks = 0;
+    glass.lastLightFieldUpdate = -Infinity;
+    glass.render();
+    await settle();
+    if (readbacks) throw new Error(`Live light probe read back on the main thread ${readbacks}x`);
+    const liveAsync = Array.from(glass.lightPixels);
+    const liveSync = syncProbe();
+    if (maxDifference(liveAsync, liveSync) > 2) throw new Error('Off-thread live probe differs from the synchronous probe');
+
+    // Consecutive manual refreshes of a static canvas behave like a live
+    // canvas and settle on the final backdrop with one extra glass draw.
+    paint(0);
+    glass.setBackdrop(backdrop, { update: 'static', autoStart: false, shouldRender: false });
+    glass.render();
+    glass.updateBackdrop();
+    readbacks = 0;
+    paint(-400);
+    glass.updateBackdrop();
+    if (readbacks) throw new Error(`Consecutive manual refresh read back on the main thread ${readbacks}x`);
+    await settle();
+    if (readbacks) throw new Error('Settled manual refresh read back on the main thread');
+    if (glass.dirty) throw new Error('Settled light probe was not drawn');
+    const settledAsync = Array.from(glass.lightPixels);
+    const settledSync = syncProbe();
+    if (maxDifference(settledAsync, settledSync) > 2) throw new Error('Settled light probe did not match the final backdrop');
+    return { checks: ['sync first probe', 'live probe off main thread', 'manual refreshes settle off main thread'] };
+  } finally {
+    CanvasRenderingContext2D.prototype.getImageData = getImageData;
+    glass.destroy();
+  }
+};
+</script>

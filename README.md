@@ -126,7 +126,7 @@ V2 surfaces remain separate and resolve overlap in element order; V1's `fusion` 
 V2 also accepts optional `tint` and `tintTone` values on each element. `tint` overrides the global
 material value only for that surface, so a legibility-first notification can use a coherent milky
 tint while folders and the dock remain clear in the same renderer. `tintTone` can force a stable
-`light` or `dark` treatment; its default `auto` tone is selected from the average backdrop below
+`light` or `dark` treatment; the default is `light`. The optional `auto` tone uses a fixed-size backdrop probe below
 the whole component rather than from each pixel:
 
 ```js
@@ -146,22 +146,37 @@ remain independent.
 
 ### V2 default material parameters
 
-The Playground exposes `refraction` from `0` to `110`. Edge capture is opt-in:
-both `edgeReach` and `edgeWidth` default to zero.
+The Playground exposes `refraction` from `0` to `110`. Capture reach is a ratio
+of each component's short side: `0.10` gives 9px on a 90px component and 40px
+on a 400px component. Set it to zero to disable edge capture. Pixel-era share
+links migrate using a 100px reference short side; direct API users should divide
+their old pixel reach by the intended component short side.
+
+`frost` (softness ratio, default 0.18) and `backdropBlur` (CSS px, default 0) are
+the same operation: the backdrop is blurred before the glass refracts it. `frost`
+resolves against each component's short side, so one value stays light on small
+controls and becomes more frosted on larger cards; `backdropBlur` is an absolute
+radius. When both are set, their radii combine in quadrature. The Playground
+has explicit Light glass / Dark glass buttons, independent of the inspector's
+theme. Dark glass selects black-gray tint; the tint slider controls opacity.
+Both controls are preserved in share links and code export. Elements accept
+`pressure: 0..1`, a pressed-in optical squash of what is seen through the
+surface; the Playground applies it to the held navigation selector.
 
 | Group | Parameter | Default |
 | --- | --- | ---: |
 | Transmission | `refraction` | `90.00` |
-| Transmission | `edgeReach` | `0.00` |
-| Transmission | `edgeWidth` | `0.00` |
+| Transmission | `edgeReach` | `0.10` |
+| Transmission | `edgeWidth` | `0.22` |
 | Transmission | `dispersion` | `2.00` |
 | Transmission | `frost` | `0.18` ratio of the component short side |
+| Transmission | `backdropBlur` | `0` CSS px |
 | Transmission | `body` | `0.72` |
 | Transmission | `absorption` | `0.58` |
 | Transmission | `tint` | `0.00` |
-| Reflection | `rim` | `0.72` |
-| Reflection | `reflection` | `0.68` |
-| Reflection | `highlight` | `0.38` |
+| Reflection | `rim` | `0.24` |
+| Reflection | `reflection` | `0.31` |
+| Reflection | `highlight` | `0.34` |
 | Reflection | `lightAngle` | `136.00` |
 | Reflection | `echo` | `0.28` |
 | Interface | `hairline` | `0.92` |
@@ -169,7 +184,8 @@ both `edgeReach` and `edgeWidth` default to zero.
 | Shape | `roundness` | `0.47` |
 
 For live backdrops, V2 updates its optical transmission every frame but rate-limits the
-low-resolution light probe and eases the detected highlight direction over roughly 280 ms.
+low-resolution light probe, reads it back on a worker so frames never wait for the GPU, and
+eases the detected highlight direction over roughly 280 ms.
 Reflection also samples a softened backdrop. These safeguards reduce highlight flashing on
 moving high-contrast content without freezing refraction or changing the parameter contract.
 

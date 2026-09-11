@@ -1,9 +1,9 @@
-import { GlassRenderer } from './renderer.js';
+import { GlassRenderer } from './renderer.js?press-lens=1';
 import { MAX_GLASS_SHAPES } from './geometry.js';
 import {
   DEFAULT_MATERIAL_V2, REDUCED_TRANSPARENCY_MATERIAL_V2, SLIDERS_V2,
   getDefaultMaterialV2, makeMaterialV2,
-} from './v2-material.js?frost-ratio=1';
+} from './v2-material.js?press-lens=1';
 import { distanceToElementsV2, hitTestElementsV2 } from './v2-geometry.js';
 
 const SHAPES = new Set(['folder', 'rect', 'pill', 'circle']);
@@ -37,6 +37,10 @@ function normalizeElement(input, index) {
     throw new TypeError('Liquid glass V2 element frost must be a finite number.');
   }
   const opacity = input.opacity == null ? undefined : Number(input.opacity);
+  const pressure = Number(input.pressure ?? 0);
+  if (!Number.isFinite(pressure)) {
+    throw new TypeError('Liquid glass V2 element pressure must be a finite number.');
+  }
   if (opacity !== undefined && !Number.isFinite(opacity)) {
     throw new TypeError('Liquid glass V2 element opacity must be a finite number.');
   }
@@ -59,6 +63,7 @@ function normalizeElement(input, index) {
     ...(frost === undefined ? {} : { frost }),
     ...(opacity === undefined ? {} : { opacity }),
     tintTone,
+    pressure: Math.max(0, Math.min(1, pressure)),
   };
 }
 
@@ -89,6 +94,45 @@ function resolveBackdropUpdate(source, update = 'auto') {
 function matchMediaSafe(query) {
   return typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia(query) : null;
 }
+
+function backdropSize(source) {
+  return [
+    Number(source?.videoWidth || source?.naturalWidth || source?.width || 0),
+    Number(source?.videoHeight || source?.naturalHeight || source?.height || 0),
+  ];
+}
+
+// Where the backdrop lands inside the square light probe (cover fit).
+function lightProbeRect(sourceWidth, sourceHeight, size, zoom) {
+  const scale = Math.max(size / sourceWidth, size / sourceHeight) * zoom;
+  const width = sourceWidth * scale;
+  const height = sourceHeight * scale;
+  return { x: (size - width) / 2, y: (size - height) / 2, width, height };
+}
+
+// The light probe reads its low-resolution backdrop copy back from the GPU.
+// On the main thread that readback waits for every queued GPU command, which
+// stalled live frames for tens of milliseconds. The worker performs the same
+// Canvas2D draw and readback on its own thread.
+const LIGHT_PROBE_WORKER = `
+let canvas = null;
+self.onmessage = ({ data }) => {
+  const { id, bitmap, size, x, y, width, height } = data;
+  let pixels = null;
+  try {
+    if (!canvas || canvas.width !== size) canvas = new OffscreenCanvas(size, size);
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.clearRect(0, 0, size, size);
+    context.drawImage(bitmap, x, y, width, height);
+    pixels = context.getImageData(0, 0, size, size).data;
+  } catch {}
+  bitmap.close();
+  self.postMessage({ id, pixels }, pixels ? [pixels.buffer] : []);
+};`;
+
+// Consecutive manual backdrop refreshes closer than this are treated as an
+// animating host canvas, matching the live light-probe cadence.
+const LIGHT_PROBE_INTERVAL_MS = 84;
 
 /**
  * Clear optical Liquid Glass V2.
@@ -142,6 +186,14 @@ export class LiquidGlassWebGLV2 {
     this.smoothedLightDirections = new Map();
     this.lastLightFieldUpdate = 0;
     this.lastLightBlendTime = 0;
+    this.lastManualBackdropUpdate = -Infinity;
+    this.lightFieldAsyncDirty = false;
+    this.lightWorker = null;
+    this.lightWorkerUnavailable = false;
+    this.lightProbeId = 0;
+    this.lightProbePending = false;
+    this.lightProbeQueued = false;
+    this.settledRenderFrame = 0;
     this.onContextLost = options.onContextLost ?? null;
     this.onContextRestored = options.onContextRestored ?? null;
 
@@ -291,7 +343,19 @@ export class LiquidGlassWebGLV2 {
 
   updateBackdrop(shouldRender = true) {
     this.renderer.refreshWallpapers(true);
-    this.markBackdropDirty();
+    const now = globalThis.performance?.now?.() ?? Date.now();
+    const consecutive = now - this.lastManualBackdropUpdate < LIGHT_PROBE_INTERVAL_MS;
+    this.lastManualBackdropUpdate = now;
+    if (consecutive && this.lightProbeWorker()) {
+      // An animating host canvas: transmission follows every refresh, while
+      // the light probe is read back off the main thread and settles on the
+      // final backdrop once the refreshes stop.
+      this.backdropDirty = true;
+      this.lightFieldAsyncDirty = true;
+      this.markDirty();
+    } else {
+      this.markBackdropDirty();
+    }
     if (shouldRender) this.render();
     return this;
   }
@@ -357,9 +421,11 @@ export class LiquidGlassWebGLV2 {
 
   updateLightField() {
     this.lightFieldDirty = false;
+    // A synchronous probe supersedes any off-thread result still in flight.
+    this.lightProbeId += 1;
+    this.lightProbeQueued = false;
     const source = this.backdrops[this.wallpaperIndex];
-    const sourceWidth = Number(source?.videoWidth || source?.naturalWidth || source?.width || 0);
-    const sourceHeight = Number(source?.videoHeight || source?.naturalHeight || source?.height || 0);
+    const [sourceWidth, sourceHeight] = backdropSize(source);
     if (!(sourceWidth > 0) || !(sourceHeight > 0) || typeof document === 'undefined') {
       this.lightPixels = null;
       return;
@@ -371,12 +437,9 @@ export class LiquidGlassWebGLV2 {
     const context = this.lightCanvas.getContext('2d', { willReadFrequently: true });
     if (!context) { this.lightPixels = null; return; }
     context.clearRect(0, 0, size, size);
-    const scale = Math.max(size / sourceWidth, size / sourceHeight) * this.wallpaperZoom;
-    const drawWidth = sourceWidth * scale;
-    const drawHeight = sourceHeight * scale;
+    const rect = lightProbeRect(sourceWidth, sourceHeight, size, this.wallpaperZoom);
     try {
-      context.drawImage(source, (size - drawWidth) / 2, (size - drawHeight) / 2,
-        drawWidth, drawHeight);
+      context.drawImage(source, rect.x, rect.y, rect.width, rect.height);
       this.lightPixels = context.getImageData(0, 0, size, size).data;
     } catch {
       // A cross-origin source can still be WebGL-sampleable with CORS while a
@@ -384,6 +447,95 @@ export class LiquidGlassWebGLV2 {
       // complete fallback in that case.
       this.lightPixels = null;
     }
+  }
+
+  /** Lazily starts the light-probe worker; null when it is unavailable. */
+  lightProbeWorker() {
+    if (this.lightWorker || this.lightWorkerUnavailable) return this.lightWorker;
+    if (typeof globalThis.Worker !== 'function' || typeof globalThis.OffscreenCanvas !== 'function'
+      || typeof globalThis.createImageBitmap !== 'function' || typeof globalThis.Blob !== 'function'
+      || typeof globalThis.URL?.createObjectURL !== 'function') {
+      this.lightWorkerUnavailable = true;
+      return null;
+    }
+    let url = '';
+    const revoke = () => {
+      if (url) globalThis.URL.revokeObjectURL(url);
+      url = '';
+    };
+    try {
+      url = globalThis.URL.createObjectURL(new globalThis.Blob([LIGHT_PROBE_WORKER], { type: 'text/javascript' }));
+      this.lightWorker = new globalThis.Worker(url);
+    } catch {
+      // For example a Content-Security-Policy without blob: workers.
+      revoke();
+      this.lightWorkerUnavailable = true;
+      return null;
+    }
+    const fallBackToMainThread = () => {
+      this.lightWorker?.terminate();
+      this.lightWorker = null;
+      this.lightWorkerUnavailable = true;
+      this.lightProbePending = false;
+      this.lightFieldDirty = true;
+      this.markDirty();
+    };
+    this.lightWorker.onerror = () => { revoke(); fallBackToMainThread(); };
+    this.lightWorker.onmessage = ({ data }) => {
+      revoke();
+      this.lightProbePending = false;
+      if (!data.pixels) { fallBackToMainThread(); return; }
+      if (data.id !== this.lightProbeId) return;
+      this.lightPixels = data.pixels;
+      this.markDirty();
+      if (this.lightProbeQueued) {
+        this.lightProbeQueued = false;
+        this.requestLightField({ queue: true });
+      }
+      // A live backdrop picks the result up on its next frame. A host canvas
+      // that has stopped refreshing has no next frame, so draw it once.
+      if (!this.renderer.hasLiveBackdrop()) this.scheduleSettledRender();
+    };
+    return this.lightWorker;
+  }
+
+  /**
+   * Starts an off-main-thread light probe of the current backdrop. Returns
+   * false when the caller should use the synchronous probe instead.
+   */
+  requestLightField({ queue = false } = {}) {
+    if (this.lightProbePending) {
+      if (queue) this.lightProbeQueued = true;
+      return true;
+    }
+    const source = this.backdrops[this.wallpaperIndex];
+    const [sourceWidth, sourceHeight] = backdropSize(source);
+    if (!(sourceWidth > 0) || !(sourceHeight > 0) || !this.lightProbeWorker()) return false;
+    const id = ++this.lightProbeId;
+    const size = this.lightSampleSize;
+    const rect = lightProbeRect(sourceWidth, sourceHeight, size, this.wallpaperZoom);
+    this.lightProbePending = true;
+    // The bitmap is a snapshot of the source; the GPU readback happens when
+    // the worker draws it.
+    globalThis.createImageBitmap(source).then((bitmap) => {
+      if (id !== this.lightProbeId || !this.lightWorker) {
+        bitmap.close();
+        if (id === this.lightProbeId) this.lightProbePending = false;
+        return;
+      }
+      this.lightWorker.postMessage({ id, bitmap, size, ...rect }, [bitmap]);
+    }, () => {
+      if (id === this.lightProbeId) this.lightProbePending = false;
+    });
+    return true;
+  }
+
+  scheduleSettledRender() {
+    if (this.settledRenderFrame || typeof globalThis.requestAnimationFrame !== 'function') return;
+    this.settledRenderFrame = globalThis.requestAnimationFrame(() => {
+      this.settledRenderFrame = 0;
+      if (this.dirty) this.render({ dpr: this.lastFrame.dpr || undefined });
+    });
   }
 
   sampleLuminance(x, y) {
@@ -470,9 +622,17 @@ export class LiquidGlassWebGLV2 {
       // The optical backdrop remains fully live, but the low-resolution light
       // probe runs at a steadier cadence. This decouples moving content from the
       // white key highlight and removes single-frame direction spikes.
-      const refreshLiveLight = liveBackdrop && now - this.lastLightFieldUpdate >= 84;
-      if (this.lightFieldDirty || resized || refreshLiveLight) {
+      const refreshLiveLight = liveBackdrop
+        && now - this.lastLightFieldUpdate >= LIGHT_PROBE_INTERVAL_MS;
+      if (this.lightFieldDirty || resized) {
         this.updateLightField();
+        this.lastLightFieldUpdate = now;
+      } else if (refreshLiveLight || this.lightFieldAsyncDirty) {
+        // A moving backdrop only refines the eased highlight direction, so the
+        // frame never waits for its GPU readback.
+        const queue = this.lightFieldAsyncDirty;
+        this.lightFieldAsyncDirty = false;
+        if (!this.requestLightField({ queue })) this.updateLightField();
         this.lastLightFieldUpdate = now;
       }
       this.backdropDirty = false;
@@ -526,6 +686,14 @@ export class LiquidGlassWebGLV2 {
 
   destroy() {
     this.stop();
+    this.lightProbeId += 1;
+    if (this.settledRenderFrame && typeof globalThis.cancelAnimationFrame === 'function') {
+      globalThis.cancelAnimationFrame(this.settledRenderFrame);
+    }
+    this.settledRenderFrame = 0;
+    this.lightWorker?.terminate();
+    this.lightWorker = null;
+    this.lightProbePending = false;
     this.canvas.removeEventListener('webglcontextlost', this.handleContextLost, false);
     this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored, false);
     this.reducedTransparencyQuery?.removeEventListener?.('change', this.handleReducedTransparencyChange);

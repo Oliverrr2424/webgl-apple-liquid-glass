@@ -255,6 +255,7 @@ export function drawPressEffectsOverlay(
   sliderPositions,
   press,
   backdrop,
+  dark = false,
 ) {
   const track = layoutElements.find((element) => element.id === 'selection-track');
   const thumb = glassElements.find((element) => element.id === 'selection-thumb')
@@ -279,8 +280,8 @@ export function drawPressEffectsOverlay(
     drawRestingFrostedThumb(ctx, toggleThumb, 'white', releaseOpacity);
   }
   ctx.save();
-  ctx.fillStyle = 'rgba(22,25,31,.88)';
-  ctx.shadowColor = 'rgba(255,255,255,.65)';
+  ctx.fillStyle = dark ? 'rgba(245,246,250,.95)' : 'rgba(22,25,31,.88)';
+  ctx.shadowColor = dark ? 'rgba(0,0,0,.35)' : 'rgba(255,255,255,.65)';
   ctx.shadowBlur = 4;
   ctx.font = `650 ${Math.max(12, track.h * 0.2)}px -apple-system, "SF Pro Display", system-ui, sans-serif`;
   ctx.textAlign = 'center';
@@ -861,7 +862,7 @@ function notificationCard(ctx, element, title, body, time, accent, tinted = fals
   gradient.addColorStop(1, '#e9efff');
   ctx.fillStyle = gradient;
   ctx.fill();
-  const color = tinted ? '#16171b' : '#fff';
+  const color = tinted && element.tintTone !== 'dark' ? '#16171b' : '#fff';
   phoneText(ctx, title, element.x + 70 * unit, element.y + 27 * unit, 15 * unit, { weight: 650, color });
   phoneText(ctx, time, element.x + element.w - 14 * unit, element.y + 26 * unit, 11 * unit, { align: 'right', alpha: 0.58, color });
   phoneText(ctx, body, element.x + 70 * unit, element.y + 50 * unit, 12.5 * unit, { alpha: 0.86, color, maxWidth: element.w - 86 * unit });

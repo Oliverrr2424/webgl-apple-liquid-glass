@@ -5,7 +5,7 @@
 // doubles as the place to add, retype and delete components without editing the
 // scene source.
 
-import { t } from './i18n.js?size-controls=2';
+import { t } from './i18n.js?press-lens=1';
 import { resizeElementFromEditor } from './interactions.js';
 
 const SHAPES = ['folder', 'rect', 'pill', 'circle'];

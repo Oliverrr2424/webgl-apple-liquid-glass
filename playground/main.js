@@ -7,8 +7,8 @@
 import {
   LiquidGlassWebGL, LiquidGlassWebGLV2, connectedElementGroups,
   makeMaterial,
-} from '../src/index.js?frost-ratio=1';
-import { getDefaultMaterialV2 } from '../src/v2-material.js?dispersion-default=2';
+} from '../src/index.js?press-lens=1';
+import { getDefaultMaterialV2 } from '../src/v2-material.js?press-lens=1';
 import {
   SCENES, PHONE_WALLPAPER_PRESETS, SCENE_WALLPAPER_PRESETS, ICON_SOURCES,
   attachIconImages, isAnimated, sceneById, panelLayout,
@@ -18,15 +18,15 @@ import {
   drawGlassContents, drawLabel, drawBadge, drawSelection, drawPressEffectsFrame,
   drawPressEffectsOverlay,
   drawPhoneSceneOverlay, drawPhonePanelOverlay,
-} from './overlay.js?phone-scenes=8';
-import { createInspector } from './inspector.js?dispersion-default=2';
+} from './overlay.js?press-lens=1';
+import { createInspector } from './inspector.js?press-lens=1';
 import { createComponentEditor } from './components.js?size-controls=2';
 import { attachStageInteractions } from './interactions.js?phone-scenes=8';
 import { attachPressEffects } from './press-effects.js?phone-scenes=8';
 import { createStats } from './stats.js';
-import { decodeState, toCode, writeHash } from './permalink.js';
+import { decodeState, toCode, writeHash } from './permalink.js?press-lens=1';
 import { PHONE_ICON_SOURCES, attachPhoneIconImages, phoneFrame } from './phone.js?phone-scenes=8';
-import { t, applyI18n, initPreferences, onLanguageChange } from './i18n.js?size-controls=2';
+import { t, applyI18n, initPreferences, onLanguageChange } from './i18n.js?press-lens=1';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -63,6 +63,7 @@ const materials = {
 
 const store = {
   version: initialVersion,
+  glassTone: shared?.glassTone ?? 'light',
   materials,
   sceneId: sceneById(shared?.sceneId ?? 'home').id,
   material: materials[initialVersion],
@@ -465,7 +466,7 @@ function panelBaseElement() {
     id: `${type}-surface`, shape: 'rect', radius: frame.screen.r,
     x: frame.screen.x, y: frame.screen.y + offsetY,
     w: frame.screen.w, h: frame.screen.h,
-    tint: 0.08, tintTone: 'auto', frost: 0.22,
+    tint: 0.08, tintTone: store.glassTone, frost: 0.22,
   };
 }
 
@@ -488,7 +489,7 @@ function panelGlassElements() {
     // notification tint is for the text treatment; keeping it off the glass
     // avoids a second opaque white veil over the full-screen surface.
     tint: 0.02,
-    tintTone: 'auto',
+    tintTone: store.glassTone,
     frost: 0.16,
   }));
 }
@@ -646,7 +647,7 @@ function drawOverlayLayer({ width, height, dpr }) {
   if (panelActive()) {
     const frame = phoneFrame(width, height);
     drawPhonePanelOverlay(uiContext, store.islandPanel.type,
-      panelLayout(store.islandPanel.type, width, height),
+      panelLayout(store.islandPanel.type, width, height).map((element) => ({ ...element, tintTone: store.glassTone })),
       width, height, store.version, panelOffsetY(store.islandPanel.progress, frame));
   } else if (scene.phoneView) {
     drawHomeScene();
@@ -659,6 +660,7 @@ function drawOverlayLayer({ width, height, dpr }) {
         store.sliderPositions,
         store.press,
         contentCanvas,
+        store.version === 'v2' && store.glassTone === 'dark',
       );
       // The specimen always carries its own content; unlike the material
       // comparison scenes it should remain legible with "Glass only" active.
@@ -776,14 +778,22 @@ function frame(now) {
   if (animating) invalidate();
 }
 
+// Held navigation lens: width growth over the resting capsule, and total
+// height as a multiple of the bar height.
+const NAV_LENS_WIDTH_GROWTH = 0.10;
+const NAV_LENS_HEIGHT = 1.36;
+
 // Elements are authored as plain objects. While held, a presentation copy is
 // inflated around its centre before it reaches WebGL; releasing it restores
 // the untouched authored geometry through a spring in press-effects.js.
 function presentationElements() {
   const byId = new Map(store.elements.map((element) => [element.id, element]));
   const press = store.press;
+  // Light glass keeps each control's authored tone (the gray resting
+  // selector, the white toggle); dark glass switches every surface.
+  const darkGlass = store.version === 'v2' && store.glassTone === 'dark';
   return store.elements.filter((element) => !element.nonGlass).map((element) => {
-    let next = { ...element };
+    let next = { ...element, ...(darkGlass ? { tintTone: 'dark' } : {}) };
     const track = element.sliderTrack ? byId.get(element.sliderTrack) : null;
     if (track) {
       const progress = store.sliderPositions.get(track.id) ?? 0;
@@ -793,12 +803,22 @@ function presentationElements() {
     }
     if (!press || press.id !== element.id) return next;
     const amount = Math.min(1, press.amount);
-    // The selector is intentionally much more elastic: at full hold it grows
-    // to one-and-a-third horizontally. Vertically it doubles, which makes the
-    // capsule clear the track by roughly one-third of the track height above
-    // and below, matching the reference interaction.
-    const scaleX = press.type === 'slider' ? 1 + amount * 0.33 : 1 + amount * 0.075;
-    const scaleY = press.type === 'slider' ? 1 + amount : 1 + amount * 0.075;
+    // Only the navigation selector becomes a pressed lens: just wider than
+    // its resting capsule, a little taller than the bar, with the optical
+    // pressure field squashing the glass seen through it. Buttons and the
+    // toggle keep their original elastic inflation.
+    const navigationLens = press.type === 'slider' && track?.id === 'selection-track';
+    let scaleX = 1 + amount * 0.075;
+    let scaleY = scaleX;
+    if (navigationLens) {
+      scaleX = 1 + amount * NAV_LENS_WIDTH_GROWTH;
+      scaleY = 1 + amount * Math.max(0, track.h * NAV_LENS_HEIGHT / next.h - 1);
+    } else if (press.type === 'slider') {
+      // The toggle grows to one-and-a-third horizontally and doubles
+      // vertically, clearing its track by about a third above and below.
+      scaleX = 1 + amount * 0.33;
+      scaleY = 1 + amount;
+    }
     const w = next.w * scaleX;
     const h = next.h * scaleY;
     const centredX = next.x - (w - next.w) / 2;
@@ -808,7 +828,11 @@ function presentationElements() {
     // what keeps the two edges visually separate. An inward inset did the
     // opposite and also shortened the apparent drag range.
     if (press.type === 'slider' && track) {
-      const edgeOvertravel = Math.max(18, track.h * 0.42);
+      // The navigation lens overhangs the bar ends by the same margin it
+      // overhangs its top and bottom edges.
+      const edgeOvertravel = navigationLens
+        ? Math.max(0, (h - track.h) / 2)
+        : Math.max(18, track.h * 0.42);
       const progress = store.sliderPositions.get(track.id) ?? 0;
       const leftX = track.x - edgeOvertravel;
       const rightX = track.x + track.w + edgeOvertravel - w;
@@ -843,7 +867,8 @@ function presentationElements() {
       tint: authoredTint + (pressedTint - authoredTint) * materialAmount,
       frost: authoredFrost + (pressedFrost - authoredFrost) * materialAmount,
       opacity: Number(next.opacity ?? 1) * releaseOpacity,
-      tintTone: press.type === 'slider' ? next.tintTone : 'light',
+      pressure: navigationLens ? amount : 0,
+      tintTone: darkGlass ? 'dark' : press.type === 'slider' ? next.tintTone : 'light',
     };
   });
 }
@@ -864,6 +889,24 @@ function applyElements() {
     glass.setElements(presented, false);
   }
 }
+
+function syncGlassTone() {
+  for (const button of document.querySelectorAll('[data-glass-tone]')) {
+    const active = button.dataset.glassTone === store.glassTone;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  }
+}
+for (const button of document.querySelectorAll('[data-glass-tone]')) button.addEventListener('click', () => {
+  store.glassTone = button.dataset.glassTone;
+  syncGlassTone();
+  if (panelActive()) applyPanelElements();
+  else applyElements();
+  // The lower glass is baked into the 2D backing in two-pass scenes.
+  // Recompose it so changing tint updates both layers immediately.
+  invalidate({ content: true });
+  queueHash();
+});
 
 function onSceneChange(reason) {
   if (['drag', 'nudge', 'resize', 'add', 'remove', 'retype', 'dragend'].includes(reason)) {
@@ -886,7 +929,7 @@ function rebuildInspector() {
       applyMaterial();
       syncPresetButtons(null);
       queueHash();
-      invalidate();
+      invalidate({ content: true });
     },
   });
   // The freshly built rows start from the English fallbacks; re-apply the
@@ -1277,11 +1320,13 @@ $('resetMaterial').addEventListener('click', () => {
   syncPresetButtons(store.version === 'v1' ? 'regular' : null);
   announce(t('announce.reset', { version: store.version.toUpperCase() }));
   queueHash();
-  invalidate();
+  invalidate({ content: true });
 });
 
 function syncVersionUI() {
   const isV2 = store.version === 'v2';
+  $('glassToneControl').hidden = !isV2;
+  syncGlassTone();
   const locked = Boolean(currentScene().lockedComponents);
   for (const button of document.querySelectorAll('[data-renderer-version]')) {
     button.classList.toggle('active', button.dataset.rendererVersion === store.version);

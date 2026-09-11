@@ -307,6 +307,10 @@
           <button type="button" data-renderer-version="v2" data-i18n="renderer.v2">V2 Transparent</button>
         </div>
         <p class="versionNote" id="versionNote">The original frosted material with smooth-union fusion.</p>
+        <div class="segmented" id="glassToneControl" role="group" aria-label="Glass appearance">
+          <button type="button" data-glass-tone="light" data-i18n="glass.light">Light glass</button>
+          <button type="button" data-glass-tone="dark" data-i18n="glass.dark">Dark glass</button>
+        </div>
       </div>
       <div class="toolbar" id="presetToolbar">
         <button type="button" data-preset="regular" data-i18n="preset.regular">Regular</button>
@@ -413,6 +417,6 @@
   </div>
 </div>
 <div id="announcer" class="srOnly" role="status" aria-live="polite"></div>
-<script type="module" src="./playground/main.js?size-controls=2"></script>
+<script type="module" src="./playground/main.js?press-lens=1"></script>
 </body>
 </html>
