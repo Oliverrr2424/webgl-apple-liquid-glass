@@ -8,9 +8,10 @@
 import { LiquidGlassWebGLV2 } from './v2.js';
 import { makeMaterialV2 } from './v2-material.js';
 import { addClient, removeClient, wake, eachClient, layoutEpoch } from './frame-loop.js';
+import { invalidatePageContent } from './dom-content.js';
 import {
   LAYER_ATTRIBUTE, isElement, normalizeBackdrop, resolveLayers, paintElementBackdrop,
-  layersAreLive, layerElements, missingLayers, onBackdropAsset,
+  layersAreLive, layerElements, missingLayers, onBackdropAsset, transparentColor,
 } from './dom-backdrop.js';
 
 const instances = new WeakMap();
@@ -105,6 +106,7 @@ export class LiquidGlass {
    * backdrop that just rendered, a canvas you drew into, a JS animation).
    */
   static refreshAll() {
+    invalidatePageContent();
     eachClient((client) => client.refresh?.());
   }
 
@@ -324,6 +326,9 @@ export class LiquidGlass {
         compositeMode: 'overlay',
         autoResize: false,
         autoStart: false,
+        // Glass above this element draws this canvas into its backdrop,
+        // possibly on a later frame than the one that rendered it.
+        preserveDrawingBuffer: true,
         material: this.options.material,
         respectReducedTransparency: this.options.respectReducedTransparency ?? true,
         onContextLost: (event) => this.options.onContextLost?.(event),
@@ -479,7 +484,7 @@ export class LiquidGlass {
           this.setStyle(node, 'backdropFilter', `blur(${blur}px) saturate(1.6)`);
           this.setStyle(node, 'webkitBackdropFilter', `blur(${blur}px) saturate(1.6)`);
         }
-        if (/rgba?\(.*[,/]\s*0\s*\)$|^transparent$/.test(style.backgroundColor)) {
+        if (transparentColor(style.backgroundColor)) {
           this.setStyle(node, 'backgroundColor', this.options.tintTone === 'dark'
             ? `rgba(20,21,26,${(0.28 + tint * 0.5).toFixed(3)})`
             : `rgba(255,255,255,${(0.14 + tint * 0.5).toFixed(3)})`);

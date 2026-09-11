@@ -7,6 +7,11 @@
 // description for any viewport rectangle, registered to where the browser
 // actually laid everything out, so the glass refracts what is really under it.
 
+// dom-content.js imports helpers from this module and this module paints its
+// display list; the cycle is safe because neither side calls the other while
+// the modules are still evaluating.
+import { paintPageContent, pageContentIsLive } from './dom-content.js';
+
 export const LAYER_ATTRIBUTE = 'data-liquid-glass-layer';
 
 const IMAGE_URL = /(^(data|blob|https?):)|\/|\.(avif|webp|png|apng|jpe?g|gif|svg|bmp|ico)([?#]|$)/i;
@@ -68,7 +73,7 @@ export function mediaSize(source) {
 // Small CSS value parsers. Only computed values reach them, which browsers
 // have already normalised (colours to rgb(), keywords to percentages).
 
-function splitTop(value, separator) {
+export function splitTop(value, separator) {
   const parts = [];
   let depth = 0;
   let start = 0;
@@ -147,8 +152,10 @@ function applyBlendMode(ctx, style) {
   if (BLEND_MODES.has(style.mixBlendMode)) ctx.globalCompositeOperation = style.mixBlendMode;
 }
 
-const transparentColor = (color) => !color || color === 'transparent'
-  || /^rgba?\(.*[,/]\s*0(\.0*)?\s*\)$/.test(color);
+// Only an explicit zero alpha: `rgb(0, 0, 0)` is black, not transparent.
+export const transparentColor = (color) => !color || color === 'transparent'
+  || /^rgba\([^)]*,\s*0(\.0*)?\s*\)$/.test(color)
+  || /\/\s*0(\.0*)?%?\s*\)$/.test(color);
 
 function borderRadii(style, box) {
   const read = (value, extent) => {
@@ -412,7 +419,7 @@ function paintBackgroundLayer(ctx, layer, options, box, region) {
   return true;
 }
 
-function paintCssBackground(ctx, element, region, { canvas = false } = {}) {
+export function paintCssBackground(ctx, element, region, { canvas = false } = {}) {
   const style = getComputedStyle(element);
   if (style.display === 'none') return true;
   const box = rectOf(element);
@@ -480,7 +487,7 @@ function drawSource(ctx, source, box, fit, position, region) {
   ctx.restore();
 }
 
-function paintMedia(ctx, layer, region) {
+export function paintMedia(ctx, layer, region) {
   const { element } = layer;
   const style = getComputedStyle(element);
   if (style.display === 'none' || style.visibility === 'hidden') return;
@@ -557,73 +564,18 @@ export function normalizeBackdrop(input) {
   throw new TypeError('LiquidGlass: unsupported backdrop. Use an element, selector, image URL, canvas/video/image, painter function, or { source, fit, anchor }.');
 }
 
-let largePaintedCache = null;
-
 /**
- * Elements big enough to be a backdrop (half the viewport in both directions)
- * that paint something: media, a background image or an opaque colour.
- * Scanned once per quarter second at most, however many surfaces ask.
- */
-function largePaintedElements() {
-  const time = globalThis.performance?.now?.() ?? Date.now();
-  if (largePaintedCache && time - largePaintedCache.time < 250) return largePaintedCache.list;
-  const viewport = viewportBox();
-  const list = [];
-  for (const element of document.body?.querySelectorAll('*') ?? []) {
-    if (element.hasAttribute(LAYER_ATTRIBUTE)) continue;
-    const rect = element.getBoundingClientRect();
-    if (rect.width < viewport.width * 0.5 || rect.height < viewport.height * 0.5) continue;
-    const style = getComputedStyle(element);
-    if (style.display === 'none' || style.visibility === 'hidden') continue;
-    const media = MEDIA_TAGS.has(element.tagName.toUpperCase());
-    if (!media && style.backgroundImage === 'none' && transparentColor(style.backgroundColor)) continue;
-    list.push({ element, media, below: Number.parseInt(style.zIndex, 10) < 0 });
-  }
-  largePaintedCache = { time, list };
-  return list;
-}
-
-const documentOrder = (a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
-
-/** Fixed or sticky glass floats over content that comes after it, too. */
-function isFloating(target) {
-  for (let node = target; node && node !== document.documentElement; node = node.parentElement) {
-    const { position } = getComputedStyle(node);
-    if (position === 'fixed' || position === 'sticky') return true;
-  }
-  return false;
-}
-
-/**
- * Best guess at what the browser paints under `target`: the root background,
- * every ancestor's background, and large backgrounds painted before it (a
- * full-screen <video>, a fixed gradient <div>, a hero <img>). Each layer is
- * clipped to its own box, so a guess that does not overlap costs nothing.
+ * What the browser paints under `target`: the root background, then the rest
+ * of the page below it in paint order (see dom-content.js).
  */
 function autoLayers(target) {
   const root = document.documentElement;
-  const body = document.body;
   const rootStyle = getComputedStyle(root);
   const rootPainted = rootStyle.backgroundImage !== 'none' || !transparentColor(rootStyle.backgroundColor);
-  const layers = [{ kind: 'css', element: rootPainted || !body ? root : body, canvas: true }];
-  const behind = [];
-  const inFlow = new Set();
-  for (let node = target.parentElement; node && node !== root; node = node.parentElement) {
-    if (node === body && !rootPainted) continue;
-    inFlow.add(node);
-  }
-  const floating = isFloating(target);
-  for (const { element, media, below } of largePaintedElements()) {
-    if (element === body || element.contains(target) || target.contains(element)) continue;
-    const precedes = Boolean(element.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING);
-    if (below) behind.push({ element, media });
-    else if (precedes || floating) inFlow.add(element);
-  }
-  const toLayer = (element) => layerFromElement(element);
-  behind.sort((a, b) => documentOrder(a.element, b.element));
-  layers.push(...behind.map(({ element }) => toLayer(element)));
-  layers.push(...[...inFlow].sort(documentOrder).map(toLayer));
-  return layers;
+  return [
+    { kind: 'css', element: rootPainted || !document.body ? root : document.body, canvas: true },
+    { kind: 'page', host: target },
+  ];
 }
 
 /** Resolves selectors and `auto` against the live document. */
@@ -719,6 +671,9 @@ export function paintLayers(ctx, layers, region) {
         case 'paint':
           layer.paint(ctx, { ...region });
           break;
+        case 'page':
+          settled = paintPageContent(ctx, region, layer.host) && settled;
+          break;
         default:
           break;
       }
@@ -755,6 +710,7 @@ export function paintElementBackdrop(context, layers, frame, bleed, dpr) {
 /** Whether any layer can change without the page telling us. */
 export function layersAreLive(layers) {
   return layers.some((layer) => {
+    if (layer.kind === 'page') return pageContentIsLive(layer.host);
     const source = layer.kind === 'media' ? layer.element : layer.kind === 'source' ? layer.source : null;
     if (!source) return false;
     const tag = source.tagName?.toUpperCase();

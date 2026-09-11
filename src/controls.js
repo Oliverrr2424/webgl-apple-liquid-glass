@@ -44,7 +44,19 @@ export function getPressedControlMaterialV2(material = {}) {
 }
 
 // Used only when the container has no size of its own.
-const DEFAULT_SIZE = { navbar: [312, 72], switch: [92, 40] };
+const DEFAULT_SIZE = { navbar: [312, 72], switch: [84, 28] };
+const SWITCH_TRACK_ASPECT = 3;
+
+// Release restores the resting material in a short linear fade while the
+// geometry is still completing its spring (the playground's Press scene).
+const RELEASE_MATERIAL_MS = 140;
+
+// The thumbs' glass at rest, so the first liquid frame matches the 2D thumb
+// it replaces before tint and frost clear under the finger.
+const RESTING_THUMB = Object.freeze({
+  switch: { tint: 1.5, frost: 0.24, tintTone: 'light' },
+  navbar: { tint: 0.34, frost: 0.32, tintTone: 'dark' },
+});
 
 function layer(tag, host, zIndex) {
   const node = document.createElement(tag);
@@ -115,6 +127,10 @@ class LiquidGlassControl {
     this.lens = { ...DEFAULT_NAVIGATION_LENS, ...(this.options.lens ?? {}) };
     this.dragging = false;
     this.animating = false;
+    this.releasing = false;
+    this.releaseMix = 1;
+    this.releaseStartedAt = 0;
+    this.activePointerId = null;
     this.lastTime = 0;
     this.frame = null;
     this.size = null;
@@ -143,10 +159,11 @@ class LiquidGlassControl {
     if (this.supported) {
       try {
         this.baseGlass = this.baseCanvas ? new LiquidGlassWebGLV2(this.baseCanvas, {
-          material: this.material, compositeMode: 'overlay', autoResize: false,
+          material: this.material, compositeMode: 'overlay', autoResize: false, preserveDrawingBuffer: true,
         }) : null;
         this.pressGlass = new LiquidGlassWebGLV2(this.pressCanvas, {
           material: getPressedControlMaterialV2(this.material), compositeMode: 'overlay', autoResize: false,
+          preserveDrawingBuffer: true,
         });
       } catch (error) {
         console.warn(`${name}: WebGL2 unavailable, drawing the flat fallback.`, error);
@@ -306,7 +323,21 @@ class LiquidGlassControl {
       canvas.width = pixelWidth;
       canvas.height = pixelHeight;
     }
-    this.track = { x: bleed, y: bleed, w: width, h: height };
+    let trackWidth = width;
+    let trackHeight = height;
+    if (this.kind === 'switch') {
+      // The host is also the generous hit target. Keep the visible track at
+      // the flatter proportions of the playground even when app CSS supplies
+      // a taller box (for example 64×30).
+      if (width / height < SWITCH_TRACK_ASPECT) trackHeight = width / SWITCH_TRACK_ASPECT;
+      else trackWidth = height * SWITCH_TRACK_ASPECT;
+    }
+    this.track = {
+      x: bleed + (width - trackWidth) / 2,
+      y: bleed + (height - trackHeight) / 2,
+      w: trackWidth,
+      h: trackHeight,
+    };
     this.baseGlass?.setBackdrop(this.backdropCanvas, { update: 'static', autoStart: false, shouldRender: false });
     this.pressGlass?.setBackdrop(this.compositeCanvas, { update: 'static', autoStart: false, shouldRender: false });
     this.staticDirty = true;
@@ -331,14 +362,19 @@ class LiquidGlassControl {
     }
     this.amount.value = clamp(this.amount.value, 0, 1.12);
     this.position.value = clamp(this.position.value, 0, last);
+    if (this.releasing) {
+      this.releaseMix = reduceMotion ? 1 : clamp((now - this.releaseStartedAt) / RELEASE_MATERIAL_MS);
+    }
     const settled = Math.abs(this.amount.value - amountTarget) < 0.004
       && Math.abs(this.amount.velocity) < 0.018
       && Math.abs(this.position.value - this.positionTarget) < 0.003
-      && Math.abs(this.position.velocity) < 0.018;
+      && Math.abs(this.position.velocity) < 0.018
+      && (!this.releasing || this.releaseMix >= 1);
     if (settled) {
       this.amount.value = amountTarget;
       this.position.value = this.positionTarget;
       this.animating = this.dragging;
+      if (!this.dragging) this.releasing = false;
     }
     this.dirty = true;
     return !settled || this.dragging;
@@ -380,9 +416,11 @@ class LiquidGlassControl {
     const w = restingWidth * scaleX;
     const h = restingHeight * scaleY;
     const centeredX = restingX - (w - restingWidth) / 2;
+    // Proportional overtravel keeps the pressed switch the same shape at any
+    // size; a fixed pixel floor made small switches overshoot their track.
     const overtravel = this.kind === 'navbar'
       ? Math.max(0, (h - track.h) / 2)
-      : Math.max(18, track.h * 0.42);
+      : track.h * 0.42;
     const anchoredX = track.x - overtravel + (track.w + overtravel * 2 - w) * progress;
     return {
       x: centeredX + (anchoredX - centeredX) * clamp(amount),
@@ -419,15 +457,20 @@ class LiquidGlassControl {
       roundRect(context, x, y, w, h);
       const progress = clamp(this.position.value);
       context.globalAlpha = progress * progress * (3 - 2 * progress);
-      const green = context.createLinearGradient(x, y, x + w, y + h);
-      green.addColorStop(0, '#34d86a');
-      green.addColorStop(1, '#25c653');
-      context.fillStyle = green;
+      if (this.options.color) {
+        context.fillStyle = this.options.color;
+      } else {
+        const green = context.createLinearGradient(x, y, x + w, y + h);
+        green.addColorStop(0, '#34d86a');
+        green.addColorStop(1, '#25c653');
+        context.fillStyle = green;
+      }
       context.fill();
     } else {
-      context.fillStyle = 'rgba(225,230,238,.72)';
+      const dark = this.darkTrack();
+      context.fillStyle = dark ? 'rgba(30,32,38,.72)' : 'rgba(225,230,238,.72)';
       context.fill();
-      context.strokeStyle = 'rgba(255,255,255,.5)';
+      context.strokeStyle = dark ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.5)';
       context.stroke();
     }
     context.restore();
@@ -454,27 +497,33 @@ class LiquidGlassControl {
     context.drawImage(this.trackCanvas, 0, 0);
   }
 
-  renderPressed(pressed) {
+  renderPressed(liquid) {
     if (!this.pressGlass) return;
-    if (!pressed) {
+    if (!liquid) {
       this.pressGlass.setElements([], false);
       this.pressGlass.render({ force: true, dpr: this.size.dpr });
       this.pressedShown = false;
       return;
     }
+    const amount = clamp(this.amount.value);
+    // Pressing clears the resting tint and frost with the elastic scale;
+    // releasing brings them back in a short linear fade, then hands over to
+    // the 2D thumb.
+    const materialAmount = this.releasing ? 1 - this.releaseMix : amount;
+    const resting = RESTING_THUMB[this.kind];
     this.pressGlass.updateBackdrop(false);
     this.pressGlass.setElements([{
       id: `${this.kind}-pressed-thumb`,
       shape: 'pill',
       ...this.thumbGeometry(),
-      tint: 0,
-      frost: 0,
-      opacity: clamp(this.amount.value),
-      pressure: this.kind === 'navbar' ? clamp(this.amount.value) : 0,
+      tint: resting.tint * (1 - materialAmount),
+      frost: resting.frost * (1 - materialAmount),
+      opacity: this.releasing ? 1 - this.releaseMix : 1,
+      pressure: this.kind === 'navbar' ? amount : 0,
       pressureAxes: this.kind === 'navbar'
         ? [1 - this.lens.innerLength, 1 - this.lens.innerHeight]
         : [1, 1],
-      tintTone: 'light',
+      tintTone: resting.tintTone,
     }], false);
     this.pressGlass.render({ force: true, dpr: this.size.dpr });
     this.pressedShown = true;
@@ -483,9 +532,14 @@ class LiquidGlassControl {
   drawRestingThumb(composed) {
     const context = this.context(this.restCanvas);
     context.clearRect(0, 0, this.restCanvas.width, this.restCanvas.height);
-    const opacity = 1 - clamp(this.amount.value);
+    // While held only the liquid thumb shows. On release the resting thumb
+    // fades back in over the still-shrinking glass. Without WebGL the 2D
+    // thumb does the whole animation itself.
+    const held = this.dragging;
+    const active = this.supported && (held || this.releasing);
+    const opacity = active ? (held ? 0 : this.releaseMix) : 1;
     if (opacity <= 0.001) return;
-    const thumb = this.thumbGeometry(0);
+    const thumb = this.thumbGeometry(active || !this.supported ? this.amount.value : 0);
     const radius = thumb.h / 2;
     context.save();
     context.globalAlpha = opacity;
@@ -505,6 +559,7 @@ class LiquidGlassControl {
       context.lineWidth = 1.5;
       context.stroke();
     } else {
+      const dark = this.darkTrack();
       context.shadowColor = 'rgba(0,0,0,.055)';
       context.shadowBlur = thumb.h * 0.09;
       context.shadowOffsetY = thumb.h * 0.045;
@@ -524,19 +579,35 @@ class LiquidGlassControl {
         context.drawImage(this.compositeCanvas, x * dpr, y * dpr, w * dpr, h * dpr, x, y, w, h);
         context.filter = 'none';
         context.globalCompositeOperation = 'color';
-        context.fillStyle = 'rgba(148,150,155,.72)';
+        context.fillStyle = dark ? 'rgba(46,48,54,.72)' : 'rgba(148,150,155,.72)';
         context.fillRect(thumb.x, thumb.y, thumb.w, thumb.h);
         context.globalCompositeOperation = 'source-over';
-        context.fillStyle = 'rgba(142,145,152,.24)';
+        // A dark track keeps a dark selection, so light labels stay legible
+        // over bright content.
+        context.fillStyle = dark ? 'rgba(12,13,17,.42)' : 'rgba(142,145,152,.24)';
       } else {
         const fill = context.createLinearGradient(thumb.x, thumb.y, thumb.x, thumb.y + thumb.h);
-        fill.addColorStop(0, 'rgba(174,178,186,.88)');
-        fill.addColorStop(1, 'rgba(145,149,158,.82)');
+        fill.addColorStop(0, dark ? 'rgba(62,64,72,.9)' : 'rgba(174,178,186,.88)');
+        fill.addColorStop(1, dark ? 'rgba(42,44,50,.86)' : 'rgba(145,149,158,.82)');
         context.fillStyle = fill;
       }
       context.fillRect(thumb.x, thumb.y, thumb.w, thumb.h);
     }
     context.restore();
+  }
+
+  /** Whether the navbar track reads as dark glass (`tintTone`, or measured for `auto`). */
+  darkTrack() {
+    const tone = this.options.tintTone ?? 'light';
+    if (tone !== 'auto') return tone === 'dark';
+    const track = this.baseGlass?.elements[0];
+    if (!track || !this.size) return false;
+    const { width, height, bleed } = this.size;
+    return this.baseGlass.tintLightForElement(track, width + bleed * 2, height + bleed * 2) < 0.5;
+  }
+
+  labelColor() {
+    return this.options.labelColor ?? (this.darkTrack() ? 'rgba(245,246,250,.95)' : 'rgba(22,25,31,.9)');
   }
 
   drawFocusRing() {
@@ -563,13 +634,20 @@ class LiquidGlassControl {
     if (this.staticDirty) {
       this.settled = this.supported ? this.drawBackdrop() : true;
       this.renderBase();
+      if (this.kind === 'navbar' && this.options.tintTone === 'auto') {
+        const color = this.labelColor();
+        if (color !== this.appliedLabelColor) {
+          this.appliedLabelColor = color;
+          for (const label of this.labelLayer.children) label.style.color = color;
+        }
+      }
       this.staticDirty = false;
     }
     this.drawTrack();
-    const pressed = this.amount.value > 0.001;
-    const composed = this.supported && (pressed || this.kind === 'navbar');
+    const liquid = this.dragging || (this.releasing && this.releaseMix < 1);
+    const composed = this.supported && (liquid || this.kind === 'navbar');
     if (composed) this.composePressedBackdrop();
-    if (pressed || this.pressedShown) this.renderPressed(pressed);
+    if (liquid || this.pressedShown) this.renderPressed(liquid);
     this.drawRestingThumb(composed);
     this.drawFocusRing();
     this.updateAccessibility();
@@ -600,7 +678,7 @@ class LiquidGlassControl {
         height: `${height}px`,
         display: 'grid',
         placeItems: 'center',
-        color: this.options.labelColor ?? 'rgba(22,25,31,.9)',
+        color: this.labelColor(),
         font: 'inherit',
         fontSize: `${this.options.fontSize ?? Math.max(13, Math.min(17, height * 0.22))}px`,
         fontWeight: '600',
@@ -653,25 +731,49 @@ class LiquidGlassControl {
     if (this.options.disabled || event.button !== 0 || !this.size) return;
     event.preventDefault();
     this.dragging = true;
-    this.positionTarget = this.progressForPointer(event);
-    this.container.setPointerCapture?.(event.pointerId);
+    const start = Math.round(this.positionTarget);
+    this.press = { x: event.clientX, y: event.clientY, moved: false, start };
+    this.activePointerId = event.pointerId;
+    this.releasing = false;
+    this.releaseMix = 0;
+    // A switch press blooms the knob where it is. Its state and position only
+    // change after an actual drag; tapping either half is visual feedback,
+    // never a toggle. Navbar items keep normal click-to-select behaviour.
+    this.positionTarget = this.kind === 'switch' ? start : this.progressForPointer(event);
+    try {
+      this.container.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Synthetic or already released pointers cannot be captured.
+    }
     this.pointerFocus = true;
     this.container.focus({ preventScroll: true });
     this.startAnimation();
   }
 
   pointerMove(event) {
-    if (!this.dragging) return;
+    if (!this.dragging || event.pointerId !== this.activePointerId) return;
     event.preventDefault();
+    if (!this.press.moved) {
+      if (Math.hypot(event.clientX - this.press.x, event.clientY - this.press.y) < 4) return;
+      this.press.moved = true;
+    }
     this.positionTarget = this.progressForPointer(event);
     this.startAnimation();
   }
 
   pointerEnd(event) {
-    if (!this.dragging) return;
+    if (!this.dragging || event.pointerId !== this.activePointerId) return;
     event.preventDefault();
     this.dragging = false;
-    this.positionTarget = Math.round(this.positionTarget);
+    const { start, moved } = this.press ?? { start: Math.round(this.positionTarget), moved: true };
+    if (event.type === 'pointercancel') this.positionTarget = start;
+    else if (this.kind === 'switch' && !moved) this.positionTarget = start;
+    else this.positionTarget = Math.round(this.positionTarget);
+    this.activePointerId = null;
+    this.press = null;
+    this.releasing = true;
+    this.releaseMix = 0;
+    this.releaseStartedAt = globalThis.performance?.now?.() ?? Date.now();
     this.commitValue(this.positionTarget);
     this.startAnimation();
   }
@@ -743,6 +845,27 @@ class LiquidGlassControl {
     this.baseGlass?.setMaterial(this.material, false);
     this.pressGlass?.setMaterial(getPressedControlMaterialV2(this.material), false);
     this.staticDirty = true;
+    wake(34);
+    return this;
+  }
+
+  /** Update the navbar's pressed-lens geometry without remounting it. */
+  setLens(lens) {
+    if (this.kind !== 'navbar') return this;
+    this.lens = { ...this.lens, ...(lens ?? {}) };
+    this.dirty = true;
+    wake(34);
+    return this;
+  }
+
+  /** Update the navbar track/label tone without remounting it. */
+  setTintTone(tintTone) {
+    if (this.kind !== 'navbar') return this;
+    this.options.tintTone = tintTone;
+    this.appliedLabelColor = null;
+    this.staticDirty = true;
+    this.dirty = true;
+    this.buildLabels();
     wake(34);
     return this;
   }

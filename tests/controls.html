@@ -48,7 +48,8 @@
     }
     // The control is sized by its container and is transparent around it.
     const toggleBox = document.querySelector('#toggle').getBoundingClientRect();
-    if (toggleBox.width !== 92 || toggleBox.height !== 40) throw new Error(`unsized switch got ${toggleBox.width}x${toggleBox.height}`);
+    if (toggleBox.width !== 84 || toggleBox.height !== 28) throw new Error(`unsized switch got ${toggleBox.width}x${toggleBox.height}`);
+    if (Math.abs(toggle.track.w / toggle.track.h - 3) > 0.001) throw new Error('switch track lost playground aspect ratio');
     if (navbar.track.w !== 320 || navbar.track.h !== 64) throw new Error('navbar track does not follow its container');
     const { dpr, bleed } = navbar.size;
     // A WebGL canvas can only be read in the same task that drew it.
@@ -68,9 +69,45 @@
     await new Promise((resolve) => setTimeout(resolve, 80));
     if (navbar.value !== 'saved' || navChange !== 'saved') throw new Error(`navbar keyboard change failed: ${navbar.value}`);
     if (!toggle.checked || switchChange !== true) throw new Error('switch keyboard change failed');
+    // Pointer taps only bloom in place. A state change requires a drag across
+    // the midpoint; keyboard activation remains available for accessibility.
+    const toggleRect = toggle.container.getBoundingClientRect();
+    const tap = (x) => {
+      const init = { clientX: x, clientY: toggleRect.top + toggleRect.height / 2, button: 0, pointerId: 7, bubbles: true };
+      toggle.container.dispatchEvent(new PointerEvent('pointerdown', init));
+      toggle.container.dispatchEvent(new PointerEvent('pointerup', init));
+    };
+    tap(toggleRect.right - 10);
+    if (!toggle.checked || switchChange !== true) throw new Error('tap on the current side changed state');
+    tap(toggleRect.left + 10);
+    if (!toggle.checked || switchChange !== true) throw new Error('tap on the other side changed state');
+    // Held anywhere it swells in place, then an actual drag changes state.
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const down = { clientX: toggleRect.right - 10, clientY: toggleRect.top + toggleRect.height / 2, button: 0, pointerId: 8, bubbles: true };
+    toggle.container.dispatchEvent(new PointerEvent('pointerdown', down));
+    await wait(150);
+    if (!(toggle.position.value > 0.9 && toggle.amount.value > 0.5)) {
+      throw new Error(`held knob moved or did not swell (position ${toggle.position.value.toFixed(2)}, amount ${toggle.amount.value.toFixed(2)})`);
+    }
+    const move = { ...down, clientX: toggleRect.left + 4 };
+    toggle.container.dispatchEvent(new PointerEvent('pointermove', move));
+    toggle.container.dispatchEvent(new PointerEvent('pointerup', move));
+    if (toggle.checked || switchChange !== false) throw new Error('drag across the midpoint did not toggle off');
+    await wait(900);
+    if (toggle.amount.value > 0.01 || toggle.position.value > 0.01) throw new Error('knob did not settle off');
+    toggle.setChecked(true);
+    toggle.container.style.width = '64px';
+    toggle.container.style.height = '30px';
+    toggle.refresh();
+    await wait(100);
+    if (Math.abs(toggle.track.w - 64) > 0.01 || Math.abs(toggle.track.h - 64 / 3) > 0.01) {
+      throw new Error(`tall switch box stretched its visible track to ${toggle.track.w}x${toggle.track.h}`);
+    }
     if (navbar.container.getAttribute('role') !== 'tablist') throw new Error('navbar role missing');
     if (toggle.container.getAttribute('aria-checked') !== 'true') throw new Error('switch aria state missing');
     if (LiquidGlassNavbar.from('#navbar') !== navbar) throw new Error('from() lookup failed');
+    navbar.setLens({ outerWidth: 0.16 }).setTintTone('dark');
+    if (navbar.lens.outerWidth !== 0.16 || !navbar.darkTrack()) throw new Error('live navbar appearance update failed');
     navbar.setValue('featured');
     if (navbar.value !== 'featured') throw new Error('setValue failed');
     navbar.destroy();

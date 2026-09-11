@@ -24,8 +24,11 @@ import { createComponentEditor } from './components.js?size-controls=2';
 import { attachStageInteractions } from './interactions.js?phone-scenes=8';
 import { attachPressEffects } from './press-effects.js?pressed-material=2';
 import {
+  createPlaygroundControlSpecimen, isPlaygroundControl,
+} from './api-controls.js?public-controls=1';
+import {
   PRESSED_CONTROL_MATERIAL_V2, getPressedControlMaterialV2,
-} from '../src/controls.js?controls=1';
+} from '../src/controls.js';
 import { createStats } from './stats.js';
 import { DEFAULT_NAV_LENS, NAV_LENS_SLIDERS, decodeState, toCode, writeHash } from './permalink.js?press-lens=3';
 import { PHONE_ICON_SOURCES, attachPhoneIconImages, phoneFrame } from './phone.js?phone-scenes=8';
@@ -111,6 +114,38 @@ const store = {
 };
 Object.assign(store.material, shared?.material ?? {});
 
+const apiControlSpecimen = createPlaygroundControlSpecimen({
+  stage,
+  backdrop: contentCanvas,
+  positions: store.sliderPositions,
+  onSelect: (id) => { store.selectedId = id; },
+  onChange: ({ trackId, index }) => {
+    const track = store.elements.find((element) => element.id === trackId);
+    const label = track?.navLabels?.[index];
+    announce(label ? `${label.replace(/^\S+\s+/, '')} selected.` : `Green toggle ${index ? 'on' : 'off'}.`);
+  },
+});
+
+function apiControlsEnabled() {
+  return store.version === 'v2' && Boolean(currentScene().interactionLab);
+}
+
+function syncApiControls() {
+  apiControlSpecimen.sync({
+    enabled: apiControlsEnabled(),
+    elements: store.elements,
+    material: store.material,
+    tintTone: store.glassTone,
+    lens: store.navLens,
+  });
+}
+
+function interactionElements() {
+  return apiControlsEnabled()
+    ? store.elements.filter((element) => !isPlaygroundControl(element))
+    : store.elements;
+}
+
 function effectiveFusion() {
   return store.fusion && !currentScene().lockedComponents;
 }
@@ -146,6 +181,7 @@ function applyMaterial() {
   pressGlass.setMaterial(store.version === 'v2'
     ? getPressedControlMaterialV2(store.material)
     : store.material, false);
+  syncApiControls();
 }
 
 const stats = createStats($('stats'));
@@ -320,6 +356,7 @@ function layoutScene({ keepEdits = false } = {}) {
       if (element.sliderThumb) store.sliderPositions.set(element.id, 0);
     }
   }
+  syncApiControls();
   if (!store.elements.some((element) => element.id === store.selectedId)) store.selectedId = null;
 }
 
@@ -674,15 +711,17 @@ function drawOverlayLayer({ width, height, dpr }) {
     drawHomeScene();
   } else {
     if (scene.interactionLab) {
-      drawPressEffectsOverlay(
-        uiContext,
-        store.elements,
-        [...glass.elements, ...pressGlass.elements],
-        store.sliderPositions,
-        store.press,
-        contentCanvas,
-        store.version === 'v2' && store.glassTone === 'dark',
-      );
+      if (!apiControlsEnabled()) {
+        drawPressEffectsOverlay(
+          uiContext,
+          store.elements,
+          [...glass.elements, ...pressGlass.elements],
+          store.sliderPositions,
+          store.press,
+          contentCanvas,
+          store.version === 'v2' && store.glassTone === 'dark',
+        );
+      }
       // The specimen always carries its own content; unlike the material
       // comparison scenes it should remain legible with "Glass only" active.
       for (const element of glass.elements) {
@@ -737,21 +776,24 @@ function frame(now) {
       image: backdropSourceFor(scene),
     });
     if (scene.interactionLab) {
-      drawPressEffectsFrame(contentContext, store.elements, store.sliderPositions);
+      if (!apiControlsEnabled()) drawPressEffectsFrame(contentContext, store.elements, store.sliderPositions);
       // First pass: render the Home/Discover glass into the backdrop. The
       // moving selector is then a true second glass layer and samples the
       // already-rendered pixels beneath it instead of the original wallpaper.
       // The lower selection track samples the wallpaper above it, which does
       // not change when the distant green switch animates. Reuse that mip
       // chain instead of rebuilding a second full-screen pyramid every frame.
-      if (baseBackdropInvalid || size.resized) {
-        baseGlass.updateBackdrop(false);
-        baseBackdropInvalid = false;
+      if (!apiControlsEnabled()) {
+        if (baseBackdropInvalid || size.resized) {
+          baseGlass.updateBackdrop(false);
+          baseBackdropInvalid = false;
+        }
+        baseGlass.render({ force: true, dpr: size.renderDpr });
+        contentContext.drawImage(baseGlCanvas, 0, 0, size.width, size.height);
       }
-      baseGlass.render({ force: true, dpr: size.renderDpr });
-      contentContext.drawImage(baseGlCanvas, 0, 0, size.width, size.height);
       glass.updateBackdrop(false);
       pressGlass.updateBackdrop(false);
+      apiControlSpecimen.refresh();
     } else if (panelActive()) {
       // The full-screen sheet moves over a static wallpaper. Only its geometry
       // changes; its source texture and blur pyramid can stay cached.
@@ -821,7 +863,9 @@ function presentationElements() {
   // Light glass keeps each control's authored tone (the gray resting
   // selector, the white toggle); dark glass switches every surface.
   const darkGlass = store.version === 'v2' && store.glassTone === 'dark';
-  return store.elements.filter((element) => !element.nonGlass).map((element) => {
+  return store.elements.filter((element) => (
+    !element.nonGlass && !(apiControlsEnabled() && isPlaygroundControl(element))
+  )).map((element) => {
     let next = { ...element, ...(darkGlass ? { tintTone: 'dark' } : {}) };
     const track = element.sliderTrack ? byId.get(element.sliderTrack) : null;
     if (track) {
@@ -934,6 +978,7 @@ function syncGlassTone() {
 for (const button of document.querySelectorAll('[data-glass-tone]')) button.addEventListener('click', () => {
   store.glassTone = button.dataset.glassTone;
   syncGlassTone();
+  syncApiControls();
   if (panelActive()) applyPanelElements();
   else applyElements();
   // The lower glass is baked into the 2D backing in two-pass scenes.
@@ -996,6 +1041,7 @@ for (const [key, min, max, step] of NAV_LENS_SLIDERS) {
     if (!Number.isFinite(clamped)) return;
     store.navLens[key] = clamped;
     apply(clamped);
+    syncApiControls();
     if (store.press) applyElements();
     queueHash();
     invalidate();
@@ -1040,11 +1086,11 @@ attachStageInteractions({
 attachPressEffects({
   canvas: uiCanvas,
   getGlass: () => glass,
-  getElements: () => store.elements,
+  getElements: () => interactionElements(),
   getFallbackElement: ({ x, y }) => {
     const scene = currentScene();
     if (!scene.interactionLab) return null;
-    return store.elements.find((element) => element.sliderThumb
+    return interactionElements().find((element) => element.sliderThumb
       && x >= element.x && x <= element.x + element.w
       && y >= element.y && y <= element.y + element.h) ?? null;
   },
@@ -1441,6 +1487,7 @@ function setRendererVersion(version, { announceChange = true } = {}) {
     store.version === 'v2' ? getPressedControlMaterialV2(store.material) : store.material,
   );
   applyElements();
+  syncApiControls();
   // The new renderer starts with a static upload; force the current scene's
   // actual live/static policy back onto it.
   backdropMode = '';
@@ -1820,6 +1867,7 @@ invalidate({ content: true });
 window.__lg = {
   store,
   get glass() { return glass; },
+  get controls() { return apiControlSpecimen; },
   render: () => { invalidate(); },
   invalidate,
   syncSliders: () => inspector.sync(),

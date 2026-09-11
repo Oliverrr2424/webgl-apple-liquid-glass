@@ -34,11 +34,11 @@ export interface LiquidGlassBackdropSource {
 }
 
 /**
- * What is behind the glass. `'auto'` (the default) reads the page: the root
- * and ancestor CSS backgrounds plus large backgrounds painted before the
- * element (full-screen `<img>`, `<video>`, `<canvas>`, gradient `<div>`).
- * A string is a CSS selector, or an image URL when nothing matches.
- * An array paints bottom to top.
+ * What is behind the glass. `'auto'` (the default) paints the page below the
+ * element in CSS paint order: backgrounds, borders, `<img>`, `<video>`,
+ * `<canvas>` and text. Not captured: `::before`/`::after`, shadows, filters,
+ * SVG, form controls. A string is a CSS selector, or an image URL when
+ * nothing matches. An array paints bottom to top.
  */
 export type LiquidGlassBackdropInput =
   | 'auto'

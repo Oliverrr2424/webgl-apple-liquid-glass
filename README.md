@@ -42,18 +42,18 @@ That is the whole integration:
 
 ## What is behind the glass
 
-Browsers do not let WebGL read page pixels, so the glass has to be told what is behind it. The default, `backdrop: 'auto'`, reads the page. It picks up CSS backgrounds (colors, images, gradients) of the page and the element's ancestors, plus large backgrounds painted before it, such as a full-screen `<video>`, `<canvas>` or fixed gradient `<div>`. When that is not enough, say what is behind:
+Browsers do not let WebGL read page pixels, so the library repaints what is behind the glass itself. The default, `backdrop: 'auto'`, paints the page below the element in CSS paint order, `z-index` included: backgrounds (colors, images, gradients), borders, `<img>`, `<video>`, `<canvas>` and text. A heading that scrolls under a fixed navbar shows up in the glass, aligned with the rest of it. To use something else, say what is behind:
 
 | `backdrop` | Use it for |
 | --- | --- |
-| `'auto'` | CSS backgrounds and full-screen media (default) |
+| `'auto'` | the page below the element (default) |
 | `'#hero-video'` or an element | a specific `<img>`, `<video>`, `<canvas>`, or an element's CSS background, where it sits on the page |
 | `'/wallpaper.jpg'` | an image covering the viewport, like a fixed wallpaper |
 | `{ source, fit, position, anchor }` | an image/canvas/video fitted like `object-fit` into `'viewport'`, `'document'` or an element |
 | `(ctx, region) => { … }` | anything else: draw it yourself in page coordinates |
 | `[ … ]` | several of the above, bottom to top |
 
-Everything is registered in page coordinates, so the part of the photo under a card is the part of the photo under that card. `auto` captures **backgrounds only**. Text and images in the page flow are not captured; paint them yourself if they pass under the glass (see [Content under the glass](#content-under-the-glass)).
+Everything is registered in page coordinates, so the part of the photo under a card is the part of the photo under that card. `auto` does not reproduce `::before`/`::after`, shadows, CSS filters, SVG or form controls; add those with a painter (see [Anything auto misses](#anything-auto-misses)).
 
 ## Options
 
@@ -115,7 +115,7 @@ Cards added or removed later are picked up. For per-card looks, pass `targets: [
 
 ### Video, canvas and WebGL backgrounds
 
-A full-screen `<video>` or `<canvas>` behind the page is found by `auto` and redrawn while it changes. Point at it explicitly if it is smaller or not behind everything: `backdrop: '#bg-video'`.
+A `<video>` or `<canvas>` below the glass is painted by `auto` and redrawn every frame while it plays or animates. To refract only that source, point at it: `backdrop: '#bg-video'`.
 
 A WebGL canvas (three.js, Pixi, …) is cleared after each frame. Create it with `preserveDrawingBuffer: true`, or call `LiquidGlass.refreshAll()` right after you render.
 
@@ -148,27 +148,27 @@ export const liquidGlass = (node, options) => {
 
 Importing is safe during server rendering. Construct only in the browser (effects, `onMounted`).
 
-### Content under the glass
+### Anything auto misses
 
-Draw extra layers with a painter. The context is already in page coordinates, so `getBoundingClientRect()` values land where they are on screen:
+Add a painter after `'auto'`. Its context is already in page coordinates, so `getBoundingClientRect()` values land where they are on screen. An inline SVG logo, for example:
 
 ```js
-const title = document.querySelector('h1');
-new LiquidGlass('.sticky-bar', {
+const logo = document.querySelector('svg.logo');
+const image = new Image();
+image.onload = () => LiquidGlass.refreshAll();
+image.src = `data:image/svg+xml,${encodeURIComponent(new XMLSerializer().serializeToString(logo))}`;
+
+new LiquidGlass('.navbar', {
   backdrop: ['auto', (ctx) => {
-    const box = title.getBoundingClientRect();
-    const style = getComputedStyle(title);
-    ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    ctx.fillStyle = style.color;
-    ctx.textBaseline = 'top';
-    ctx.fillText(title.textContent, box.left, box.top);
+    const box = logo.getBoundingClientRect();
+    ctx.drawImage(image, box.left, box.top, box.width, box.height);
   }],
 });
 ```
 
 ### Changes the page does not announce
 
-Scroll, resize, CSS transitions and inline-style or class changes on the element, its ancestors or its backdrop elements are all picked up. Drawing into a canvas, or moving something unrelated that sits behind the glass, is not: call `LiquidGlass.refreshAll()`, or set `live: true` while it happens.
+Scroll, resize, font loading, DOM, class and style changes, and the end of CSS transitions are all picked up, and canvases and playing videos redraw every frame. Content that moves behind the glass *during* a transition or JS animation catches up when it stops; to follow it frame by frame, call `LiquidGlass.refreshAll()` from the animation's update callback.
 
 ## Navbar and switch
 
@@ -177,7 +177,7 @@ Ready-made controls with the pressed liquid lens, drag, springs, keyboard and AR
 ```js
 import { LiquidGlassNavbar, LiquidGlassSwitch } from 'apple-liquid-glass-webgl';
 
-const nav = new LiquidGlassNavbar('#nav', {        // #nav { width: 330px; height: 56px }
+const nav = new LiquidGlassNavbar('#nav', {        // your CSS: #nav { width: 330px; height: 56px }
   items: [
     { value: 'home', label: 'Home' },
     { value: 'work', label: 'Work', icon: '▣' },
@@ -187,16 +187,22 @@ const nav = new LiquidGlassNavbar('#nav', {        // #nav { width: 330px; heigh
   onChange: (value, index) => router.push(value),
 });
 
-const toggle = new LiquidGlassSwitch('#dark-mode', { // #dark-mode { width: 64px; height: 30px }
+const toggle = new LiquidGlassSwitch('#dark-mode', { // your CSS: #dark-mode { width: 84px; height: 28px }
   checked: false,
   onChange: (checked) => document.documentElement.classList.toggle('dark', checked),
 });
 
 nav.setValue('work');                  // controlled update, no onChange
+nav.setLens({ outerWidth: 0.16 });     // live geometry update
+nav.setTintTone('dark');               // live track + label tone update
 toggle.setChecked(true, { notify: true });
 ```
 
-Options shared with `LiquidGlass`: `backdrop`, `material`, `live`. The navbar also takes `tint` (track, default `0.86`), `labelColor`, `fontSize`, `lens`. Both take `disabled` and `ariaLabel`, and dispatch a bubbling `change` event. An unsized container gets 312×72 (navbar) or 92×40 (switch). Leave `overflow` visible: the pressed lens grows past the track.
+The interaction is the playground's Press scene because the scene uses these public controls directly. Pressing blooms the switch knob in place; only dragging it across the midpoint changes its pointer-controlled state. A tap on either half does not toggle it. Navbar items still support click-to-select, and Arrow keys, Home/End and Space keep both controls keyboard-accessible. Controls can sit inside a `LiquidGlass` element; they refract its glass.
+
+Options shared with `LiquidGlass`: `backdrop`, `material`, `live`. The navbar also takes `tint` (track, default `0.86`), `tintTone` (`'dark'` also darkens the selection and turns labels white), `labelColor`, `fontSize` and `lens`. The switch takes `color` for its on state. Both take `disabled` and `ariaLabel`, and dispatch a bubbling `change` event.
+
+The control uses its container as the hit target. The switch keeps the playground's flatter 3 : 1 visible-track ratio inside that box, so a taller CSS box does not stretch its glass; without a CSS size the navbar gets 312×72 and the switch 84×28. Leave `overflow` visible and some room around it: the pressed glass grows beyond the track while held.
 
 ## Material
 
@@ -261,8 +267,8 @@ Lengths are CSS pixels, and `sizeAdaptation` fits them to small controls. `setFu
 
 ## Limits
 
-- About 16 WebGL contexts per page. A `LiquidGlass` element or switch uses one and a navbar uses two. Group with `targets`.
-- `auto` captures backgrounds, not text, borders or shadows. Use a painter for those.
+- About 16 WebGL contexts per page. A `LiquidGlass` element or switch uses one and a navbar uses two (it has more canvases; the rest are 2D). Group with `targets`.
+- `auto` skips `::before`/`::after`, shadows, filters, SVG and form controls, and draws rotated or scaled text unrotated. Use a painter for those.
 - Scale and translate transforms are followed; rotation is not.
 - Cross-origin images need CORS headers.
 

@@ -38,6 +38,7 @@ export interface LiquidGlassNavbarOptions<T = string> extends LiquidGlassControl
   lens?: Partial<LiquidGlassNavigationLens>;
   /** Track tint, default 0.86 (the playground's white track). */
   tint?: number;
+  /** `dark` also darkens the selection and defaults labels to white. */
   tintTone?: 'light' | 'dark' | 'auto';
   labelColor?: string;
   fontSize?: number;
@@ -46,6 +47,8 @@ export interface LiquidGlassNavbarOptions<T = string> extends LiquidGlassControl
 
 export interface LiquidGlassSwitchOptions extends LiquidGlassControlOptions {
   checked?: boolean;
+  /** Track colour when on. Default iOS green. */
+  color?: string;
   onChange?: (checked: boolean) => void;
 }
 
@@ -80,6 +83,8 @@ export declare class LiquidGlassNavbar<T = string> extends LiquidGlassControl {
   constructor(container: string | HTMLElement, options?: LiquidGlassNavbarOptions<T>);
   readonly value: T;
   setValue(value: T, options?: { notify?: boolean }): this;
+  setLens(lens: Partial<LiquidGlassNavigationLens>): this;
+  setTintTone(tintTone: 'light' | 'dark' | 'auto'): this;
 }
 
 export declare class LiquidGlassSwitch extends LiquidGlassControl {

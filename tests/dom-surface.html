@@ -20,6 +20,14 @@
 <div id="card" class="card"></div>
 <div id="hidden"></div>
 <div id="plain"></div>
+<div id="ink" hidden style="position:absolute; left:20px; top:300px; width:360px; height:120px; background:#fff; color:#000; font:900 64px/120px sans-serif;">HHHH</div>
+<div id="textglass" hidden style="position:absolute; left:20px; top:300px; width:360px; height:120px; z-index:1"></div>
+<div id="under" hidden style="position:absolute; left:20px; top:440px; width:120px; height:60px; background:#000; z-index:0"></div>
+<div id="lens" hidden style="position:absolute; left:20px; top:440px; width:240px; height:60px; z-index:1"></div>
+<div id="outer" hidden style="position:absolute; left:20px; top:560px; width:240px; height:100px; z-index:1">
+  <div id="inner" style="position:absolute; left:20px; top:20px; width:80px; height:60px"></div>
+</div>
+<div id="over" hidden style="position:absolute; left:140px; top:440px; width:120px; height:60px; background:#000; z-index:2"></div>
 <script type="module">
   import { LiquidGlass, LiquidGlassWebGLV2 } from '../src/index.js';
 
@@ -141,7 +149,49 @@
     }
     checks.push('destroy restores element');
 
+    // 6. Page content: text is captured, and only what paints below the glass.
     card.destroy();
+    for (const id of ['ink', 'textglass', 'under', 'lens', 'over']) document.getElementById(id).hidden = false;
+    window.scrollTo(0, 280);
+    const textGlass = new LiquidGlass('#textglass', { material: NEUTRAL });
+    const lens = new LiquidGlass('#lens', { material: NEUTRAL });
+    await Promise.all([textGlass.ready, lens.ready]);
+    await frames(4);
+    const inkBox = textGlass.element.getBoundingClientRect();
+    const grid = [];
+    for (let y = inkBox.top + 10; y < inkBox.bottom - 10; y += 4) {
+      for (let x = inkBox.left + 10; x < inkBox.right - 10; x += 4) grid.push([x, y]);
+    }
+    const inked = sample(textGlass, grid).filter(([r, g, b]) => r + g + b < 180).length / grid.length;
+    if (!(inked > 0.08 && inked < 0.8)) throw new Error(`page text not captured (dark ratio ${inked.toFixed(3)})`);
+    const lensY = lens.element.getBoundingClientRect().top + 30;
+    const [below, above] = sample(lens, [[80, lensY], [200, lensY]]);
+    expectColor('content below the glass', below, [0, 0, 0]);
+    expectColor('content above the glass', above, [255, 255, 255]);
+    checks.push('page text capture', 'paint order');
+    textGlass.destroy();
+    lens.destroy();
+
+    // 7. Glass inside glass refracts the outer glass, not an empty backdrop.
+    document.getElementById('outer').hidden = false;
+    window.scrollTo(0, 520);
+    const outer = new LiquidGlass('#outer', { material: NEUTRAL, tint: 1.5, tintTone: 'dark' });
+    await outer.ready;
+    await frames(3);
+    const inner = new LiquidGlass('#inner', { material: NEUTRAL });
+    await inner.ready;
+    await frames(4);
+    const innerBox = inner.element.getBoundingClientRect();
+    const [outerPixel] = sample(outer, [[innerBox.left - 10, innerBox.top + 30]]);
+    const [innerPixel] = sample(inner, [[innerBox.left + 40, innerBox.top + 30]]);
+    const brightness = (pixel) => pixel[0] + pixel[1] + pixel[2];
+    if (!(brightness(outerPixel) < 450)) throw new Error(`outer glass is not dark: ${outerPixel}`);
+    if (!(Math.abs(brightness(innerPixel) - brightness(outerPixel)) < 90)) {
+      throw new Error(`nested glass does not see the outer glass: inner ${innerPixel}, outer ${outerPixel}`);
+    }
+    checks.push('glass inside glass');
+    inner.destroy();
+    outer.destroy();
     return { checks };
   };
 </script>

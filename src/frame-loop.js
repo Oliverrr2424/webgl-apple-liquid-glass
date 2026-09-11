@@ -17,6 +17,12 @@ let epoch = 0;
 
 export const layoutEpoch = () => epoch;
 
+/** Page content changed under the glass: repaint every visible backdrop. */
+export function invalidateLayout() {
+  epoch++;
+  wake(34);
+}
+
 const now = () => globalThis.performance?.now?.() ?? Date.now();
 
 function request() {
@@ -93,7 +99,10 @@ const onAnimationEnd = (event) => {
   else running.set(event.target, count - 1);
   wake(34);
 };
-const onFontsLoaded = () => wake(200);
+const onFontsLoaded = () => {
+  epoch++;
+  wake(200);
+};
 
 function listen() {
   if (listening || typeof globalThis.addEventListener !== 'function') return;

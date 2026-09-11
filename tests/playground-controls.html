@@ -1,0 +1,86 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; }
+  iframe { width: 1000px; height: 640px; border: 0; }
+</style>
+<iframe id="playground" src="../index.html"></iframe>
+<script>
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function pointer(target, type, x, y, pointerId) {
+    target.dispatchEvent(new PointerEvent(type, {
+      bubbles: true,
+      button: 0,
+      buttons: type === 'pointerup' ? 0 : 1,
+      clientX: x,
+      clientY: y,
+      pointerId,
+      pointerType: 'mouse',
+    }));
+  }
+
+  window.runTest = async () => {
+    const iframe = document.querySelector('#playground');
+    const page = iframe.contentWindow;
+    const deadline = performance.now() + 10000;
+    while (!page.__lg && performance.now() < deadline) await wait(20);
+    if (!page.__lg) throw new Error('playground did not expose its test hook');
+
+    page.__lg.setVersion('v2');
+    page.__lg.setScene('press');
+    await wait(500);
+
+    const frameDocument = iframe.contentDocument;
+    const hosts = [...frameDocument.querySelectorAll('[data-playground-control]')];
+    if (hosts.length !== 3) throw new Error(`Press mounted ${hosts.length} public controls instead of 3`);
+    const duplicated = page.__lg.glass.elements.filter((element) => (
+      ['selection-thumb', 'compact-selection-thumb', 'green-toggle-thumb'].includes(element.id)
+    ));
+    if (duplicated.length) throw new Error(`shared canvas duplicated public controls: ${duplicated.map(({ id }) => id).join(', ')}`);
+
+    const toggle = frameDocument.querySelector('[data-playground-control="green-toggle-track"]');
+    const box = toggle.getBoundingClientRect();
+    const y = box.top + box.height / 2;
+    pointer(toggle, 'pointerdown', box.right - 8, y, 31);
+    pointer(toggle, 'pointerup', box.right - 8, y, 31);
+    await wait(250);
+    if (toggle.getAttribute('aria-checked') !== 'false') throw new Error('tap changed public switch state');
+
+    pointer(toggle, 'pointerdown', box.left + box.width * 0.25, y, 32);
+    pointer(toggle, 'pointermove', box.left + box.width * 0.80, y, 32);
+    pointer(toggle, 'pointerup', box.left + box.width * 0.80, y, 32);
+    await wait(250);
+    if (toggle.getAttribute('aria-checked') !== 'true') throw new Error('cross-track drag did not change public switch state');
+
+    const navigation = frameDocument.querySelector('[data-playground-control="selection-track"]');
+    const navBox = navigation.getBoundingClientRect();
+    pointer(navigation, 'pointerdown', navBox.left + navBox.width * 0.75, navBox.top + navBox.height / 2, 33);
+    pointer(navigation, 'pointerup', navBox.left + navBox.width * 0.75, navBox.top + navBox.height / 2, 33);
+    await wait(250);
+    const discover = navigation.querySelector('[data-index="1"]');
+    if (discover.getAttribute('aria-selected') !== 'true') throw new Error('navbar click-to-select regressed');
+
+    page.__lg.setVersion('v1');
+    await wait(250);
+    if (frameDocument.querySelectorAll('[data-playground-control]').length) {
+      throw new Error('V1 comparison kept V2 public controls mounted');
+    }
+
+    page.__lg.setVersion('v2');
+    await wait(350);
+    if (frameDocument.querySelectorAll('[data-playground-control]').length !== 3) {
+      throw new Error('V2 public controls did not remount');
+    }
+
+    return {
+      checks: [
+        'Press uses three public controls',
+        'no shared-canvas duplicate',
+        'switch tap ignored/drag committed',
+        'navbar click selected',
+        'V1 fallback/V2 remount',
+      ],
+    };
+  };
+</script>

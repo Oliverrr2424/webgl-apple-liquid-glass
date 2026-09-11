@@ -1,6 +1,6 @@
 {
   "name": "apple-liquid-glass-webgl",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Reusable WebGL2 liquid glass surfaces for folders, rectangles, pills, and circles.",
   "keywords": [
     "webgl2",
@@ -64,6 +64,7 @@
     "src/dom.js",
     "src/dom.d.ts",
     "src/dom-backdrop.js",
+    "src/dom-content.js",
     "src/frame-loop.js",
     "src/controls.js",
     "src/controls.d.ts",
