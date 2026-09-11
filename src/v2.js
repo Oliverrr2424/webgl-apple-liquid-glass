@@ -1,9 +1,9 @@
-import { GlassRenderer } from './renderer.js?press-lens=1';
+import { GlassRenderer } from './renderer.js?press-lens=2';
 import { MAX_GLASS_SHAPES } from './geometry.js';
 import {
   DEFAULT_MATERIAL_V2, REDUCED_TRANSPARENCY_MATERIAL_V2, SLIDERS_V2,
   getDefaultMaterialV2, makeMaterialV2,
-} from './v2-material.js?press-lens=1';
+} from './v2-material.js?press-lens=2';
 import { distanceToElementsV2, hitTestElementsV2 } from './v2-geometry.js';
 
 const SHAPES = new Set(['folder', 'rect', 'pill', 'circle']);
@@ -41,6 +41,12 @@ function normalizeElement(input, index) {
   if (!Number.isFinite(pressure)) {
     throw new TypeError('Liquid glass V2 element pressure must be a finite number.');
   }
+  const pressureAxes = input.pressureAxes == null
+    ? [1, 1]
+    : [Number(input.pressureAxes[0] ?? 1), Number(input.pressureAxes[1] ?? 1)];
+  if (!pressureAxes.every(Number.isFinite)) {
+    throw new TypeError('Liquid glass V2 element pressureAxes must be two finite numbers.');
+  }
   if (opacity !== undefined && !Number.isFinite(opacity)) {
     throw new TypeError('Liquid glass V2 element opacity must be a finite number.');
   }
@@ -64,6 +70,7 @@ function normalizeElement(input, index) {
     ...(opacity === undefined ? {} : { opacity }),
     tintTone,
     pressure: Math.max(0, Math.min(1, pressure)),
+    pressureAxes: pressureAxes.map((v) => Math.max(0, Math.min(1, v))),
   };
 }
 

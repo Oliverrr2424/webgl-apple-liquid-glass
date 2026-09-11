@@ -257,17 +257,21 @@ export function drawPressEffectsOverlay(
   backdrop,
   dark = false,
 ) {
-  const track = layoutElements.find((element) => element.id === 'selection-track');
-  const thumb = glassElements.find((element) => element.id === 'selection-thumb')
-    ?? restingThumb(layoutElements, 'selection-thumb', sliderPositions);
-  if (!track || !thumb) return;
-  const selectionIsLiquid = press?.type === 'slider' && press.id === 'selection-thumb';
-  const toggleIsLiquid = press?.type === 'slider' && press.id === 'green-toggle-thumb';
   const releaseOpacity = press?.target === 0 ? Math.min(1, Math.max(0, press.releaseMix ?? 0)) : 0;
-  if (!selectionIsLiquid) drawRestingFrostedThumb(ctx, thumb, 'gray', 1, backdrop);
-  else if (releaseOpacity > 0) {
-    drawRestingFrostedThumb(ctx, thumb, 'gray', releaseOpacity, backdrop);
+  const navigationTracks = layoutElements.filter((element) => (
+    element.navigationLens && element.sliderThumb
+  ));
+  for (const track of navigationTracks) {
+    const thumb = glassElements.find((element) => element.id === track.sliderThumb)
+      ?? restingThumb(layoutElements, track.sliderThumb, sliderPositions);
+    const isLiquid = press?.type === 'slider' && press.id === track.sliderThumb;
+    if (!isLiquid) drawRestingFrostedThumb(ctx, thumb, 'gray', 1, backdrop);
+    else if (releaseOpacity > 0) {
+      drawRestingFrostedThumb(ctx, thumb, 'gray', releaseOpacity, backdrop);
+    }
   }
+
+  const toggleIsLiquid = press?.type === 'slider' && press.id === 'green-toggle-thumb';
   const toggleThumb = glassElements.find((element) => element.id === 'green-toggle-thumb')
     ?? restingThumb(layoutElements, 'green-toggle-thumb', sliderPositions);
   if (!toggleIsLiquid) {
@@ -279,16 +283,19 @@ export function drawPressEffectsOverlay(
   } else if (releaseOpacity > 0) {
     drawRestingFrostedThumb(ctx, toggleThumb, 'white', releaseOpacity);
   }
-  ctx.save();
-  ctx.fillStyle = dark ? 'rgba(245,246,250,.95)' : 'rgba(22,25,31,.88)';
-  ctx.shadowColor = dark ? 'rgba(0,0,0,.35)' : 'rgba(255,255,255,.65)';
-  ctx.shadowBlur = 4;
-  ctx.font = `650 ${Math.max(12, track.h * 0.2)}px -apple-system, "SF Pro Display", system-ui, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('⌂  Home', track.x + track.w * 0.25, track.y + track.h * 0.52);
-  ctx.fillText('⌕  Discover', track.x + track.w * 0.75, track.y + track.h * 0.52);
-  ctx.restore();
+  for (const track of navigationTracks) {
+    const labels = track.navLabels ?? ['⌂  Home', '⌕  Discover'];
+    ctx.save();
+    ctx.fillStyle = dark ? 'rgba(245,246,250,.95)' : 'rgba(22,25,31,.88)';
+    ctx.shadowColor = dark ? 'rgba(0,0,0,.35)' : 'rgba(255,255,255,.65)';
+    ctx.shadowBlur = 4;
+    ctx.font = `650 ${Math.max(11, track.h * (track.w < 400 ? 0.17 : 0.2))}px -apple-system, "SF Pro Display", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(labels[0], track.x + track.w * 0.25, track.y + track.h * 0.52);
+    ctx.fillText(labels[1], track.x + track.w * 0.75, track.y + track.h * 0.52);
+    ctx.restore();
+  }
 }
 
 export function drawBadge(ctx, f) {

@@ -2,7 +2,7 @@ import {
   VS_FULLSCREEN, VS_GLASS, FS_BLIT, FS_DOWN, FS_UP, FS_WALLPAPER, FS_GLASS,
 } from './shaders.js';
 import { MAX_GLASS_SHAPES } from './geometry.js';
-import { FS_GLASS_V2 } from './v2-shaders.js?press-lens=1';
+import { FS_GLASS_V2 } from './v2-shaders.js?press-lens=2';
 
 function compile(gl, type, src) {
   const s = gl.createShader(type);
@@ -564,6 +564,7 @@ export class GlassRenderer {
     const frosts = new Float32Array(MAX_GLASS_SHAPES);
     const opacities = new Float32Array(MAX_GLASS_SHAPES);
     const pressures = new Float32Array(MAX_GLASS_SHAPES);
+    const pressAxes = new Float32Array(MAX_GLASS_SHAPES * 2);
     shapes.forEach((element, i) => {
       const short = Math.min(element.w, element.h);
       centers[i * 2] = (element.x + element.w / 2) * dpr;
@@ -589,6 +590,8 @@ export class GlassRenderer {
       frosts[i] = element.frost ?? m.frost;
       opacities[i] = element.opacity ?? 1;
       pressures[i] = element.pressure ?? 0;
+      pressAxes[i * 2] = element.pressureAxes?.[0] ?? 1;
+      pressAxes[i * 2 + 1] = element.pressureAxes?.[1] ?? 1;
     });
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -619,6 +622,7 @@ export class GlassRenderer {
     gl.uniform1fv(loc.uShapeFrosts, frosts);
     gl.uniform1fv(loc.uShapeOpacities, opacities);
     gl.uniform1fv(loc.uShapePressures, pressures);
+    gl.uniform2fv(loc.uShapePressAxes, pressAxes);
     gl.uniform2fv(loc.uLightDirs, lights);
     gl.uniform1f(loc.uRefraction, m.refraction * dpr);
     gl.uniform1f(loc.uEdgeReach, m.edgeReach);

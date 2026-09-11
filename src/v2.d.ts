@@ -4,7 +4,7 @@ export type LiquidGlassV2BackdropUpdate = 'auto' | 'static' | 'live';
 
 export interface LiquidGlassV2Material {
   refraction: number;
-  /** Capture distance / component short side (0.10 = 9px on a 90px surface). */
+  /** Capture distance / component short side (0.17 = 15.3px on a 90px surface). */
   edgeReach: number;
   edgeWidth: number;
   dispersion: number;
@@ -45,6 +45,9 @@ export interface LiquidGlassV2Element {
   opacity?: number;
   /** Pressed-in optical squash while held, from 0 (resting) to 1 (pressed). */
   pressure?: number;
+  /** Per-axis weight of the pressed squash, `[x, y]` each 0..1 (default `[1, 1]`).
+   * Lower x keeps a wide capsule's length while pressed; lower y keeps its height. */
+  pressureAxes?: [number, number];
   /** Select a coherent light or dark tint for the whole surface. The default
    * is `light`, matching the switch material. `auto` derives its tone from a
    * fixed-size backdrop probe below the component, independent of its size. */

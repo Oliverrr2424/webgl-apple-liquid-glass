@@ -4,10 +4,28 @@
 // tuning session lives in the URL hash and can be copied out as the exact code
 // that reproduces it.
 
-import { DEFAULT_MATERIAL, getDefaultMaterial } from '../src/index.js?press-lens=1';
-import { DEFAULT_MATERIAL_V2, getDefaultMaterialV2 } from '../src/v2.js?press-lens=1';
+import { DEFAULT_MATERIAL, getDefaultMaterial } from '../src/index.js?press-lens=2';
+import { DEFAULT_MATERIAL_V2, getDefaultMaterialV2 } from '../src/v2.js?press-lens=2';
+import { DEFAULT_NAVIGATION_LENS } from '../src/controls.js?controls=1';
 
 const round = (value) => Math.round(value * 1000) / 1000;
+
+// Playground-only geometry of the held navigation lens (Press scene). Not a
+// material parameter, so it is shared separately and never enters toCode().
+export const DEFAULT_NAV_LENS = DEFAULT_NAVIGATION_LENS;
+export const NAV_LENS_SLIDERS = Object.freeze([
+  ['outerWidth', 0, 0.8, 0.01],
+  ['outerHeight', 1, 2.5, 0.01],
+  ['innerLength', 0, 1, 0.01],
+  ['innerHeight', 0, 1, 0.01],
+]);
+
+function encodeNavLens(navLens = {}) {
+  return Object.keys(DEFAULT_NAV_LENS)
+    .filter((key) => typeof navLens[key] === 'number' && navLens[key] !== DEFAULT_NAV_LENS[key])
+    .map((key) => `${key}:${round(navLens[key])}`)
+    .join('|');
+}
 
 const versionOf = (value) => value === 'v2' ? 'v2' : 'v1';
 const defaultsFor = (version) => versionOf(version) === 'v2' ? DEFAULT_MATERIAL_V2 : DEFAULT_MATERIAL;
@@ -39,6 +57,8 @@ export function encodeState(state) {
   if (version === 'v1' && state.material.debug) params.set('debug', String(state.material.debug));
   const material = encodeMaterial(state.material, defaults);
   if (material) params.set('m', material);
+  const navLens = version === 'v2' ? encodeNavLens(state.navLens) : '';
+  if (navLens) params.set('nav', navLens);
   if (state.movedElements) params.set('e', encodeElements(state.elements));
   return params.toString();
 }
@@ -76,6 +96,12 @@ export function decodeState(hash = globalThis.location?.hash ?? '') {
       && material.edgeReach !== undefined) {
     material.edgeReach = round(material.edgeReach / 100);
   }
+  const navLens = {};
+  for (const pair of (params.get('nav') ?? '').split('|').filter(Boolean)) {
+    const [key, value] = pair.split(':');
+    const number = Number(value);
+    if (key in DEFAULT_NAV_LENS && Number.isFinite(number)) navLens[key] = number;
+  }
   const debug = Number(params.get('debug'));
   if (version === 'v1' && debug >= 1 && debug <= 3) material.debug = debug;
 
@@ -92,6 +118,7 @@ export function decodeState(hash = globalThis.location?.hash ?? '') {
     showIcons: params.get('icons') === '1',
     showLabels: params.get('labels') === '1',
     material,
+    navLens,
     elements,
   };
 }

@@ -6,7 +6,7 @@
 // so a long session stays readable.
 
 import { DEFAULT_MATERIAL, SLIDERS } from '../src/material.js';
-import { DEFAULT_MATERIAL_V2, SLIDERS_V2 } from '../src/v2-material.js?press-lens=1';
+import { DEFAULT_MATERIAL_V2, SLIDERS_V2 } from '../src/v2-material.js?press-lens=2';
 
 const GROUPS_V1 = {
   geometry: ['radius', 'squircle', 'mergeRadius', 'bevel', 'height', 'sizeAdaptation'],

@@ -53,7 +53,7 @@
     font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
   #app { display: grid; grid-template-columns: minmax(0, 1fr) 372px; height: 100%; }
   #stage { position: relative; min-width: 0; overflow: hidden; background: #0b0c0f; }
-  #content, #scrim, #baseGl, #gl, #ui { position: absolute; inset: 0; display: block; }
+  #content, #scrim, #baseGl, #gl, #pressGl, #ui { position: absolute; inset: 0; display: block; }
   #baseGl { visibility: hidden; pointer-events: none; }
   #scrim { pointer-events: none; }
   #ui { touch-action: none; cursor: default; }
@@ -249,6 +249,7 @@
     <canvas id="scrim" aria-hidden="true"></canvas>
     <canvas id="baseGl" aria-hidden="true"></canvas>
     <canvas id="gl" aria-hidden="true"></canvas>
+    <canvas id="pressGl" aria-hidden="true"></canvas>
     <canvas id="ui" tabindex="0" role="application"
       aria-label="Liquid glass stage. Drag a component, or select one and move it with the arrow keys."></canvas>
     <div id="phoneGestureTips" hidden aria-live="polite">
@@ -400,6 +401,10 @@
       <div class="section">
         <div class="sectionHeader"><h2 data-i18n="section.material">Material</h2><span class="sectionMeta" id="materialVersion">V1 parameters</span></div>
         <div id="sliders"></div>
+        <details class="sliderGroup" id="navLensGroup" hidden>
+          <summary><span class="sliderGroupName" data-i18n="group.navLens">Navigation lens (Press scene)</span><span class="sliderGroupChevron" aria-hidden="true"></span></summary>
+          <div class="sliderRows" id="navLensRows"></div>
+        </details>
       </div>
       <div class="tip" id="materialTip">
         Drag components together: inside the fusion distance they form one surface, so the silhouette,
@@ -417,6 +422,6 @@
   </div>
 </div>
 <div id="announcer" class="srOnly" role="status" aria-live="polite"></div>
-<script type="module" src="./playground/main.js?press-lens=1"></script>
+<script type="module" src="./playground/main.js?press-lens=3"></script>
 </body>
 </html>

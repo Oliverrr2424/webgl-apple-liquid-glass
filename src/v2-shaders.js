@@ -22,6 +22,7 @@ uniform float uShapeTintLights[MAX_SHAPES];
 uniform float uShapeFrosts[MAX_SHAPES];
 uniform float uShapeOpacities[MAX_SHAPES];
 uniform float uShapePressures[MAX_SHAPES];
+uniform vec2 uShapePressAxes[MAX_SHAPES];
 uniform vec2 uLightDirs[MAX_SHAPES];
 uniform float uRefraction;
 uniform float uEdgeReach;
@@ -231,8 +232,11 @@ void main() {
   float pressure = clamp(uShapePressures[chosen], 0.0, 1.0);
   float pressDepth = clamp(edgeDepth / max(minHalf, 1.0), 0.0, 1.0);
   lensShift *= 1.0 - pressure * 0.35;
-  lensShift += normal * (PRESS_SQUASH * minHalf * pressure
-                         * pressDepth * (1.0 - pressDepth));
+  // Per-axis weights let a host shorten the squash along one direction, so a
+  // wide capsule can keep its length while it flattens (or vice versa).
+  vec2 pressAxes = clamp(uShapePressAxes[chosen], 0.0, 1.0);
+  lensShift += normal * pressAxes * (PRESS_SQUASH * minHalf * pressure
+                                     * pressDepth * (1.0 - pressDepth));
   vec2 chromaShift = bendNormal * uDispersion * (0.32 + edgeCurve * 0.95);
   vec2 uvR = (point + lensShift * (1.0 + uDispersion * 0.009) + chromaShift) / uRes;
   vec2 uvG = (point + lensShift) / uRes;

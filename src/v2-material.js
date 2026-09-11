@@ -2,15 +2,15 @@
 // values deliberately live outside material.js: similarly named V1 controls
 // (notably dispersion and edgeWidth) use different units and shader maths.
 export const DEFAULT_MATERIAL_V2 = Object.freeze({
-  refraction: 90,
+  refraction: 84,
   // Capture distance as a fraction of the component's short side.
-  edgeReach: 0.10,
-  edgeWidth: 0.22,
+  edgeReach: 0.17,
+  edgeWidth: 0.11,
   dispersion: 2.0,
   // Softness ratio. Like backdropBlur it blurs the backdrop before refraction,
   // but its radius is resolved against each component's short side, so the
   // same value stays delicate on small icons and becomes denser on large cards.
-  frost: 0.18,
+  frost: 0,
   // Absolute pre-blur radius in CSS pixels; combines with frost.
   backdropBlur: 0,
   body: 0.72,

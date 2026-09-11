@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_MATERIAL, getDefaultMaterial } from '../src/material.js';
-import { getDefaultMaterialV2 } from '../src/v2-material.js';
-import { decodeState, encodeState, toCode } from '../playground/permalink.js';
+import { DEFAULT_MATERIAL_V2, getDefaultMaterialV2 } from '../src/v2-material.js';
+import { DEFAULT_NAV_LENS, decodeState, encodeState, toCode } from '../playground/permalink.js';
 
 const session = (overrides = {}) => ({
   sceneId: 'tab-bar',
@@ -133,7 +133,7 @@ test('capture ratios round-trip while old pixel values migrate once', () => {
 
 test('glass appearance and pre-blur round-trip independently of UI theme and softness', () => {
   const state = session({ version: 'v2', glassTone: 'dark',
-    material: { ...getDefaultMaterialV2(), backdropBlur: 12, frost: 0.18 } });
+    material: { ...getDefaultMaterialV2(), backdropBlur: 12, frost: DEFAULT_MATERIAL_V2.frost } });
   const decoded = decodeState(encodeState(state));
   assert.equal(decoded.glassTone, 'dark');
   assert.equal(decoded.material.backdropBlur, 12);
@@ -141,4 +141,17 @@ test('glass appearance and pre-blur round-trip independently of UI theme and sof
   assert.match(toCode(state), /tintTone: 'dark'/);
   assert.match(toCode(state), /material.backdropBlur = 12/);
   assert.equal(decodeState('#version=v2').glassTone, 'light');
+});
+
+test('navigation lens geometry round-trips only when changed and stays out of code export', () => {
+  const untouched = session({ version: 'v2', material: getDefaultMaterialV2(), navLens: { ...DEFAULT_NAV_LENS } });
+  assert.doesNotMatch(encodeState(untouched), /(^|&)nav=/);
+  assert.deepEqual(decodeState(encodeState(untouched)).navLens, {});
+
+  const state = session({ version: 'v2', material: getDefaultMaterialV2(),
+    navLens: { ...DEFAULT_NAV_LENS, outerWidth: 0.25, innerLength: 0.7 } });
+  const decoded = decodeState(encodeState(state));
+  assert.deepEqual(decoded.navLens, { outerWidth: 0.25, innerLength: 0.7 });
+  assert.doesNotMatch(toCode(state), /navLens|outerWidth/);
+  assert.doesNotMatch(encodeState({ ...state, version: 'v1', material: getDefaultMaterial() }), /(^|&)nav=/);
 });

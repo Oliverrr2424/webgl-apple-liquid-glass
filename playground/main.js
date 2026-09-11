@@ -7,26 +7,29 @@
 import {
   LiquidGlassWebGL, LiquidGlassWebGLV2, connectedElementGroups,
   makeMaterial,
-} from '../src/index.js?press-lens=1';
-import { getDefaultMaterialV2 } from '../src/v2-material.js?press-lens=1';
+} from '../src/index.js?press-lens=2';
+import { getDefaultMaterialV2 } from '../src/v2-material.js?press-lens=2';
 import {
   SCENES, PHONE_WALLPAPER_PRESETS, SCENE_WALLPAPER_PRESETS, ICON_SOURCES,
   attachIconImages, isAnimated, sceneById, panelLayout,
-} from './scenes.js?phone-scenes=10';
+} from './scenes.js?phone-scenes=11';
 import { drawSceneBackdrop } from './content.js?phone-scenes=8';
 import {
   drawGlassContents, drawLabel, drawBadge, drawSelection, drawPressEffectsFrame,
   drawPressEffectsOverlay,
   drawPhoneSceneOverlay, drawPhonePanelOverlay,
-} from './overlay.js?press-lens=1';
-import { createInspector } from './inspector.js?press-lens=1';
+} from './overlay.js?press-lens=3';
+import { createInspector } from './inspector.js?press-lens=2';
 import { createComponentEditor } from './components.js?size-controls=2';
 import { attachStageInteractions } from './interactions.js?phone-scenes=8';
-import { attachPressEffects } from './press-effects.js?phone-scenes=8';
+import { attachPressEffects } from './press-effects.js?pressed-material=2';
+import {
+  PRESSED_CONTROL_MATERIAL_V2, getPressedControlMaterialV2,
+} from '../src/controls.js?controls=1';
 import { createStats } from './stats.js';
-import { decodeState, toCode, writeHash } from './permalink.js?press-lens=1';
+import { DEFAULT_NAV_LENS, NAV_LENS_SLIDERS, decodeState, toCode, writeHash } from './permalink.js?press-lens=3';
 import { PHONE_ICON_SOURCES, attachPhoneIconImages, phoneFrame } from './phone.js?phone-scenes=8';
-import { t, applyI18n, initPreferences, onLanguageChange } from './i18n.js?press-lens=1';
+import { t, applyI18n, initPreferences, onLanguageChange } from './i18n.js?press-lens=2';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -34,6 +37,7 @@ const contentCanvas = $('content');
 const scrimCanvas = $('scrim');
 const baseGlCanvas = $('baseGl');
 const glCanvas = $('gl');
+const pressGlCanvas = $('pressGl');
 const uiCanvas = $('ui');
 const liveRegion = $('announcer');
 const announce = (message) => { liveRegion.textContent = message; };
@@ -64,6 +68,10 @@ const materials = {
 const store = {
   version: initialVersion,
   glassTone: shared?.glassTone ?? 'light',
+  // Held navigation lens geometry (Press scene selector only). Outer: width
+  // growth of the lens over the resting capsule. Inner: how much length /
+  // height the glass seen through it keeps (1 = no squash on that axis).
+  navLens: { ...DEFAULT_NAV_LENS, ...(shared?.navLens ?? {}) },
   materials,
   sceneId: sceneById(shared?.sceneId ?? 'home').id,
   material: materials[initialVersion],
@@ -78,6 +86,7 @@ const store = {
   press: null,
   sliderPositions: new Map([
     ['selection-track', 0],
+    ['compact-selection-track', 0],
     ['green-toggle-track', 0],
   ]),
   wallZoom: 1,
@@ -106,11 +115,11 @@ function effectiveFusion() {
   return store.fusion && !currentScene().lockedComponents;
 }
 
-function createGlass(targetCanvas = glCanvas) {
+function createGlass(targetCanvas = glCanvas, material = store.material) {
   const GlassClass = store.version === 'v2' ? LiquidGlassWebGLV2 : LiquidGlassWebGL;
   const options = {
     compositeMode: 'overlay',
-    material: store.material,
+    material,
     // The playground owns the frame loop and the layout, and the screenshot tools
     // read the drawing buffer back.
     autoResize: false,
@@ -126,10 +135,17 @@ function createGlass(targetCanvas = glCanvas) {
 
 let glass = createGlass();
 let baseGlass = createGlass(baseGlCanvas);
+let pressGlass = createGlass(
+  pressGlCanvas,
+  store.version === 'v2' ? getPressedControlMaterialV2(store.material) : store.material,
+);
 
 function applyMaterial() {
   glass.setMaterial(store.material, false);
   baseGlass.setMaterial(store.material, false);
+  pressGlass.setMaterial(store.version === 'v2'
+    ? getPressedControlMaterialV2(store.material)
+    : store.material, false);
 }
 
 const stats = createStats($('stats'));
@@ -275,6 +291,7 @@ function syncBackdropMode() {
     backdropMode = mode;
     glass.setBackdrop(contentCanvas, { update: mode, autoStart: false, shouldRender: false });
     baseGlass.setBackdrop(contentCanvas, { update: mode, autoStart: false, shouldRender: false });
+    pressGlass.setBackdrop(contentCanvas, { update: mode, autoStart: false, shouldRender: false });
   }
   const video = scene.backdrop.type === 'video' ? scene.backdrop.source : null;
   for (const other of allScenes()) {
@@ -299,8 +316,9 @@ function layoutScene({ keepEdits = false } = {}) {
   applyHomePageTransform();
   if (!keepEdits) store.movedElements = false;
   if (scene.interactionLab) {
-    store.sliderPositions.set('selection-track', 0);
-    store.sliderPositions.set('green-toggle-track', 0);
+    for (const element of store.elements) {
+      if (element.sliderThumb) store.sliderPositions.set(element.id, 0);
+    }
   }
   if (!store.elements.some((element) => element.id === store.selectedId)) store.selectedId = null;
 }
@@ -603,10 +621,10 @@ function syncSizes() {
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
     }
-    glCanvas.style.width = `${width}px`;
-    glCanvas.style.height = `${height}px`;
-    baseGlCanvas.style.width = `${width}px`;
-    baseGlCanvas.style.height = `${height}px`;
+    for (const canvas of [glCanvas, pressGlCanvas, baseGlCanvas]) {
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+    }
     lastSize = { width, height, dpr, renderDpr };
   }
   const scene = currentScene();
@@ -614,9 +632,12 @@ function syncSizes() {
     const frame = phoneFrame(width, height);
     const right = Math.max(0, width - frame.screen.x - frame.screen.w);
     const bottom = Math.max(0, height - frame.screen.y - frame.screen.h);
-    glCanvas.style.clipPath = `inset(${frame.screen.y}px ${right}px ${bottom}px ${frame.screen.x}px round ${frame.screen.r}px)`;
+    const clip = `inset(${frame.screen.y}px ${right}px ${bottom}px ${frame.screen.x}px round ${frame.screen.r}px)`;
+    glCanvas.style.clipPath = clip;
+    pressGlCanvas.style.clipPath = clip;
   } else {
     glCanvas.style.clipPath = 'none';
+    pressGlCanvas.style.clipPath = 'none';
   }
   if (resized && scene.phoneView === 'home') positionGestureTips();
   return { width, height, dpr, renderDpr, resized };
@@ -656,7 +677,7 @@ function drawOverlayLayer({ width, height, dpr }) {
       drawPressEffectsOverlay(
         uiContext,
         store.elements,
-        glass.elements,
+        [...glass.elements, ...pressGlass.elements],
         store.sliderPositions,
         store.press,
         contentCanvas,
@@ -730,6 +751,7 @@ function frame(now) {
       baseGlass.render({ force: true, dpr: size.renderDpr });
       contentContext.drawImage(baseGlCanvas, 0, 0, size.width, size.height);
       glass.updateBackdrop(false);
+      pressGlass.updateBackdrop(false);
     } else if (panelActive()) {
       // The full-screen sheet moves over a static wallpaper. Only its geometry
       // changes; its source texture and blur pyramid can stay cached.
@@ -753,35 +775,42 @@ function frame(now) {
       contentContext.drawImage(baseGlCanvas, 0, 0, size.width, size.height);
       contentContext.restore();
       glass.updateBackdrop(false);
-    } else if (!animating) glass.updateBackdrop(false);
+    } else if (!animating) {
+      glass.updateBackdrop(false);
+      pressGlass.updateBackdrop(false);
+    }
     contentDirty = false;
   }
 
   drawPanelScrim(size);
-  const willDraw = animating || size.resized || glass.dirty;
+  const willDraw = animating || size.resized || glass.dirty || pressGlass.dirty;
   glass.render({ dpr: size.renderDpr });
+  pressGlass.render({ dpr: size.renderDpr });
   drawOverlayLayer(size);
   if (willDraw) stats.frame(performance.now() - started);
 
-  const groups = store.version === 'v2'
-    ? Math.ceil(glass.elements.length / 16)
+  const visibleShapeCount = glass.elements.length + pressGlass.elements.length;
+  const mainPasses = store.version === 'v2'
+    ? Math.ceil(glass.elements.length / 16) + Math.ceil(pressGlass.elements.length / 16)
     : effectiveFusion()
       ? connectedElementGroups(glass.elements, glass.material.mergeRadius).length
       : glass.elements.length;
+  const groups = store.version === 'v2'
+    ? mainPasses
+    : mainPasses + pressGlass.elements.length;
   stats.info({
     size: `${Math.round(size.width * size.renderDpr)}×${Math.round(size.height * size.renderDpr)}`,
     dpr: `${size.renderDpr}×`,
-    shapes: `${glass.elements.length} in ${groups} pass${groups === 1 ? '' : 'es'}`,
+    shapes: `${visibleShapeCount} in ${groups} pass${groups === 1 ? '' : 'es'}`,
     backdrop: animating ? 'live upload' : 'static upload',
   });
 
   if (animating) invalidate();
 }
 
-// Held navigation lens: width growth over the resting capsule, and total
-// height as a multiple of the bar height.
-const NAV_LENS_WIDTH_GROWTH = 0.10;
-const NAV_LENS_HEIGHT = 1.36;
+// Held navigation lens geometry (Press scene selector only) is fully
+// user-tunable through store.navLens: outer width growth, outer total height
+// as a multiple of the bar height, and the inner squash weights.
 
 // Elements are authored as plain objects. While held, a presentation copy is
 // inflated around its centre before it reaches WebGL; releasing it restores
@@ -807,12 +836,12 @@ function presentationElements() {
     // its resting capsule, a little taller than the bar, with the optical
     // pressure field squashing the glass seen through it. Buttons and the
     // toggle keep their original elastic inflation.
-    const navigationLens = press.type === 'slider' && track?.id === 'selection-track';
+    const navigationLens = press.type === 'slider' && Boolean(track?.navigationLens);
     let scaleX = 1 + amount * 0.075;
     let scaleY = scaleX;
     if (navigationLens) {
-      scaleX = 1 + amount * NAV_LENS_WIDTH_GROWTH;
-      scaleY = 1 + amount * Math.max(0, track.h * NAV_LENS_HEIGHT / next.h - 1);
+      scaleX = 1 + amount * store.navLens.outerWidth;
+      scaleY = 1 + amount * Math.max(0, track.h * store.navLens.outerHeight / next.h - 1);
     } else if (press.type === 'slider') {
       // The toggle grows to one-and-a-third horizontally and doubles
       // vertically, clearing its track by about a third above and below.
@@ -850,7 +879,9 @@ function presentationElements() {
     // Standalone glass controls keep the subtler light-tint bloom.
     const pressedTint = press.type === 'slider' ? 0 : Math.max(authoredTint, 0.34);
     const pressedFrost = press.type === 'slider'
-      ? Number(store.material.frost ?? 0)
+      ? Number(store.version === 'v2'
+        ? PRESSED_CONTROL_MATERIAL_V2.frost
+        : store.material.frost ?? 0)
       : authoredFrost;
     // Press-in follows the elastic scale. Release material is deliberately
     // independent: Apple restores tint in a short, linear fade while the
@@ -868,6 +899,7 @@ function presentationElements() {
       frost: authoredFrost + (pressedFrost - authoredFrost) * materialAmount,
       opacity: Number(next.opacity ?? 1) * releaseOpacity,
       pressure: navigationLens ? amount : 0,
+      pressureAxes: [1 - store.navLens.innerLength, 1 - store.navLens.innerHeight],
       tintTone: darkGlass ? 'dark' : press.type === 'slider' ? next.tintTone : 'light',
     };
   });
@@ -876,17 +908,19 @@ function presentationElements() {
 function applyElements() {
   const presented = presentationElements();
   if (currentScene().interactionLab) {
-    baseGlass.setElements(presented.filter((element) => element.id === 'selection-track'), false);
+    baseGlass.setElements(presented.filter((element) => element.navigationLens), false);
     // Resting slider thumbs are inexpensive 2D frosted controls. Only the
     // thumb currently being held enters the liquid-glass pass.
     const activeSliderId = store.press?.type === 'slider' ? store.press.id : null;
     glass.setElements(presented.filter((element) => (
-      element.id !== 'selection-track'
-      && (!element.sliderTrack || element.id === activeSliderId)
+      !element.navigationLens
+      && !element.sliderTrack
     )), false);
+    pressGlass.setElements(presented.filter((element) => element.id === activeSliderId), false);
   } else {
     baseGlass.setElements([], false);
     glass.setElements(presented, false);
+    pressGlass.setElements([], false);
   }
 }
 
@@ -937,6 +971,48 @@ function rebuildInspector() {
   applyI18n($('sliders'));
 }
 rebuildInspector();
+
+// Navigation lens sliders. These shape only the Press scene's held selector:
+// the outer lens width and how much length / height the glass seen through it
+// keeps. They are playground presentation, not material, so they live outside
+// the inspector and are shared through the `nav` hash key.
+const navLensRows = new Map();
+for (const [key, min, max, step] of NAV_LENS_SLIDERS) {
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML = `
+    <button type="button" class="rowLabel" data-i18n="navLens.${key}" title="${key} - double click to reset to ${DEFAULT_NAV_LENS[key]}">${key}</button>
+    <input type="range" aria-label="${key}" min="${min}" max="${max}" step="${step}">
+    <input type="number" aria-label="${key} value" class="num" min="${min}" max="${max}" step="${step}">`;
+  const range = row.querySelector('input[type=range]');
+  const number = row.querySelector('input[type=number]');
+  const apply = (value) => {
+    range.value = String(value);
+    if (document.activeElement !== number) number.value = String(Math.round(value * 1000) / 1000);
+    row.classList.toggle('modified', value !== DEFAULT_NAV_LENS[key]);
+  };
+  const commit = (value) => {
+    const clamped = Math.min(max, Math.max(min, value));
+    if (!Number.isFinite(clamped)) return;
+    store.navLens[key] = clamped;
+    apply(clamped);
+    if (store.press) applyElements();
+    queueHash();
+    invalidate();
+  };
+  range.addEventListener('input', () => commit(parseFloat(range.value)));
+  number.addEventListener('change', () => commit(parseFloat(number.value)));
+  row.querySelector('.rowLabel').addEventListener('dblclick', () => commit(DEFAULT_NAV_LENS[key]));
+  row.querySelector('.rowLabel').addEventListener('click', (event) => event.preventDefault());
+  navLensRows.set(key, apply);
+  $('navLensRows').appendChild(row);
+}
+applyI18n($('navLensGroup'));
+function syncNavLensControls() {
+  for (const [key, apply] of navLensRows) apply(store.navLens[key]);
+  $('navLensGroup').hidden = !(store.version === 'v2' && currentScene().interactionLab);
+}
+syncNavLensControls();
 
 const componentEditor = createComponentEditor({
   container: $('componentList'),
@@ -1315,8 +1391,10 @@ for (const button of document.querySelectorAll('[data-preset]')) {
 $('resetMaterial').addEventListener('click', () => {
   const defaults = store.version === 'v2' ? getDefaultMaterialV2() : makeMaterial('regular');
   Object.assign(store.material, defaults);
+  Object.assign(store.navLens, DEFAULT_NAV_LENS);
   applyMaterial();
   inspector.sync();
+  syncNavLensControls();
   syncPresetButtons(store.version === 'v1' ? 'regular' : null);
   announce(t('announce.reset', { version: store.version.toUpperCase() }));
   queueHash();
@@ -1327,6 +1405,7 @@ function syncVersionUI() {
   const isV2 = store.version === 'v2';
   $('glassToneControl').hidden = !isV2;
   syncGlassTone();
+  syncNavLensControls();
   const locked = Boolean(currentScene().lockedComponents);
   for (const button of document.querySelectorAll('[data-renderer-version]')) {
     button.classList.toggle('active', button.dataset.rendererVersion === store.version);
@@ -1352,10 +1431,15 @@ function setRendererVersion(version, { announceChange = true } = {}) {
 
   glass.destroy();
   baseGlass.destroy();
+  pressGlass.destroy();
   store.version = version;
   store.material = store.materials[version];
   glass = createGlass();
   baseGlass = createGlass(baseGlCanvas);
+  pressGlass = createGlass(
+    pressGlCanvas,
+    store.version === 'v2' ? getPressedControlMaterialV2(store.material) : store.material,
+  );
   applyElements();
   // The new renderer starts with a static upload; force the current scene's
   // actual live/static policy back onto it.
@@ -1461,6 +1545,7 @@ function renderScenePicker() {
 function syncSceneUI() {
   const scene = currentScene();
   const list = allScenes();
+  syncNavLensControls();
   const index = list.findIndex((entry) => entry.id === scene.id);
   sceneSelect.value = scene.id;
   $('sceneKind').textContent = scene.kind;

@@ -79,6 +79,9 @@ window.runTest = () => {
     gradient.addColorStop(0, '#000'); gradient.addColorStop(1, '#fff');
     ctx.fillStyle = gradient; ctx.fillRect(0, 0, 640, 480);
     glass.material.refraction = 0;
+    // Keep the caustic support proportional at both sizes (its 8px floor
+    // would otherwise distort the ratio for the smaller component).
+    glass.material.edgeWidth = 0.22;
     element.x = 100;
     const capture = (size) => {
       element.w = size; element.h = size;
