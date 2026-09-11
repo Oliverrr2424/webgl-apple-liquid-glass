@@ -82,6 +82,15 @@
     expectColor('gradient middle', middle, [128, 0, 128]);
     checks.push('auto CSS gradient registration');
 
+    // 1b. Repeating gradients tile like the browser paints them.
+    const stage = document.querySelector('#stage');
+    stage.style.background = 'repeating-linear-gradient(90deg, rgb(255,0,0) 0 10px, rgb(0,0,255) 10px 20px)';
+    await frames(4);
+    const [stripeRed, stripeBlue] = sample(card, [[105, 120], [115, 120]]);
+    expectColor('repeating gradient stripe', stripeRed, [255, 0, 0]);
+    expectColor('repeating gradient gap', stripeBlue, [0, 0, 255]);
+    checks.push('repeating gradients');
+
     // 2. Image backdrop by selector, with vertical and horizontal registration.
     const image = document.createElement('canvas');
     image.width = 64;

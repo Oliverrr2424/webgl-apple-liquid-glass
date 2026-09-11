@@ -174,6 +174,9 @@ class LiquidGlassControl {
       }
     }
 
+    // Same marker as LiquidGlass, so one CSS rule can style both fallbacks.
+    container.setAttribute('data-liquid-glass', this.supported ? 'webgl' : 'fallback');
+
     this.onPointerDown = (event) => this.pointerDown(event);
     this.onPointerMove = (event) => this.pointerMove(event);
     this.onPointerEnd = (event) => this.pointerEnd(event);
@@ -237,7 +240,7 @@ class LiquidGlassControl {
     setStyle('cursor', this.options.disabled ? 'default' : 'pointer');
     // The focus ring is drawn around the track, not the container's box.
     setStyle('outline', 'none');
-    this.originalAttributes = ['tabindex', 'role', 'aria-checked', 'aria-label', 'aria-disabled']
+    this.originalAttributes = ['tabindex', 'role', 'aria-checked', 'aria-label', 'aria-disabled', 'data-liquid-glass']
       .map((attribute) => [attribute, container.getAttribute(attribute)]);
     container.tabIndex = this.options.disabled ? -1 : (container.tabIndex >= 0 ? container.tabIndex : 0);
     container.dataset.liquidGlassControl = kind;

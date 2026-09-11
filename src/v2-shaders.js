@@ -55,6 +55,22 @@ float sdRoundBox(vec2 p, vec2 b, float r) {
   return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
 }
 
+// Inside a rounded box the exact distance is max(q.x, q.y), and its gradient
+// switches axis across the corner diagonal. Refraction reads that gradient as
+// the surface normal, so the switch drew a 45-degree crease into every corner.
+// A soft maximum rounds that ridge. It is used for the normal only: distance,
+// masks, hairline and silhouette all keep the exact field.
+// Unbiased: softMax(a, a, k) == a, so the interior term keeps its sign and
+// the clamp below still recognises the inner rectangle.
+float softMax(float a, float b, float k) {
+  return 0.5 * (a + b + sqrt((a - b) * (a - b) + k * k)) - k * 0.5;
+}
+
+float sdRoundBoxSoft(vec2 p, vec2 b, float r, float k) {
+  vec2 q = abs(p) - b + r;
+  return min(softMax(q.x, q.y, k), 0.0) + length(max(q, 0.0)) - r;
+}
+
 float smoothUnion(float d1, float d2, float k) {
   float h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
   return mix(d2, d1, h) - k * h * (1.0 - h);
@@ -68,6 +84,18 @@ float shapeSdf(int index, vec2 point) {
   if (kind == 0) return sdRoundBox(p, halfSize, radius);
   if (kind == 1) return sdRoundBox(p, halfSize, min(halfSize.x, halfSize.y));
   return length(p) - min(halfSize.x, halfSize.y);
+}
+
+/** The silhouette field with a rounded interior ridge, for normals. */
+float shapeField(int index, vec2 point) {
+  vec2 p = point - uShapeCenters[index];
+  vec2 halfSize = uShapeHalves[index];
+  int kind = uShapeTypes[index];
+  float minHalf = min(halfSize.x, halfSize.y);
+  float k = clamp(minHalf * 0.08, 1.5, 12.0);
+  if (kind == 0) return sdRoundBoxSoft(p, halfSize, min(uShapeRadii[index], minHalf), k);
+  if (kind == 1) return sdRoundBoxSoft(p, halfSize, minHalf, k);
+  return length(p) - minHalf;
 }
 
 vec2 opticalNormal(int index, vec2 point, vec2 sdfNormal) {
@@ -190,8 +218,8 @@ void main() {
   vec2 halfSize = uShapeHalves[chosen];
   float minHalf = min(halfSize.x, halfSize.y);
   float e = 1.35;
-  float dx = shapeSdf(chosen, point + vec2(e, 0.0)) - shapeSdf(chosen, point - vec2(e, 0.0));
-  float dy = shapeSdf(chosen, point + vec2(0.0, e)) - shapeSdf(chosen, point - vec2(0.0, e));
+  float dx = shapeField(chosen, point + vec2(e, 0.0)) - shapeField(chosen, point - vec2(e, 0.0));
+  float dy = shapeField(chosen, point + vec2(0.0, e)) - shapeField(chosen, point - vec2(0.0, e));
   vec2 normal = normalize(vec2(dx, dy) + vec2(0.0001));
   float depth = clamp(-chosenD / max(12.0, minHalf * 0.62), 0.0, 1.0);
   float refractionSupport = max(14.0, minHalf * 0.50);

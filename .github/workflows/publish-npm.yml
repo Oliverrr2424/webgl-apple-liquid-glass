@@ -17,34 +17,60 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # Required to tag the release and publish its notes.
+      contents: write
       # Required for npm provenance attestation.
       id-token: write
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          # `gh release --generate-notes` needs the history behind the tag.
+          fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
         run: npm ci
 
       - name: Publish new package version
+        id: publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -eu
-          package_name="$(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json', 'utf8')).name)")"
-          package_version="$(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version)")"
+          package_name="$(node -p "require('./package.json').name")"
+          package_version="$(node -p "require('./package.json').version")"
           published_version="$(npm view "$package_name" version 2>/dev/null || true)"
+          echo "version=$package_version" >> "$GITHUB_OUTPUT"
 
           if [ "$package_version" = "$published_version" ]; then
             echo "$package_name@$package_version is already published; skipping."
+            echo "released=false" >> "$GITHUB_OUTPUT"
           else
             npm publish --access public --provenance
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The npm version and the GitHub release stay in step: one tag per
+      # published version, created only when this run published it.
+      - name: Publish the GitHub release
+        if: steps.publish.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.publish.outputs.version }}
+        run: |
+          set -eu
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "Release v$VERSION already exists; skipping."
+          else
+            gh release create "v$VERSION" \
+              --title "v$VERSION" \
+              --generate-notes \
+              --target "$GITHUB_SHA"
           fi

@@ -53,7 +53,7 @@ Browsers do not let WebGL read page pixels, so the library repaints what is behi
 | `(ctx, region) => { … }` | anything else: draw it yourself in page coordinates |
 | `[ … ]` | several of the above, bottom to top |
 
-Everything is registered in page coordinates, so the part of the photo under a card is the part of the photo under that card. `auto` does not reproduce `::before`/`::after`, shadows, CSS filters, SVG or form controls; add those with a painter (see [Anything auto misses](#anything-auto-misses)).
+Everything is registered in page coordinates, so the part of the photo under a card is the part of the photo under that card. Images from another origin have to allow CORS (`<img crossorigin="anonymous">` and a permissive server), or the browser will not let the glass read them. `auto` does not reproduce `::before`/`::after`, shadows, CSS filters, SVG or form controls; add those with a painter (see [Anything auto misses](#anything-auto-misses)).
 
 ## Options
 
@@ -74,7 +74,7 @@ new LiquidGlass(element, {
 | `material` | V2 default | Partial [material](#material). Unknown keys throw. |
 | `targets` | — | Selector or elements: draw several descendants as glass on one canvas. |
 | `shape`, `radius` | from CSS | `'rect' \| 'pill' \| 'circle'`, CSS px. |
-| `live` | `'auto'` | Redraw every frame. `auto` is on while a video plays or a canvas is in the backdrop. |
+| `live` | `'auto'` | Redraw every frame. `auto` turns itself on while a `<canvas>` below the glass is in view or a `<video>` there is playing, including ones `auto` found for you. |
 | `fallback` | `'css'` | `'css'`, `'none'`, or `(element) => {}`. |
 | `maxDpr` | `2` | Resolution cap. |
 | `zIndex` | `-1` | Glass layer inside the element: behind its content. |
@@ -202,7 +202,7 @@ The interaction is the playground's Press scene because the scene uses these pub
 
 Options shared with `LiquidGlass`: `backdrop`, `material`, `live`. The navbar also takes `tint` (track, default `0.86`), `tintTone` (`'dark'` also darkens the selection and turns labels white), `labelColor`, `fontSize` and `lens`. The switch takes `color` for its on state. Both take `disabled` and `ariaLabel`, and dispatch a bubbling `change` event.
 
-The control uses its container as the hit target. The switch keeps the playground's flatter 3 : 1 visible-track ratio inside that box, so a taller CSS box does not stretch its glass; without a CSS size the navbar gets 312×72 and the switch 84×28. Leave `overflow` visible and some room around it: the pressed glass grows beyond the track while held.
+Control containers carry `data-liquid-glass="webgl" | "fallback"` too, so one CSS rule can style both fallbacks. The control uses its container as the hit target. The switch keeps the playground's flatter 3 : 1 visible-track ratio inside that box, so a taller CSS box does not stretch its glass; without a CSS size the navbar gets 312×72 and the switch 84×28. Leave `overflow` visible and some room around it: the pressed glass grows beyond the track while held.
 
 ## Material
 

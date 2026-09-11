@@ -242,6 +242,23 @@ function gradientStops(parts, lineLength) {
   return stops;
 }
 
+/** Repeats a gradient's stops across the whole line, for `repeating-*`. */
+function tileStops(stops) {
+  if (stops.length < 2) return stops;
+  const first = stops[0].offset;
+  const period = stops.at(-1).offset - first;
+  if (!(period > 0.0005)) return stops;
+  const repeated = [];
+  for (let i = Math.floor(-first / period); i <= Math.ceil((1 - first) / period); i++) {
+    for (const stop of stops) {
+      const offset = stop.offset + i * period;
+      if (offset < -period || offset > 1 + period) continue;
+      repeated.push({ color: stop.color, offset: Math.min(1, Math.max(0, offset)) });
+    }
+  }
+  return repeated.length >= 2 ? repeated : stops;
+}
+
 function applyStops(gradient, stops) {
   for (const stop of stops) {
     try {
@@ -260,7 +277,7 @@ function angleOf(token) {
   return { deg: value, turn: value * 360, rad: value * 180 / Math.PI, grad: value * 0.9 }[match[2]];
 }
 
-function paintLinearGradient(ctx, args, tile) {
+function paintLinearGradient(ctx, args, tile, repeating = false) {
   const parts = splitTop(args, ',');
   let angle = 180;
   const head = parts[0] ?? '';
@@ -286,11 +303,15 @@ function paintLinearGradient(ctx, args, tile) {
   const cy = tile.y + tile.height / 2;
   const dx = Math.sin(radians) * length / 2;
   const dy = -Math.cos(radians) * length / 2;
-  ctx.fillStyle = applyStops(ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy), gradientStops(parts, length));
+  const stops = gradientStops(parts, length);
+  ctx.fillStyle = applyStops(
+    ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy),
+    repeating ? tileStops(stops) : stops,
+  );
   ctx.fillRect(tile.x, tile.y, tile.width, tile.height);
 }
 
-function paintRadialGradient(ctx, args, tile) {
+function paintRadialGradient(ctx, args, tile, repeating = false) {
   const parts = splitTop(args, ',');
   const head = parts[0] ?? '';
   let circle = false;
@@ -343,7 +364,11 @@ function paintRadialGradient(ctx, args, tile) {
   ctx.clip();
   ctx.translate(cx, cy);
   ctx.scale(1, ry / rx);
-  ctx.fillStyle = applyStops(ctx.createRadialGradient(0, 0, 0, 0, 0, rx), gradientStops(parts, rx));
+  const stops = gradientStops(parts, rx);
+  ctx.fillStyle = applyStops(
+    ctx.createRadialGradient(0, 0, 0, 0, 0, rx),
+    repeating ? tileStops(stops) : stops,
+  );
   const reach = Math.max(tile.width, tile.height) * 2 + Math.abs(cx) + Math.abs(cy);
   ctx.fillRect(-reach, -reach * rx / ry, reach * 2, reach * 2 * rx / ry);
   ctx.restore();
@@ -373,7 +398,7 @@ function backgroundTileSize(sizeValue, box, intrinsic) {
 
 function paintBackgroundLayer(ctx, layer, options, box, region) {
   const url = /^url\((['"]?)(.*)\1\)$/.exec(layer);
-  const gradient = /^(linear|radial)-gradient\((.*)\)$/s.exec(layer);
+  const gradient = /^(repeating-)?(linear|radial)-gradient\((.*)\)$/s.exec(layer);
   if (!url && !gradient) return true;
   let entry = null;
   if (url) {
@@ -412,8 +437,8 @@ function paintBackgroundLayer(ctx, layer, options, box, region) {
       tiles++;
       const tile = { x, y, width: tileWidth, height: tileHeight };
       if (entry) ctx.drawImage(entry.image, x, y, tileWidth, tileHeight);
-      else if (gradient[1] === 'linear') paintLinearGradient(ctx, gradient[2], tile);
-      else paintRadialGradient(ctx, gradient[2], tile);
+      else if (gradient[2] === 'linear') paintLinearGradient(ctx, gradient[3], tile, Boolean(gradient[1]));
+      else paintRadialGradient(ctx, gradient[3], tile, Boolean(gradient[1]));
     }
   }
   return true;

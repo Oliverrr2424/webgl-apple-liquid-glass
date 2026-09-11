@@ -1,12 +1,12 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
   workflow_dispatch:
-  # Called by the publish workflow so a release cannot skip the gate.
+  # Called by the publish workflow, which is what runs these tests on main.
+  # Triggering on `push: main` as well would start a second, identical run
+  # that the concurrency group below then cancelled, leaving every release
+  # with a cancelled CI run next to a green one.
   workflow_call:
 
 permissions:
@@ -14,8 +14,10 @@ permissions:
 
 # A newer commit supersedes an older run. This keeps the required check useful
 # on active pull requests instead of queueing several identical Chromium jobs.
+# The workflow name is part of the group so a release's called run never
+# cancels a run of this workflow, or the other way round.
 concurrency:
-  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -24,12 +26,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
