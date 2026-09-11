@@ -108,9 +108,9 @@ export function drawFeed(ctx, width, height, scroll, tint = '#1d2430') {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
-  const margin = 40;
-  const cardHeight = 168;
-  const pitch = cardHeight + 26;
+  const margin = Math.max(22, Math.min(46, width * 0.035));
+  const cardHeight = Math.max(176, Math.min(236, height * 0.34));
+  const pitch = cardHeight + Math.max(24, height * 0.045);
   const offset = ((scroll % pitch) + pitch) % pitch;
   const first = Math.floor(scroll / pitch);
   const rows = Math.ceil(height / pitch) + 2;
@@ -118,11 +118,23 @@ export function drawFeed(ctx, width, height, scroll, tint = '#1d2430') {
   for (let i = -1; i < rows; i++) {
     const y = i * pitch - offset;
     const seed = first + i;
-    card(ctx, margin, y, width - margin * 2 - 150, cardHeight, seed);
+    const cardWidth = width - margin * 2;
+    card(ctx, margin, y, cardWidth, cardHeight, seed);
     ctx.save();
-    textLine(ctx, width - margin - 138, y + 20, 138, 20, 0.5);
-    textLine(ctx, width - margin - 138, y + 54, 96, 14, 0.26);
-    textLine(ctx, width - margin - 138, y + 80, 118, 14, 0.26);
+    const titles = ['Liquid motion', 'Through the glass', 'Colour in transit', 'Optical rhythm'];
+    const subtitles = ['LIVE MATERIAL STUDY', 'SCROLLING BACKDROP', 'REFRACTION TEST', 'EDGE RESPONSE'];
+    const index = ((seed % titles.length) + titles.length) % titles.length;
+    const copyX = margin + Math.max(24, cardHeight * 0.16);
+    const copyY = y + cardHeight * 0.46;
+    ctx.fillStyle = 'rgba(255,255,255,.94)';
+    ctx.font = `700 ${Math.max(24, Math.min(48, cardHeight * 0.20))}px -apple-system, "SF Pro Display", system-ui, sans-serif`;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(titles[index], copyX, copyY, cardWidth * 0.62);
+    ctx.fillStyle = 'rgba(255,255,255,.68)';
+    ctx.font = `650 ${Math.max(11, Math.min(16, cardHeight * 0.065))}px -apple-system, "SF Pro Text", system-ui, sans-serif`;
+    ctx.letterSpacing = '0.11em';
+    ctx.fillText(subtitles[index], copyX, copyY + cardHeight * 0.15);
+    ctx.letterSpacing = '0px';
     ctx.restore();
   }
 }

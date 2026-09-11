@@ -72,8 +72,8 @@
     // Fix the visual starting point before pointer assertions. Software
     // renderers can advance the keyboard spring by only a few frames in 80ms.
     toggle.setChecked(true);
-    // Pointer taps only bloom in place. A state change requires a drag across
-    // the midpoint; keyboard activation remains available for accessibility.
+    // Pointer taps select a side like navbar items: the current side is a
+    // no-op, while the opposite side commits on release.
     const toggleRect = toggle.container.getBoundingClientRect();
     const tap = (x) => {
       const init = { clientX: x, clientY: toggleRect.top + toggleRect.height / 2, button: 0, pointerId: 7, bubbles: true };
@@ -83,7 +83,11 @@
     tap(toggleRect.right - 10);
     if (!toggle.checked || switchChange !== true) throw new Error('tap on the current side changed state');
     tap(toggleRect.left + 10);
-    if (!toggle.checked || switchChange !== true) throw new Error('tap on the other side changed state');
+    if (toggle.checked || switchChange !== false) throw new Error('tap on the other side did not select it');
+    tap(toggleRect.left + 10);
+    if (toggle.checked || switchChange !== false) throw new Error('second tap on the current side changed state');
+    tap(toggleRect.right - 10);
+    if (!toggle.checked || switchChange !== true) throw new Error('reverse-side tap did not select it');
     // Held anywhere it swells in place, then an actual drag changes state.
     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const down = { clientX: toggleRect.right - 10, clientY: toggleRect.top + toggleRect.height / 2, button: 0, pointerId: 8, bubbles: true };

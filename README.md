@@ -198,7 +198,7 @@ nav.setTintTone('dark');               // live track + label tone update
 toggle.setChecked(true, { notify: true });
 ```
 
-The interaction is the playground's Press scene because the scene uses these public controls directly. Pressing blooms the switch knob in place; only dragging it across the midpoint changes its pointer-controlled state. A tap on either half does not toggle it. Navbar items still support click-to-select, and Arrow keys, Home/End and Space keep both controls keyboard-accessible. Controls can sit inside a `LiquidGlass` element; they refract its glass.
+The interaction is the playground's Press scene because the scene uses these public controls directly. Pressing blooms the switch knob in place; dragging it across the midpoint changes its state, and clicking the opposite half selects that side on release. Clicking the already-selected half is a no-op. Navbar items use the same select-an-item rule, and Arrow keys, Home/End and Space keep both controls keyboard-accessible. Controls can sit inside a `LiquidGlass` element; they refract its glass.
 
 Options shared with `LiquidGlass`: `backdrop`, `material`, `live`. The navbar also takes `tint` (track, default `0.86`), `tintTone` (`'dark'` also darkens the selection and turns labels white), `labelColor`, `fontSize` and `lens`. The switch takes `color` for its on state. Both take `disabled` and `ariaLabel`, and dispatch a bubbling `change` event.
 

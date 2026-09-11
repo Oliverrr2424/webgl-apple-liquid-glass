@@ -193,16 +193,22 @@ function controlCentre(w, h) {
   ]);
 }
 
-function scrollingFeed(w) {
-  const barWidth = Math.min(560, w * 0.66);
+function scrollingFeed(w, h) {
+  // Oversized controls make the moving backdrop and edge pull easy to inspect
+  // at a glance, even when the inspector is closed on a wide display.
+  const margin = Math.max(30, Math.min(90, w * 0.065));
+  const controlHeight = Math.max(96, Math.min(144, h * 0.235));
+  const barWidth = Math.min(760, w * 0.60);
+  const gap = Math.max(18, controlHeight * 0.22);
+  const top = Math.max(24, h * 0.04);
   return [
     {
-      id: 'toolbar', shape: 'pill', label: 'Toolbar', content: 'Library',
-      x: (w - barWidth) / 2, y: 28, w: barWidth, h: 66,
+      id: 'toolbar', shape: 'pill', label: 'Search toolbar', content: '',
+      x: margin, y: top, w: barWidth, h: controlHeight,
     },
     {
-      id: 'search', shape: 'circle', label: 'Search', content: '⌕',
-      x: (w - barWidth) / 2 + barWidth + 14, y: 28, w: 66, h: 66,
+      id: 'search', shape: 'circle', label: 'Search action', content: '',
+      x: margin + barWidth + gap, y: top, w: controlHeight, h: controlHeight,
     },
   ];
 }
@@ -299,7 +305,7 @@ function pressEffects(w, h) {
 export const SCENES = [
   { id: 'press', name: 'Press', kind: 'Selectable & tactile glass controls', lockedComponents: true, interactionLab: true, backdrop: { type: 'image', src: WALLPAPERS['earth-black'], thumb: WALLPAPERS['earth-black'] }, layout: pressEffects },
   { id: 'home', name: 'Home', kind: 'Swipeable iPhone home screen', phoneView: 'home', phonePages: 2, lockedComponents: true, backdrop: { type: 'phone', wallpaper: 'image', src: WALLPAPERS['home-page-warm'], tint: '#b8a999', thumb: phoneThumbOf('home-page-warm') }, layout: homePage },
-  { id: 'scrol', name: 'Scroll', kind: 'Live backdrop', backdrop: { type: 'feed', tint: '#1d2430', animated: true, thumb: phoneThumbOf('scrolling-feed') }, layout: scrollingFeed },
+  { id: 'scrol', name: 'Scroll', kind: 'Live backdrop', scrollUi: true, backdrop: { type: 'feed', tint: '#1d2430', animated: true, thumb: phoneThumbOf('scrolling-feed') }, layout: scrollingFeed },
   { id: 'scene', name: 'Scene', kind: 'Four shape / wallpaper gallery', backdrop: { type: 'image', src: WALLPAPERS['natural-lake'], thumb: thumbOf('natural-lake') }, layout: shapeSet },
 ];
 

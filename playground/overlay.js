@@ -90,6 +90,90 @@ export function drawGlassContents(ctx, f) {
   });
 }
 
+function drawMagnifier(ctx, x, y, size, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, size * 0.11);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(x, y, size * 0.28, 0, Math.PI * 2);
+  ctx.moveTo(x + size * 0.20, y + size * 0.20);
+  ctx.lineTo(x + size * 0.47, y + size * 0.47);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawMicrophone(ctx, x, y, size, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, size * 0.09);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.roundRect(x - size * 0.18, y - size * 0.42, size * 0.36, size * 0.62, size * 0.18);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y - size * 0.05, size * 0.32, 0, Math.PI);
+  ctx.moveTo(x, y + size * 0.28);
+  ctx.lineTo(x, y + size * 0.48);
+  ctx.moveTo(x - size * 0.20, y + size * 0.48);
+  ctx.lineTo(x + size * 0.20, y + size * 0.48);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Search and action chrome for the oversized live-scroll material specimen. */
+export function drawScrollSceneOverlay(ctx, elements) {
+  const toolbar = elements.find((element) => element.id === 'toolbar');
+  const action = elements.find((element) => element.id === 'search');
+  if (!toolbar) return;
+
+  const unit = toolbar.h;
+  const foreground = 'rgba(247,248,252,.94)';
+  const secondary = 'rgba(226,229,238,.64)';
+  const appSize = unit * 0.43;
+  const appX = toolbar.x + unit * 0.13;
+  const appY = toolbar.y - unit * 0.08;
+  drawIcon(ctx, { c0: '#36aaff', c1: '#0874de', t: 'S', small: true }, appX, appY, appSize);
+  drawMagnifier(ctx, toolbar.x + unit * 0.28, toolbar.y + unit * 0.60, unit * 0.28, foreground);
+
+  ctx.save();
+  ctx.fillStyle = foreground;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.font = `650 ${Math.max(18, unit * 0.23)}px -apple-system, "SF Pro Display", "PingFang SC", system-ui, sans-serif`;
+  ctx.fillText('视觉库', toolbar.x + unit * 0.68, toolbar.y + unit * 0.40);
+  ctx.fillStyle = secondary;
+  ctx.font = `560 ${Math.max(17, unit * 0.21)}px -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif`;
+  ctx.fillText('搜索', toolbar.x + unit * 0.68, toolbar.y + unit * 0.67);
+  ctx.restore();
+  drawMicrophone(ctx, toolbar.x + toolbar.w - unit * 0.28, toolbar.y + unit * 0.50, unit * 0.25, foreground);
+
+  if (action) {
+    drawMagnifier(ctx, action.x + action.w * 0.46, action.y + action.h * 0.45, action.h * 0.34, foreground);
+  }
+
+  const rowY = toolbar.y + toolbar.h + unit * 0.18;
+  const rowIconSize = unit * 0.34;
+  drawIcon(ctx, { c0: '#2fb8ff', c1: '#176be8', t: '↗', small: true }, toolbar.x + unit * 0.10, rowY, rowIconSize);
+  ctx.save();
+  ctx.fillStyle = foreground;
+  ctx.font = `620 ${Math.max(18, unit * 0.20)}px -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('操作按钮', toolbar.x + unit * 0.58, rowY + rowIconSize * 0.52);
+  ctx.strokeStyle = secondary;
+  ctx.lineWidth = Math.max(2, unit * 0.025);
+  ctx.lineCap = 'round';
+  const chevronX = toolbar.x + toolbar.w - unit * 0.22;
+  const chevronY = rowY + rowIconSize * 0.52;
+  ctx.beginPath();
+  ctx.moveTo(chevronX - unit * 0.05, chevronY - unit * 0.07);
+  ctx.lineTo(chevronX + unit * 0.02, chevronY);
+  ctx.lineTo(chevronX - unit * 0.05, chevronY + unit * 0.07);
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function drawLabel(ctx, f) {
   ctx.save();
   const unit = Math.min(f.w, f.h);

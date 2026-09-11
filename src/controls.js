@@ -736,9 +736,10 @@ class LiquidGlassControl {
     this.activePointerId = event.pointerId;
     this.releasing = false;
     this.releaseMix = 0;
-    // A switch press blooms the knob where it is. Its state and position only
-    // change after an actual drag; tapping either half is visual feedback,
-    // never a toggle. Navbar items keep normal click-to-select behaviour.
+    // A switch press blooms the knob where it is. Dragging follows the pointer;
+    // a stationary press is resolved on release so the knob never jumps away
+    // while held. Like a navbar, clicking the other side selects it while
+    // clicking the already-selected side is a no-op.
     this.positionTarget = this.kind === 'switch' ? start : this.progressForPointer(event);
     try {
       this.container.setPointerCapture?.(event.pointerId);
@@ -767,7 +768,9 @@ class LiquidGlassControl {
     this.dragging = false;
     const { start, moved } = this.press ?? { start: Math.round(this.positionTarget), moved: true };
     if (event.type === 'pointercancel') this.positionTarget = start;
-    else if (this.kind === 'switch' && !moved) this.positionTarget = start;
+    else if (this.kind === 'switch' && !moved) {
+      this.positionTarget = Math.round(this.progressForPointer(event));
+    }
     else this.positionTarget = Math.round(this.positionTarget);
     this.activePointerId = null;
     this.press = null;

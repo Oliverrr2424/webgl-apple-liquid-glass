@@ -12,13 +12,13 @@ import { getDefaultMaterialV2 } from '../src/v2-material.js?press-lens=2';
 import {
   SCENES, PHONE_WALLPAPER_PRESETS, SCENE_WALLPAPER_PRESETS, ICON_SOURCES,
   attachIconImages, isAnimated, sceneById, panelLayout,
-} from './scenes.js?phone-scenes=11';
-import { drawSceneBackdrop } from './content.js?phone-scenes=8';
+} from './scenes.js?scroll-ui=1';
+import { drawSceneBackdrop } from './content.js?scroll-ui=1';
 import {
   drawGlassContents, drawLabel, drawBadge, drawSelection, drawPressEffectsFrame,
-  drawPressEffectsOverlay,
+  drawPressEffectsOverlay, drawScrollSceneOverlay,
   drawPhoneSceneOverlay, drawPhonePanelOverlay,
-} from './overlay.js?press-lens=3';
+} from './overlay.js?scroll-ui=1';
 import { createInspector } from './inspector.js?press-lens=2';
 import { createComponentEditor } from './components.js?size-controls=2';
 import { attachStageInteractions } from './interactions.js?phone-scenes=8';
@@ -728,8 +728,9 @@ function drawOverlayLayer({ width, height, dpr }) {
         if (element.id === 'hold-button' || element.id === 'hold-orb') drawGlassContents(uiContext, element);
       }
     } else {
+      if (scene.scrollUi) drawScrollSceneOverlay(uiContext, glass.elements);
       for (const element of glass.elements) {
-        if (store.showIcons) drawGlassContents(uiContext, element);
+        if (store.showIcons && !scene.scrollUi) drawGlassContents(uiContext, element);
         if (store.showLabels) { drawLabel(uiContext, element); drawBadge(uiContext, element); }
       }
       const selected = glass.elements.find((element) => element.id === store.selectedId);
@@ -977,6 +978,12 @@ function syncGlassTone() {
 }
 for (const button of document.querySelectorAll('[data-glass-tone]')) button.addEventListener('click', () => {
   store.glassTone = button.dataset.glassTone;
+  if (store.version === 'v2' && store.glassTone === 'dark') {
+    store.material.tint = 1;
+    inspector?.sync();
+    syncPresetButtons(null);
+    applyMaterial();
+  }
   syncGlassTone();
   syncApiControls();
   if (panelActive()) applyPanelElements();

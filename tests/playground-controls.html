@@ -45,7 +45,17 @@
     pointer(toggle, 'pointerdown', box.right - 8, y, 31);
     pointer(toggle, 'pointerup', box.right - 8, y, 31);
     await wait(250);
-    if (toggle.getAttribute('aria-checked') !== 'false') throw new Error('tap changed public switch state');
+    if (toggle.getAttribute('aria-checked') !== 'true') throw new Error('opposite-side tap did not enable public switch');
+
+    pointer(toggle, 'pointerdown', box.right - 8, y, 34);
+    pointer(toggle, 'pointerup', box.right - 8, y, 34);
+    await wait(120);
+    if (toggle.getAttribute('aria-checked') !== 'true') throw new Error('current-side tap changed public switch state');
+
+    pointer(toggle, 'pointerdown', box.left + 8, y, 35);
+    pointer(toggle, 'pointerup', box.left + 8, y, 35);
+    await wait(250);
+    if (toggle.getAttribute('aria-checked') !== 'false') throw new Error('reverse-side tap did not disable public switch');
 
     pointer(toggle, 'pointerdown', box.left + box.width * 0.25, y, 32);
     pointer(toggle, 'pointermove', box.left + box.width * 0.80, y, 32);
@@ -73,13 +83,21 @@
       throw new Error('V2 public controls did not remount');
     }
 
+    page.__lg.set({ tint: 0.35 });
+    frameDocument.querySelector('[data-glass-tone="dark"]').click();
+    await wait(120);
+    if (page.__lg.store.material.tint !== 1) {
+      throw new Error(`dark glass left V2 tint at ${page.__lg.store.material.tint}`);
+    }
+
     return {
       checks: [
         'Press uses three public controls',
         'no shared-canvas duplicate',
-        'switch tap ignored/drag committed',
+        'switch opposite-side tap/current-side no-op/drag committed',
         'navbar click selected',
         'V1 fallback/V2 remount',
+        'dark glass sets V2 tint to 1.00',
       ],
     };
   };
