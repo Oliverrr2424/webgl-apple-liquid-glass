@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Liquid Glass — landing example</title>
+  <link rel="stylesheet" href="./style.css">
+  <!-- In an app with a bundler this is just `npm install apple-liquid-glass-webgl`. -->
+  <script type="importmap">
+    { "imports": { "apple-liquid-glass-webgl": "../../src/index.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="aurora" aria-hidden="true"></canvas>
+
+  <header class="top">
+    <strong class="brand">Liquid Glass</strong>
+    <div id="nav"></div>
+    <label class="calm">Calm <span id="calm"></span></label>
+  </header>
+
+  <main>
+    <section id="home" class="hero">
+      <h1>Glass<br>in motion.</h1>
+      <p>A living surface that bends whatever is behind it — here, an animated canvas.</p>
+      <a class="cta" href="#work">See the cards</a>
+    </section>
+
+    <section id="work" class="photo">
+      <div class="grid">
+        <article class="card">
+          <h3>One canvas</h3>
+          <p>Three cards share a single WebGL context through <code>targets</code>.</p>
+        </article>
+        <article class="card">
+          <h3>Registered</h3>
+          <p>The photo under each card is the photo under each card, while you scroll.</p>
+        </article>
+        <article class="card">
+          <h3>CSS shapes</h3>
+          <p>Corner radius comes from <code>border-radius</code>. No numbers to keep in sync.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="read" class="reading">
+      <div class="panel">
+        <h2>Frosted for reading</h2>
+        <p>
+          Body text needs a body behind it. <code>frost</code> blurs the backdrop
+          before the lens bends it and <code>tint</code> adds a milky layer, so
+          the panel stays legible over a busy gradient without going opaque.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

@@ -1,9 +1,9 @@
-import { GlassRenderer } from './renderer.js?press-lens=2';
+import { GlassRenderer } from './renderer.js';
 import { MAX_GLASS_SHAPES } from './geometry.js';
 import {
   DEFAULT_MATERIAL_V2, REDUCED_TRANSPARENCY_MATERIAL_V2, SLIDERS_V2,
   getDefaultMaterialV2, makeMaterialV2,
-} from './v2-material.js?press-lens=2';
+} from './v2-material.js';
 import { distanceToElementsV2, hitTestElementsV2 } from './v2-geometry.js';
 
 const SHAPES = new Set(['folder', 'rect', 'pill', 'circle']);
@@ -25,8 +25,10 @@ function normalizeShape(shape) {
 function normalizeElement(input, index) {
   const width = Number(input.w ?? input.width ?? input.size ?? 0);
   const height = Number(input.h ?? input.height ?? input.size ?? width);
-  if (!(width > 0) || !(height > 0)) {
-    throw new TypeError('Liquid glass V2 elements need a positive width and height.');
+  // Zero is allowed: layout that has not happened yet (a hidden section, a
+  // canvas measured before CSS applied) simply draws nothing until it has.
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 0 || height < 0) {
+    throw new TypeError('Liquid glass V2 elements need a finite, non-negative width and height.');
   }
   const tint = input.tint == null ? undefined : Number(input.tint);
   if (tint !== undefined && !Number.isFinite(tint)) {
@@ -648,13 +650,14 @@ export class LiquidGlassWebGLV2 {
     else this.renderer.drawBackdrop();
 
     const material = this.effectiveMaterial;
+    const elements = this.elements.filter((element) => element.w > 0 && element.h > 0);
     const elapsed = this.lastLightBlendTime ? Math.min(100, now - this.lastLightBlendTime) : 100;
     const blend = liveBackdrop ? 1 - Math.exp(-elapsed / 280) : 1;
-    const activeLightIds = new Set(this.elements.map((element) => element.id));
+    const activeLightIds = new Set(elements.map((element) => element.id));
     for (const id of this.smoothedLightDirections.keys()) {
       if (!activeLightIds.has(id)) this.smoothedLightDirections.delete(id);
     }
-    const lightDirections = this.elements.map((element) => {
+    const lightDirections = elements.map((element) => {
       const target = this.lightDirection(element, width, height, material.lightAngle);
       const previous = this.smoothedLightDirections.get(element.id);
       if (!previous || blend >= 1) {
@@ -668,17 +671,17 @@ export class LiquidGlassWebGLV2 {
       this.smoothedLightDirections.set(element.id, direction);
       return direction;
     });
-    const tintLights = this.elements.map((element) => (
+    const tintLights = elements.map((element) => (
       this.tintLightForElement(element, width, height)
     ));
     this.lastLightBlendTime = now;
-    if (this.elements.length > MAX_GLASS_SHAPES && !this.warnedShapeLimit) {
+    if (elements.length > MAX_GLASS_SHAPES && !this.warnedShapeLimit) {
       this.warnedShapeLimit = true;
       console.warn(`LiquidGlassWebGLV2: more than ${MAX_GLASS_SHAPES} shapes require multiple passes; overlapping shapes across a pass boundary may composite differently.`);
     }
-    for (let i = 0; i < this.elements.length; i += MAX_GLASS_SHAPES) {
+    for (let i = 0; i < elements.length; i += MAX_GLASS_SHAPES) {
       this.renderer.drawGlassV2Group(
-        this.elements.slice(i, i + MAX_GLASS_SHAPES),
+        elements.slice(i, i + MAX_GLASS_SHAPES),
         material,
         dpr,
         lightDirections.slice(i, i + MAX_GLASS_SHAPES),

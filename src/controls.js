@@ -1,7 +1,21 @@
-import { LiquidGlassWebGLV2 } from './v2.js?controls=1';
-import { getDefaultMaterialV2 } from './v2-material.js?controls=1';
+// Ready-made liquid glass controls: a segmented navbar and a switch.
+//
+// Each control is transparent over the page. Its layers bleed past the
+// container so the pressed lens can grow beyond the track, and the glass
+// samples the page backdrop registered to where the control sits on screen,
+// exactly like `LiquidGlass`.
+
+import { LiquidGlassWebGLV2 } from './v2.js';
+import { getDefaultMaterialV2, makeMaterialV2 } from './v2-material.js';
+import { addClient, removeClient, wake, layoutEpoch } from './frame-loop.js';
+import {
+  LAYER_ATTRIBUTE, normalizeBackdrop, resolveLayers, paintElementBackdrop,
+  layersAreLive, layerElements, onBackdropAsset,
+} from './dom-backdrop.js';
+import { resolveTarget, releaseGlass, webgl2Supported, watchStyles } from './dom.js';
 
 const clamp = (value, min = 0, max = 1) => Math.max(min, Math.min(max, value));
+const registry = new WeakMap();
 
 /** Stable V2 transmission used by the navbar and switch while held. */
 export const PRESSED_CONTROL_MATERIAL_V2 = Object.freeze({
@@ -29,59 +43,33 @@ export function getPressedControlMaterialV2(material = {}) {
   return { ...getDefaultMaterialV2(), ...material, ...PRESSED_CONTROL_MATERIAL_V2 };
 }
 
-function setStyles(element, styles) {
-  Object.assign(element.style, styles);
-  return element;
-}
+// Used only when the container has no size of its own.
+const DEFAULT_SIZE = { navbar: [312, 72], switch: [92, 40] };
 
-function makeCanvas(host, { hidden = false, zIndex = 0 } = {}) {
-  const canvas = document.createElement('canvas');
-  canvas.setAttribute('aria-hidden', 'true');
-  setStyles(canvas, {
-    position: hidden ? 'absolute' : 'absolute',
-    inset: '0',
-    width: '100%',
-    height: '100%',
-    display: hidden ? 'none' : 'block',
+function layer(tag, host, zIndex) {
+  const node = document.createElement(tag);
+  node.setAttribute(LAYER_ATTRIBUTE, '');
+  node.setAttribute('aria-hidden', 'true');
+  Object.assign(node.style, {
+    position: 'absolute',
+    left: '0px',
+    top: '0px',
+    margin: '0',
+    padding: '0',
+    border: '0',
+    maxWidth: 'none',
+    maxHeight: 'none',
+    display: 'block',
     pointerEvents: 'none',
     zIndex: String(zIndex),
   });
-  host.appendChild(canvas);
-  return canvas;
-}
-
-function sizeCanvas(canvas, width, height, dpr) {
-  const pixelWidth = Math.max(1, Math.round(width * dpr));
-  const pixelHeight = Math.max(1, Math.round(height * dpr));
-  if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
-  if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
+  host?.appendChild(node);
+  return node;
 }
 
 function roundRect(context, x, y, width, height, radius = height / 2) {
   context.beginPath();
-  context.roundRect(x, y, width, height, Math.min(radius, width / 2, height / 2));
-}
-
-function drawCover(context, source, width, height) {
-  const sourceWidth = Number(source?.videoWidth || source?.naturalWidth || source?.width || 0);
-  const sourceHeight = Number(source?.videoHeight || source?.naturalHeight || source?.height || 0);
-  if (!(sourceWidth > 0) || !(sourceHeight > 0)) return false;
-  const scale = Math.max(width / sourceWidth, height / sourceHeight);
-  const drawWidth = sourceWidth * scale;
-  const drawHeight = sourceHeight * scale;
-  context.drawImage(source, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
-  return true;
-}
-
-function loadImage(source) {
-  if (typeof source !== 'string') return Promise.resolve(source);
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.crossOrigin = 'anonymous';
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error(`Unable to load liquid-glass control backdrop: ${source}`));
-    image.src = source;
-  });
+  context.roundRect(x, y, width, height, Math.max(0, Math.min(radius, width / 2, height / 2)));
 }
 
 function pressureSpring(state, target, seconds, stiffness, damping) {
@@ -90,80 +78,84 @@ function pressureSpring(state, target, seconds, stiffness, damping) {
   state.value += state.velocity * seconds;
 }
 
+function normalizeItems(items) {
+  const list = items ?? [
+    { value: 'first', label: 'First' },
+    { value: 'second', label: 'Second' },
+  ];
+  if (!Array.isArray(list) || list.length < 2) {
+    throw new TypeError('LiquidGlassNavbar needs at least two items.');
+  }
+  return list.map((item, index) => typeof item === 'string'
+    ? { value: item, label: item }
+    : { value: item.value ?? String(index), label: item.label ?? String(item.value ?? index), icon: item.icon });
+}
+
 class LiquidGlassControl {
-  constructor(container, options, kind) {
-    if (!(container instanceof HTMLElement)) {
-      throw new TypeError('Liquid glass controls need an HTMLElement container.');
-    }
+  constructor(target, options, kind) {
+    const name = kind === 'navbar' ? 'LiquidGlassNavbar' : 'LiquidGlassSwitch';
+    const container = resolveTarget(target, name);
+    makeMaterialV2(options?.material ?? {});
+    registry.get(container)?.destroy();
+    registry.set(container, this);
+
     this.container = container;
-    this.options = options ?? {};
+    this.element = container;
+    this.options = { ...(options ?? {}) };
     this.kind = kind;
     this.destroyed = false;
-    this.backdrop = null;
-    this.frameId = 0;
-    this.lastTime = 0;
-    this.dragging = false;
-    this.staticDirty = true;
+    this.visible = true;
+    this.items = kind === 'navbar' ? normalizeItems(this.options.items) : null;
+    const index = kind === 'switch' ? (this.options.checked ? 1 : 0) : this.indexOf(this.options.value);
+    this.position = { value: index, velocity: 0 };
+    this.positionTarget = index;
     this.amount = { value: 0, velocity: 0 };
-    this.position = { value: kind === 'switch'
-      ? (this.options.checked ? 1 : 0)
-      : this.resolveNavbarIndex(this.options.value), velocity: 0 };
-    this.positionTarget = this.position.value;
-    this.value = kind === 'switch'
-      ? Boolean(this.position.value)
-      : this.navbarItems()[this.position.value].value;
+    this.value = kind === 'switch' ? Boolean(index) : this.items[index].value;
     this.material = { ...getDefaultMaterialV2(), ...(this.options.material ?? {}) };
     this.lens = { ...DEFAULT_NAVIGATION_LENS, ...(this.options.lens ?? {}) };
+    this.dragging = false;
+    this.animating = false;
+    this.lastTime = 0;
+    this.frame = null;
+    this.size = null;
+    this.sizeKey = '';
+    this.geometryKey = '';
+    this.staticDirty = true;
+    this.dirty = true;
+    this.pressedShown = false;
+    this.settled = false;
+    this.settledWaiters = [];
+    this.restore = [];
+    this.ready = new Promise((resolve) => { this.settledWaiters.push(() => resolve(this)); });
 
-    this.original = {
-      style: {
-        position: container.style.position,
-        width: container.style.width,
-        height: container.style.height,
-        touchAction: container.style.touchAction,
-        userSelect: container.style.userSelect,
-        cursor: container.style.cursor,
-      },
-      tabIndex: container.getAttribute('tabindex'),
-      role: container.getAttribute('role'),
-      ariaChecked: container.getAttribute('aria-checked'),
-      ariaLabel: container.getAttribute('aria-label'),
-      ariaDisabled: container.getAttribute('aria-disabled'),
-    };
-    const computedPosition = getComputedStyle(container).position;
-    this.changedPosition = computedPosition === 'static';
-    if (this.changedPosition) container.style.position = 'relative';
-    if (!container.style.width) container.style.width = kind === 'navbar' ? '360px' : '230px';
-    if (!container.style.height) container.style.height = kind === 'navbar' ? '144px' : '150px';
-    container.dataset.liquidGlassControl = kind;
-    container.style.touchAction = 'none';
-    container.style.userSelect = 'none';
-    container.style.cursor = this.options.disabled ? 'default' : 'pointer';
-    container.tabIndex = this.options.disabled ? -1 : (container.tabIndex >= 0 ? container.tabIndex : 0);
+    this.setupContainer();
+    this.supported = webgl2Supported();
+    this.backdropCanvas = layer('canvas', null, 0);
+    this.compositeCanvas = layer('canvas', null, 0);
+    this.baseCanvas = kind === 'navbar' ? layer('canvas', container, 0) : null;
+    this.trackCanvas = layer('canvas', container, 1);
+    this.pressCanvas = layer('canvas', container, 2);
+    this.restCanvas = layer('canvas', container, 3);
+    this.labelLayer = layer('div', container, 4);
+    Object.assign(this.labelLayer.style, { inset: '0', width: '100%', height: '100%' });
+    this.labelLayer.removeAttribute('aria-hidden');
 
-    this.backdropCanvas = makeCanvas(container, { zIndex: 0 });
-    this.baseCanvas = makeCanvas(container, { zIndex: 1 });
-    this.trackCanvas = makeCanvas(container, { zIndex: 2 });
-    this.pressCanvas = makeCanvas(container, { zIndex: 3 });
-    this.restCanvas = makeCanvas(container, { zIndex: 4 });
-    this.compositeCanvas = makeCanvas(container, { hidden: true });
-    this.labelLayer = setStyles(document.createElement('div'), {
-      position: 'absolute', inset: '0', zIndex: '5', pointerEvents: 'none',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    });
-    container.appendChild(this.labelLayer);
-
-    this.supported = LiquidGlassWebGLV2.isSupported();
-    this.baseGlass = this.supported ? new LiquidGlassWebGLV2(this.baseCanvas, {
-      material: this.material,
-      compositeMode: 'overlay',
-      autoResize: false,
-    }) : null;
-    this.pressGlass = this.supported ? new LiquidGlassWebGLV2(this.pressCanvas, {
-      material: getPressedControlMaterialV2(this.material),
-      compositeMode: 'overlay',
-      autoResize: false,
-    }) : null;
+    if (this.supported) {
+      try {
+        this.baseGlass = this.baseCanvas ? new LiquidGlassWebGLV2(this.baseCanvas, {
+          material: this.material, compositeMode: 'overlay', autoResize: false,
+        }) : null;
+        this.pressGlass = new LiquidGlassWebGLV2(this.pressCanvas, {
+          material: getPressedControlMaterialV2(this.material), compositeMode: 'overlay', autoResize: false,
+        });
+      } catch (error) {
+        console.warn(`${name}: WebGL2 unavailable, drawing the flat fallback.`, error);
+        releaseGlass(this.baseGlass);
+        this.baseGlass = null;
+        this.pressGlass = null;
+        this.supported = false;
+      }
+    }
 
     this.onPointerDown = (event) => this.pointerDown(event);
     this.onPointerMove = (event) => this.pointerMove(event);
@@ -175,90 +167,206 @@ class LiquidGlassControl {
     container.addEventListener('pointercancel', this.onPointerEnd);
     container.addEventListener('lostpointercapture', this.onPointerEnd);
     container.addEventListener('keydown', this.onKeyDown);
+    this.onFocusChange = (event) => {
+      if (event.type === 'blur') this.pointerFocus = false;
+      this.dirty = true;
+      wake(34);
+    };
+    container.addEventListener('focus', this.onFocusChange);
+    container.addEventListener('blur', this.onFocusChange);
 
+    this.layers = resolveLayers(normalizeBackdrop(this.options.backdrop), container);
+    this.unsubscribeAssets = onBackdropAsset(() => {
+      this.staticDirty = true;
+      wake(34);
+    });
     this.resizeObserver = typeof ResizeObserver === 'function'
-      ? new ResizeObserver(() => this.layout())
+      ? new ResizeObserver(() => wake(64))
       : null;
     this.resizeObserver?.observe(container);
-    this.layout();
-    this.ready = this.setBackdrop(this.options.backdrop ?? null);
+    this.watchStyles();
+    this.buildLabels();
+    this.updateAccessibility();
+    addClient(this);
   }
 
-  navbarItems() {
-    const items = this.options.items ?? [
-      { value: 'first', label: 'First' },
-      { value: 'second', label: 'Second' },
-    ];
-    if (!Array.isArray(items) || items.length !== 2) {
-      throw new TypeError('LiquidGlassNavbar currently requires exactly two items.');
+  static from(target) {
+    const element = typeof target === 'string' ? document.querySelector(target) : target;
+    return (element && registry.get(element)) ?? null;
+  }
+
+  setupContainer() {
+    const { container, kind } = this;
+    const style = getComputedStyle(container);
+    const setStyle = (property, value) => {
+      this.restore.push([property, container.style[property]]);
+      container.style[property] = value;
+    };
+    if (style.position === 'static') setStyle('position', 'relative');
+    if (style.isolation !== 'isolate') setStyle('isolation', 'isolate');
+    if (style.display === 'inline') setStyle('display', 'inline-block');
+    const [defaultWidth, defaultHeight] = DEFAULT_SIZE[kind];
+    // An empty container with no height has not been sized by the page.
+    const unsized = container.clientHeight === 0 && !container.style.height;
+    if (this.options.width != null || (unsized && !container.style.width)) {
+      setStyle('width', `${this.options.width ?? defaultWidth}px`);
     }
-    return items.map((item, index) => typeof item === 'string'
-      ? { value: item, label: item }
-      : { value: item.value ?? String(index), label: item.label ?? String(item.value ?? index), icon: item.icon });
+    if (this.options.height != null || unsized) {
+      setStyle('height', `${this.options.height ?? defaultHeight}px`);
+    }
+    setStyle('touchAction', 'none');
+    setStyle('userSelect', 'none');
+    setStyle('webkitUserSelect', 'none');
+    setStyle('cursor', this.options.disabled ? 'default' : 'pointer');
+    // The focus ring is drawn around the track, not the container's box.
+    setStyle('outline', 'none');
+    this.originalAttributes = ['tabindex', 'role', 'aria-checked', 'aria-label', 'aria-disabled']
+      .map((attribute) => [attribute, container.getAttribute(attribute)]);
+    container.tabIndex = this.options.disabled ? -1 : (container.tabIndex >= 0 ? container.tabIndex : 0);
+    container.dataset.liquidGlassControl = kind;
   }
 
-  resolveNavbarIndex(value) {
-    const index = this.navbarItems().findIndex((item) => item.value === value);
+  trackedElements() {
+    return [this.container];
+  }
+
+  watchStyles() {
+    this.styleObserver?.disconnect();
+    this.styleObserver = watchStyles([this.container, ...layerElements(this.layers)], () => {
+      this.staticDirty = true;
+      wake(120);
+    });
+  }
+
+  onViewportResize() {
+    this.refresh();
+  }
+
+  count() {
+    return this.kind === 'navbar' ? this.items.length : 2;
+  }
+
+  indexOf(value) {
+    const index = this.items.findIndex((item) => item.value === value);
     return index < 0 ? 0 : index;
   }
 
-  layout() {
-    if (this.destroyed) return;
-    const width = Math.max(1, this.container.clientWidth || parseFloat(this.container.style.width) || 1);
-    const height = Math.max(1, this.container.clientHeight || parseFloat(this.container.style.height) || 1);
-    const dpr = Math.min(devicePixelRatio || 1, 2);
-    this.size = { width, height, dpr };
-    for (const canvas of [this.backdropCanvas, this.trackCanvas, this.restCanvas, this.compositeCanvas]) {
-      sizeCanvas(canvas, width, height, dpr);
-    }
-    const requestedWidth = Number(this.options.width ?? (this.kind === 'navbar' ? 312 : 190));
-    const requestedHeight = Number(this.options.height ?? (this.kind === 'navbar' ? 96 : 70));
-    const controlWidth = Math.min(requestedWidth, Math.max(40, width - 16));
-    const controlHeight = Math.min(requestedHeight, Math.max(30, height - 24));
-    this.track = {
-      x: (width - controlWidth) / 2,
-      y: (height - controlHeight) / 2,
-      w: controlWidth,
-      h: controlHeight,
+  // ---- frame loop -------------------------------------------------------
+
+  measure() {
+    const rect = this.container.getBoundingClientRect();
+    this.frame = {
+      x: rect.left,
+      y: rect.top,
+      screenWidth: rect.width,
+      screenHeight: rect.height,
+      width: this.container.offsetWidth,
+      height: this.container.offsetHeight,
     };
-    this.staticDirty = true;
-    this.buildLabels();
-    this.render();
   }
 
-  async setBackdrop(source) {
-    this.backdrop = await loadImage(source);
-    if (!this.destroyed) {
-      this.staticDirty = true;
-      this.render();
+  draw(now) {
+    const { frame } = this;
+    if (!frame || this.destroyed || !(frame.width > 0 && frame.height > 0)) return false;
+    const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
+    const sizeKey = `${frame.width}x${frame.height}@${dpr}`;
+    if (sizeKey !== this.sizeKey) {
+      this.sizeKey = sizeKey;
+      this.layout(frame.width, frame.height, dpr);
     }
-    return this;
+    const geometryKey = [frame.x, frame.y, frame.screenWidth, frame.screenHeight]
+      .map((value) => Math.round(value * 64)).join(',');
+    if (geometryKey !== this.geometryKey || layoutEpoch() !== this.epoch) {
+      this.geometryKey = geometryKey;
+      this.epoch = layoutEpoch();
+      this.staticDirty = true;
+    }
+    const live = this.options.live === true
+      || (this.options.live !== false && this.supported && layersAreLive(this.layers));
+    if (live) this.staticDirty = true;
+    const animating = this.animating && this.step(now);
+    if (this.staticDirty || this.dirty) this.render();
+    return animating || live;
   }
 
-  setMaterial(material) {
-    this.material = { ...this.material, ...(material ?? {}) };
-    this.baseGlass?.setMaterial(this.material, false);
-    this.pressGlass?.setMaterial(getPressedControlMaterialV2(this.material), false);
+  layout(width, height, dpr) {
+    const bleed = Math.ceil(36 + height * 0.5);
+    this.size = { width, height, dpr, bleed };
+    const cssWidth = width + bleed * 2;
+    const cssHeight = height + bleed * 2;
+    const pixelWidth = Math.max(1, Math.round(cssWidth * dpr));
+    const pixelHeight = Math.max(1, Math.round(cssHeight * dpr));
+    for (const canvas of [this.baseCanvas, this.trackCanvas, this.pressCanvas, this.restCanvas]) {
+      if (!canvas) continue;
+      Object.assign(canvas.style, {
+        left: `${-bleed}px`, top: `${-bleed}px`, width: `${cssWidth}px`, height: `${cssHeight}px`,
+      });
+    }
+    for (const canvas of [this.backdropCanvas, this.compositeCanvas, this.trackCanvas, this.restCanvas]) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+    }
+    this.track = { x: bleed, y: bleed, w: width, h: height };
+    this.baseGlass?.setBackdrop(this.backdropCanvas, { update: 'static', autoStart: false, shouldRender: false });
+    this.pressGlass?.setBackdrop(this.compositeCanvas, { update: 'static', autoStart: false, shouldRender: false });
     this.staticDirty = true;
-    this.render();
-    return this;
+    this.dirty = true;
+    this.buildLabels();
   }
 
-  updateBackdrop() {
-    this.staticDirty = true;
-    this.render();
-    return this;
+  step(now) {
+    const seconds = clamp((now - this.lastTime) / 1000, 0.001, 0.034);
+    this.lastTime = now;
+    const reduceMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    const amountTarget = this.dragging ? 1 : 0;
+    const last = this.count() - 1;
+    if (reduceMotion) {
+      this.amount.value = amountTarget;
+      this.amount.velocity = 0;
+      this.position.value = this.positionTarget;
+      this.position.velocity = 0;
+    } else {
+      pressureSpring(this.amount, amountTarget, seconds, this.dragging ? 520 : 540, this.dragging ? 28 : 31);
+      pressureSpring(this.position, this.positionTarget, seconds, this.dragging ? 420 : 360, this.dragging ? 31 : 27);
+    }
+    this.amount.value = clamp(this.amount.value, 0, 1.12);
+    this.position.value = clamp(this.position.value, 0, last);
+    const settled = Math.abs(this.amount.value - amountTarget) < 0.004
+      && Math.abs(this.amount.velocity) < 0.018
+      && Math.abs(this.position.value - this.positionTarget) < 0.003
+      && Math.abs(this.position.velocity) < 0.018;
+    if (settled) {
+      this.amount.value = amountTarget;
+      this.position.value = this.positionTarget;
+      this.animating = this.dragging;
+    }
+    this.dirty = true;
+    return !settled || this.dragging;
   }
+
+  startAnimation() {
+    if (this.destroyed) return;
+    if (!this.animating) {
+      this.animating = true;
+      this.lastTime = globalThis.performance?.now?.() ?? Date.now();
+    }
+    this.dirty = true;
+    wake(34);
+  }
+
+  // ---- drawing ----------------------------------------------------------
 
   thumbGeometry(amount = this.amount.value) {
-    const track = this.track;
+    const { track } = this;
     const inset = track.h * 0.08;
+    const count = this.count();
+    const progress = clamp(this.position.value / (count - 1));
     const restingWidth = this.kind === 'navbar'
-      ? track.w * 0.5 - inset
+      ? (track.w - inset * 2) / count
       : track.w * 0.65;
     const restingHeight = track.h * 0.84;
     const travel = Math.max(0, track.w - restingWidth - inset * 2);
-    const restingX = track.x + inset + travel * clamp(this.position.value);
+    const restingX = track.x + inset + travel * progress;
     const restingY = track.y + inset;
     let scaleX;
     let scaleY;
@@ -275,37 +383,30 @@ class LiquidGlassControl {
     const overtravel = this.kind === 'navbar'
       ? Math.max(0, (h - track.h) / 2)
       : Math.max(18, track.h * 0.42);
-    const anchoredX = track.x - overtravel
-      + (track.w + overtravel * 2 - w) * clamp(this.position.value);
+    const anchoredX = track.x - overtravel + (track.w + overtravel * 2 - w) * progress;
     return {
-      x: centeredX + (anchoredX - centeredX) * amount,
+      x: centeredX + (anchoredX - centeredX) * clamp(amount),
       y: restingY - (h - restingHeight) / 2,
       w,
       h,
     };
   }
 
+  context(canvas) {
+    const context = canvas.getContext('2d');
+    context.setTransform(this.size.dpr, 0, 0, this.size.dpr, 0, 0);
+    return context;
+  }
+
   drawBackdrop() {
-    const { width, height, dpr } = this.size;
     const context = this.backdropCanvas.getContext('2d');
-    context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    context.clearRect(0, 0, width, height);
-    if (!drawCover(context, this.backdrop, width, height)) {
-      const gradient = context.createLinearGradient(0, 0, width, height);
-      gradient.addColorStop(0, '#334a66');
-      gradient.addColorStop(0.5, '#172437');
-      gradient.addColorStop(1, '#6d4a38');
-      context.fillStyle = gradient;
-      context.fillRect(0, 0, width, height);
-    }
+    return paintElementBackdrop(context, this.layers, this.frame, this.size.bleed, this.size.dpr);
   }
 
   drawTrack() {
-    const { width, height, dpr } = this.size;
-    const context = this.trackCanvas.getContext('2d');
-    context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    context.clearRect(0, 0, width, height);
-    if (this.kind === 'navbar' && this.supported) return;
+    const context = this.context(this.trackCanvas);
+    context.clearRect(0, 0, this.trackCanvas.width, this.trackCanvas.height);
+    if (this.kind === 'navbar' && this.baseGlass) return;
     const { x, y, w, h } = this.track;
     context.save();
     roundRect(context, x, y, w, h);
@@ -316,125 +417,194 @@ class LiquidGlassControl {
       context.fillStyle = gray;
       context.fill();
       roundRect(context, x, y, w, h);
-      context.globalAlpha = clamp(this.position.value);
+      const progress = clamp(this.position.value);
+      context.globalAlpha = progress * progress * (3 - 2 * progress);
       const green = context.createLinearGradient(x, y, x + w, y + h);
       green.addColorStop(0, '#34d86a');
       green.addColorStop(1, '#25c653');
       context.fillStyle = green;
       context.fill();
     } else {
-      context.fillStyle = 'rgba(225,230,238,.48)';
+      context.fillStyle = 'rgba(225,230,238,.72)';
       context.fill();
-      context.strokeStyle = 'rgba(255,255,255,.4)';
+      context.strokeStyle = 'rgba(255,255,255,.5)';
       context.stroke();
     }
     context.restore();
   }
 
-  drawRestingThumb() {
-    const { width, height, dpr } = this.size;
-    const context = this.restCanvas.getContext('2d');
-    context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    context.clearRect(0, 0, width, height);
-    const thumb = this.thumbGeometry(0);
-    const opacity = 1 - clamp(this.amount.value);
-    if (opacity <= 0.001) return;
-    context.save();
-    context.globalAlpha = opacity;
-    context.shadowColor = 'rgba(0,0,0,.16)';
-    context.shadowBlur = thumb.h * 0.13;
-    context.shadowOffsetY = thumb.h * 0.04;
-    roundRect(context, thumb.x, thumb.y, thumb.w, thumb.h);
-    const fill = context.createLinearGradient(thumb.x, thumb.y, thumb.x, thumb.y + thumb.h);
-    if (this.kind === 'navbar') {
-      fill.addColorStop(0, 'rgba(174,178,186,.88)');
-      fill.addColorStop(1, 'rgba(145,149,158,.82)');
-    } else {
-      fill.addColorStop(0, 'rgba(255,255,255,.98)');
-      fill.addColorStop(1, 'rgba(238,239,242,.95)');
-    }
-    context.fillStyle = fill;
-    context.fill();
-    context.restore();
-  }
-
   renderBase() {
     if (!this.baseGlass) return;
-    this.baseGlass.setBackdrop(this.backdropCanvas, { update: 'static', autoStart: false, shouldRender: false });
-    this.baseGlass.setElements(this.kind === 'navbar' ? [{
-      id: 'navbar-track', shape: 'pill', ...this.track, tint: 0.86, tintTone: 'light',
-    }] : [], false);
+    this.baseGlass.updateBackdrop(false);
+    this.baseGlass.setElements([{
+      id: 'navbar-track',
+      shape: 'pill',
+      ...this.track,
+      tint: this.options.tint ?? 0.86,
+      tintTone: this.options.tintTone ?? 'light',
+    }], false);
     this.baseGlass.render({ force: true, dpr: this.size.dpr });
   }
 
   composePressedBackdrop() {
     const context = this.compositeCanvas.getContext('2d');
     context.setTransform(1, 0, 0, 1, 0, 0);
-    context.clearRect(0, 0, this.compositeCanvas.width, this.compositeCanvas.height);
     context.drawImage(this.backdropCanvas, 0, 0);
-    context.drawImage(this.baseCanvas, 0, 0);
+    if (this.baseCanvas) context.drawImage(this.baseCanvas, 0, 0, this.compositeCanvas.width, this.compositeCanvas.height);
     context.drawImage(this.trackCanvas, 0, 0);
   }
 
-  renderPressed() {
+  renderPressed(pressed) {
     if (!this.pressGlass) return;
-    this.pressGlass.setBackdrop(this.compositeCanvas, { update: 'static', autoStart: false, shouldRender: false });
-    if (this.amount.value <= 0.001) {
+    if (!pressed) {
       this.pressGlass.setElements([], false);
-    } else {
-      const geometry = this.thumbGeometry();
-      this.pressGlass.setElements([{
-        id: `${this.kind}-pressed-thumb`,
-        shape: 'pill',
-        ...geometry,
-        tint: 0,
-        frost: 0,
-        opacity: clamp(this.amount.value),
-        pressure: this.kind === 'navbar' ? clamp(this.amount.value) : 0,
-        pressureAxes: this.kind === 'navbar'
-          ? [1 - this.lens.innerLength, 1 - this.lens.innerHeight]
-          : [1, 1],
-        tintTone: 'light',
-      }], false);
+      this.pressGlass.render({ force: true, dpr: this.size.dpr });
+      this.pressedShown = false;
+      return;
     }
+    this.pressGlass.updateBackdrop(false);
+    this.pressGlass.setElements([{
+      id: `${this.kind}-pressed-thumb`,
+      shape: 'pill',
+      ...this.thumbGeometry(),
+      tint: 0,
+      frost: 0,
+      opacity: clamp(this.amount.value),
+      pressure: this.kind === 'navbar' ? clamp(this.amount.value) : 0,
+      pressureAxes: this.kind === 'navbar'
+        ? [1 - this.lens.innerLength, 1 - this.lens.innerHeight]
+        : [1, 1],
+      tintTone: 'light',
+    }], false);
     this.pressGlass.render({ force: true, dpr: this.size.dpr });
+    this.pressedShown = true;
+  }
+
+  drawRestingThumb(composed) {
+    const context = this.context(this.restCanvas);
+    context.clearRect(0, 0, this.restCanvas.width, this.restCanvas.height);
+    const opacity = 1 - clamp(this.amount.value);
+    if (opacity <= 0.001) return;
+    const thumb = this.thumbGeometry(0);
+    const radius = thumb.h / 2;
+    context.save();
+    context.globalAlpha = opacity;
+    if (this.kind === 'switch') {
+      context.shadowColor = 'rgba(0,0,0,.18)';
+      context.shadowBlur = thumb.h * 0.16;
+      context.shadowOffsetY = thumb.h * 0.045;
+      roundRect(context, thumb.x, thumb.y, thumb.w, thumb.h, radius);
+      const fill = context.createLinearGradient(thumb.x, thumb.y, thumb.x, thumb.y + thumb.h);
+      fill.addColorStop(0, 'rgba(255,255,255,.97)');
+      fill.addColorStop(1, 'rgba(238,239,242,.94)');
+      context.fillStyle = fill;
+      context.fill();
+      context.shadowColor = 'transparent';
+      roundRect(context, thumb.x + 0.75, thumb.y + 0.75, thumb.w - 1.5, thumb.h - 1.5, radius - 0.75);
+      context.strokeStyle = 'rgba(83,85,91,.34)';
+      context.lineWidth = 1.5;
+      context.stroke();
+    } else {
+      context.shadowColor = 'rgba(0,0,0,.055)';
+      context.shadowBlur = thumb.h * 0.09;
+      context.shadowOffsetY = thumb.h * 0.045;
+      roundRect(context, thumb.x, thumb.y, thumb.w, thumb.h, radius);
+      context.clip();
+      // The playground's resting selection: blur the already-composited
+      // track under the thumb, neutralise most of its hue, one gray veil.
+      if (composed && 'filter' in context) {
+        const { dpr } = this.size;
+        const blur = Math.max(5, thumb.h * 0.105);
+        const pad = blur * 2.5;
+        const x = Math.max(0, thumb.x - pad);
+        const y = Math.max(0, thumb.y - pad);
+        const w = thumb.w + pad * 2;
+        const h = thumb.h + pad * 2;
+        context.filter = `blur(${blur}px)`;
+        context.drawImage(this.compositeCanvas, x * dpr, y * dpr, w * dpr, h * dpr, x, y, w, h);
+        context.filter = 'none';
+        context.globalCompositeOperation = 'color';
+        context.fillStyle = 'rgba(148,150,155,.72)';
+        context.fillRect(thumb.x, thumb.y, thumb.w, thumb.h);
+        context.globalCompositeOperation = 'source-over';
+        context.fillStyle = 'rgba(142,145,152,.24)';
+      } else {
+        const fill = context.createLinearGradient(thumb.x, thumb.y, thumb.x, thumb.y + thumb.h);
+        fill.addColorStop(0, 'rgba(174,178,186,.88)');
+        fill.addColorStop(1, 'rgba(145,149,158,.82)');
+        context.fillStyle = fill;
+      }
+      context.fillRect(thumb.x, thumb.y, thumb.w, thumb.h);
+    }
+    context.restore();
+  }
+
+  drawFocusRing() {
+    let visible;
+    try {
+      visible = this.container.matches(':focus-visible');
+    } catch {
+      visible = document.activeElement === this.container;
+    }
+    // Like native controls: a ring for keyboard focus, none after a press.
+    if (!visible || this.pointerFocus) return;
+    const context = this.context(this.restCanvas);
+    const { x, y, w, h } = this.track;
+    context.save();
+    roundRect(context, x - 3, y - 3, w + 6, h + 6);
+    context.lineWidth = 2;
+    context.strokeStyle = 'rgba(10,132,255,.95)';
+    context.stroke();
+    context.restore();
   }
 
   render() {
-    if (this.destroyed || !this.size) return this;
+    if (this.destroyed || !this.size || !this.frame) return this;
     if (this.staticDirty) {
-      this.drawBackdrop();
+      this.settled = this.supported ? this.drawBackdrop() : true;
       this.renderBase();
       this.staticDirty = false;
     }
     this.drawTrack();
-    this.composePressedBackdrop();
-    this.renderPressed();
-    this.drawRestingThumb();
+    const pressed = this.amount.value > 0.001;
+    const composed = this.supported && (pressed || this.kind === 'navbar');
+    if (composed) this.composePressedBackdrop();
+    if (pressed || this.pressedShown) this.renderPressed(pressed);
+    this.drawRestingThumb(composed);
+    this.drawFocusRing();
     this.updateAccessibility();
+    this.dirty = false;
+    if (this.settled && this.settledWaiters.length) {
+      this.settledWaiters.splice(0).forEach((resolve) => resolve());
+    }
     return this;
   }
 
   buildLabels() {
     this.labelLayer.replaceChildren();
     if (this.kind !== 'navbar') return;
-    const items = this.navbarItems();
-    items.forEach((item, index) => {
+    const width = this.size?.width ?? this.container.offsetWidth;
+    const height = this.size?.height ?? this.container.offsetHeight;
+    const inset = height * 0.08;
+    const slot = (width - inset * 2) / this.items.length;
+    this.items.forEach((item, index) => {
       const label = document.createElement('span');
       label.dataset.index = String(index);
       label.setAttribute('role', 'tab');
       label.textContent = `${item.icon ? `${item.icon}  ` : ''}${item.label}`;
-      setStyles(label, {
+      Object.assign(label.style, {
         position: 'absolute',
-        left: `${this.track.x + this.track.w * index / 2}px`,
-        top: `${this.track.y}px`,
-        width: `${this.track.w / 2}px`,
-        height: `${this.track.h}px`,
+        left: `${inset + slot * index}px`,
+        top: '0px',
+        width: `${slot}px`,
+        height: `${height}px`,
         display: 'grid',
         placeItems: 'center',
         color: this.options.labelColor ?? 'rgba(22,25,31,.9)',
-        fontSize: `${this.options.fontSize ?? Math.max(13, this.track.h * 0.19)}px`,
-        fontWeight: '650',
+        font: 'inherit',
+        fontSize: `${this.options.fontSize ?? Math.max(13, Math.min(17, height * 0.22))}px`,
+        fontWeight: '600',
+        lineHeight: '1',
         whiteSpace: 'nowrap',
         pointerEvents: 'none',
       });
@@ -442,26 +612,50 @@ class LiquidGlassControl {
     });
   }
 
-  progressForPointer(event) {
+  updateAccessibility() {
+    const { container } = this;
+    if (this.kind === 'switch') {
+      container.setAttribute('role', 'switch');
+      container.setAttribute('aria-checked', String(Boolean(this.value)));
+      container.setAttribute('aria-label', this.options.ariaLabel ?? container.getAttribute('aria-label') ?? 'Liquid glass switch');
+    } else {
+      container.setAttribute('role', 'tablist');
+      container.setAttribute('aria-label', this.options.ariaLabel ?? container.getAttribute('aria-label') ?? 'Liquid glass navigation');
+      const selected = Math.round(this.positionTarget);
+      for (const label of this.labelLayer.children) {
+        label.setAttribute('aria-selected', String(Number(label.dataset.index) === selected));
+      }
+    }
+  }
+
+  // ---- input ------------------------------------------------------------
+
+  localPoint(event) {
     const rect = this.container.getBoundingClientRect();
-    const x = event.clientX - rect.left;
+    const width = this.size?.width || rect.width || 1;
+    const height = this.size?.height || rect.height || 1;
+    return {
+      x: (event.clientX - rect.left) * width / (rect.width || 1),
+      y: (event.clientY - rect.top) * height / (rect.height || 1),
+    };
+  }
+
+  progressForPointer(event) {
+    const { x } = this.localPoint(event);
+    const { track, size } = this;
     const thumb = this.thumbGeometry(0);
-    const inset = this.track.h * 0.08;
-    const travel = Math.max(1, this.track.w - thumb.w - inset * 2);
-    return clamp((x - this.track.x - inset - thumb.w / 2) / travel);
+    const inset = track.h * 0.08;
+    const travel = Math.max(1, track.w - thumb.w - inset * 2);
+    return clamp((x + size.bleed - track.x - inset - thumb.w / 2) / travel) * (this.count() - 1);
   }
 
   pointerDown(event) {
-    if (this.options.disabled || event.button !== 0) return;
-    const bounds = this.container.getBoundingClientRect();
-    const x = event.clientX - bounds.left;
-    const y = event.clientY - bounds.top;
-    if (x < this.track.x || x > this.track.x + this.track.w
-      || y < this.track.y || y > this.track.y + this.track.h) return;
+    if (this.options.disabled || event.button !== 0 || !this.size) return;
     event.preventDefault();
     this.dragging = true;
     this.positionTarget = this.progressForPointer(event);
     this.container.setPointerCapture?.(event.pointerId);
+    this.pointerFocus = true;
     this.container.focus({ preventScroll: true });
     this.startAnimation();
   }
@@ -477,17 +671,26 @@ class LiquidGlassControl {
     if (!this.dragging) return;
     event.preventDefault();
     this.dragging = false;
-    this.positionTarget = this.positionTarget >= 0.5 ? 1 : 0;
+    this.positionTarget = Math.round(this.positionTarget);
     this.commitValue(this.positionTarget);
     this.startAnimation();
   }
 
   keyDown(event) {
+    if (this.pointerFocus) {
+      this.pointerFocus = false;
+      this.dirty = true;
+      wake(34);
+    }
     if (this.options.disabled) return;
+    const last = this.count() - 1;
+    const current = Math.round(this.positionTarget);
     let next = null;
-    if (event.key === 'ArrowLeft' || event.key === 'Home') next = 0;
-    if (event.key === 'ArrowRight' || event.key === 'End') next = 1;
-    if (this.kind === 'switch' && (event.key === ' ' || event.key === 'Enter')) next = this.positionTarget ? 0 : 1;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = Math.max(0, current - 1);
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = Math.min(last, current + 1);
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = last;
+    if (this.kind === 'switch' && (event.key === ' ' || event.key === 'Enter')) next = current ? 0 : 1;
     if (next === null) return;
     event.preventDefault();
     this.positionTarget = next;
@@ -497,66 +700,51 @@ class LiquidGlassControl {
 
   commitValue(index, notify = true) {
     const previous = this.value;
-    this.value = this.kind === 'switch' ? Boolean(index) : this.navbarItems()[index].value;
+    this.value = this.kind === 'switch' ? Boolean(index) : this.items[index].value;
     if (notify && previous !== this.value) {
-      this.options.onChange?.(this.value, this.kind === 'switch' ? undefined : index);
+      const detailIndex = this.kind === 'switch' ? undefined : index;
+      this.options.onChange?.(this.value, detailIndex);
       this.container.dispatchEvent(new CustomEvent('change', {
-        detail: { value: this.value, index: this.kind === 'switch' ? undefined : index },
+        detail: { value: this.value, index: detailIndex },
         bubbles: true,
       }));
     }
     this.updateAccessibility();
   }
 
-  updateAccessibility() {
-    if (this.kind === 'switch') {
-      this.container.setAttribute('role', 'switch');
-      this.container.setAttribute('aria-checked', String(Boolean(this.value)));
-      this.container.setAttribute('aria-label', this.options.ariaLabel ?? 'Liquid glass switch');
-    } else {
-      this.container.setAttribute('role', 'tablist');
-      this.container.setAttribute('aria-label', this.options.ariaLabel ?? 'Liquid glass navigation');
-      for (const label of this.labelLayer.children) {
-        label.setAttribute('aria-selected', String(Number(label.dataset.index) === Math.round(this.positionTarget)));
-      }
-    }
+  jumpTo(index, notify) {
+    this.positionTarget = index;
+    this.position.value = index;
+    this.position.velocity = 0;
+    this.commitValue(index, notify);
+    this.dirty = true;
+    wake(34);
+    return this;
   }
 
-  startAnimation() {
-    if (this.frameId || this.destroyed) return;
-    this.lastTime = performance.now();
-    this.frameId = requestAnimationFrame((now) => this.tick(now));
+  // ---- public -----------------------------------------------------------
+
+  /** Replace the backdrop. Resolves once the new backdrop has been drawn. */
+  setBackdrop(backdrop) {
+    this.options.backdrop = backdrop;
+    return this.refresh().nextSettled();
   }
 
-  tick(now) {
-    this.frameId = 0;
-    if (this.destroyed) return;
-    const seconds = Math.min(0.034, Math.max(0.001, (now - this.lastTime) / 1000));
-    this.lastTime = now;
-    const reduceMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-    const amountTarget = this.dragging ? 1 : 0;
-    if (reduceMotion) {
-      this.amount.value = amountTarget;
-      this.amount.velocity = 0;
-      this.position.value = this.positionTarget;
-      this.position.velocity = 0;
-    } else {
-      pressureSpring(this.amount, amountTarget, seconds, this.dragging ? 520 : 540, this.dragging ? 28 : 31);
-      pressureSpring(this.position, this.positionTarget, seconds, this.dragging ? 420 : 360, this.dragging ? 31 : 27);
-    }
-    this.amount.value = clamp(this.amount.value, 0, 1.12);
-    this.position.value = clamp(this.position.value);
-    this.render();
-    const settled = Math.abs(this.amount.value - amountTarget) < 0.004
-      && Math.abs(this.amount.velocity) < 0.018
-      && Math.abs(this.position.value - this.positionTarget) < 0.003
-      && Math.abs(this.position.velocity) < 0.018;
-    if (!settled) this.frameId = requestAnimationFrame((next) => this.tick(next));
-    else {
-      this.amount.value = amountTarget;
-      this.position.value = this.positionTarget;
-      this.render();
-    }
+  nextSettled() {
+    return new Promise((resolve) => {
+      this.settled = false;
+      this.settledWaiters.push(() => resolve(this));
+    });
+  }
+
+  setMaterial(material) {
+    makeMaterialV2({ ...(this.options.material ?? {}), ...(material ?? {}) });
+    this.material = { ...this.material, ...(material ?? {}) };
+    this.baseGlass?.setMaterial(this.material, false);
+    this.pressGlass?.setMaterial(getPressedControlMaterialV2(this.material), false);
+    this.staticDirty = true;
+    wake(34);
+    return this;
   }
 
   setDisabled(disabled) {
@@ -567,68 +755,78 @@ class LiquidGlassControl {
     return this;
   }
 
+  /** Re-resolve the backdrop and redraw on the next frame. */
+  refresh() {
+    if (this.destroyed) return this;
+    this.layers = resolveLayers(normalizeBackdrop(this.options.backdrop), this.container);
+    this.watchStyles();
+    this.staticDirty = true;
+    this.dirty = true;
+    wake(64);
+    return this;
+  }
+
+  /** Alias of `refresh()`, kept from 2.2. */
+  updateBackdrop() {
+    return this.refresh();
+  }
+
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
-    if (this.frameId) cancelAnimationFrame(this.frameId);
+    removeClient(this);
     this.resizeObserver?.disconnect();
-    this.baseGlass?.destroy();
-    this.pressGlass?.destroy();
-    this.container.removeEventListener('pointerdown', this.onPointerDown);
-    this.container.removeEventListener('pointermove', this.onPointerMove);
-    this.container.removeEventListener('pointerup', this.onPointerEnd);
-    this.container.removeEventListener('pointercancel', this.onPointerEnd);
-    this.container.removeEventListener('lostpointercapture', this.onPointerEnd);
-    this.container.removeEventListener('keydown', this.onKeyDown);
-    for (const element of [
-      this.backdropCanvas, this.baseCanvas, this.trackCanvas,
-      this.pressCanvas, this.restCanvas, this.compositeCanvas, this.labelLayer,
-    ]) element.remove();
-    delete this.container.dataset.liquidGlassControl;
-    Object.assign(this.container.style, this.original.style);
-    for (const [attribute, value] of [
-      ['tabindex', this.original.tabIndex],
-      ['role', this.original.role],
-      ['aria-checked', this.original.ariaChecked],
-      ['aria-label', this.original.ariaLabel],
-      ['aria-disabled', this.original.ariaDisabled],
-    ]) {
-      if (value === null) this.container.removeAttribute(attribute);
-      else this.container.setAttribute(attribute, value);
+    this.styleObserver?.disconnect();
+    this.unsubscribeAssets?.();
+    releaseGlass(this.baseGlass);
+    releaseGlass(this.pressGlass);
+    this.baseGlass = null;
+    this.pressGlass = null;
+    const { container } = this;
+    container.removeEventListener('pointerdown', this.onPointerDown);
+    container.removeEventListener('pointermove', this.onPointerMove);
+    container.removeEventListener('pointerup', this.onPointerEnd);
+    container.removeEventListener('pointercancel', this.onPointerEnd);
+    container.removeEventListener('lostpointercapture', this.onPointerEnd);
+    container.removeEventListener('keydown', this.onKeyDown);
+    container.removeEventListener('focus', this.onFocusChange);
+    container.removeEventListener('blur', this.onFocusChange);
+    for (const node of [this.baseCanvas, this.trackCanvas, this.pressCanvas, this.restCanvas, this.labelLayer]) {
+      node?.remove();
     }
+    delete container.dataset.liquidGlassControl;
+    for (const [property, value] of this.restore.reverse()) container.style[property] = value;
+    for (const [attribute, value] of this.originalAttributes) {
+      if (value === null) container.removeAttribute(attribute);
+      else container.setAttribute(attribute, value);
+    }
+    if (registry.get(container) === this) registry.delete(container);
+    this.settledWaiters.splice(0).forEach((resolve) => resolve());
   }
 }
 
-/** Two-item, draggable liquid-glass navigation control. */
+/** Segmented liquid glass navigation with two or more items. */
 export class LiquidGlassNavbar extends LiquidGlassControl {
   constructor(container, options = {}) {
     super(container, options, 'navbar');
   }
 
   setValue(value, { notify = false } = {}) {
-    const index = this.resolveNavbarIndex(value);
-    this.positionTarget = index;
-    this.position.value = index;
-    this.commitValue(index, notify);
-    this.render();
-    return this;
+    return this.jumpTo(this.indexOf(value), notify);
   }
 }
 
-/** Draggable, keyboard-accessible liquid-glass switch. */
+/** Draggable, keyboard-accessible liquid glass switch. */
 export class LiquidGlassSwitch extends LiquidGlassControl {
   constructor(container, options = {}) {
     super(container, options, 'switch');
   }
 
-  get checked() { return Boolean(this.value); }
+  get checked() {
+    return Boolean(this.value);
+  }
 
   setChecked(checked, { notify = false } = {}) {
-    const index = checked ? 1 : 0;
-    this.positionTarget = index;
-    this.position.value = index;
-    this.commitValue(index, notify);
-    this.render();
-    return this;
+    return this.jumpTo(checked ? 1 : 0, notify);
   }
 }

@@ -1,32 +1,23 @@
 # apple-liquid-glass-webgl
 
-Framework-free WebGL2 liquid glass. Two renderers, one element contract:
-
-- **V1** `LiquidGlassWebGL` — the frosted original: bevel height field, variable blur, smooth-union fusion.
-- **V2** `LiquidGlassWebGLV2` — the clear optical model: edge capture, pre-blurred refraction, pressed lens.
-
-Shapes: `folder`, `rect`, `pill`, `circle`. Coordinates are CSS pixels. Backdrops are images, canvases, videos, `ImageBitmap` or `OffscreenCanvas`.
+Apple-style liquid glass for the web, rendered with WebGL2. Point it at an element and it refracts what is actually behind that element on the page, while it scrolls, resizes and animates.
 
 <table align="center" width="100%">
   <tr>
     <td align="center" width="50%">
-      <img src="assets/readme/v2-home-warm-interaction.gif" alt="Liquid Glass V2 Home screen interaction on the warm wallpaper" width="100%">
+      <img src="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-home-warm-interaction.gif" alt="Liquid Glass V2 Home screen interaction on the warm wallpaper" width="100%">
     </td>
     <td align="center" width="50%">
-      <img src="assets/readme/v2-home-sunset-interaction.gif" alt="Liquid Glass V2 Home screen interaction on the sunset wallpaper" width="100%">
+      <img src="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-home-sunset-interaction.gif" alt="Liquid Glass V2 Home screen interaction on the sunset wallpaper" width="100%">
     </td>
   </tr>
 </table>
 
 <p align="center">
-  <img src="assets/readme/v2-press-effects-interaction.gif" alt="Liquid Glass V2 press effects interaction" width="100%">
+  <img src="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-press-effects-interaction.gif" alt="Liquid Glass V2 press effects interaction" width="100%">
 </p>
 
-<p align="center">
-  <img src="assets/readme/v2-glass-showcase.gif" alt="Liquid Glass V2 live scrolling backdrop" width="100%">
-</p>
-
-Playground: [oliverrr2424.github.io/webgl-apple-liquid-glass](https://oliverrr2424.github.io/webgl-apple-liquid-glass/)
+[Playground](https://oliverrr2424.github.io/webgl-apple-liquid-glass/) · [Landing page example](examples/landing)
 
 ## Install
 
@@ -34,207 +25,257 @@ Playground: [oliverrr2424.github.io/webgl-apple-liquid-glass](https://oliverrr24
 npm install apple-liquid-glass-webgl
 ```
 
-WebGL2 required. Give the canvas a CSS size before rendering. Feature-detect instead of catching the constructor:
-
-```js
-if (!LiquidGlassWebGL.isSupported()) panel.classList.add('css-fallback');
-```
-
 ## Quick start
 
 ```js
-import { LiquidGlassWebGLV2, getDefaultMaterialV2 } from 'apple-liquid-glass-webgl/v2';
+import { LiquidGlass } from 'apple-liquid-glass-webgl';
 
-const glass = new LiquidGlassWebGLV2(document.querySelector('canvas'), {
-  material: getDefaultMaterialV2(),
-  compositeMode: 'overlay',          // transparent outside the glass
-});
-
-await glass.loadBackdrop('/images/wallpaper.jpg');
-glass.setElements([
-  { id: 'bar',  shape: 'pill', x: 100, y: 28, width: 560, height: 66 },
-  { id: 'card', shape: 'rect', x: 18, y: 120, width: 357, height: 78, tint: 0.86, tintTone: 'light' },
-]);
-glass.render();
+new LiquidGlass('.navbar');
 ```
 
-V1 is the same API with a different material and `fusion`:
+That is the whole integration:
+
+- The element keeps its content, layout and events. The glass is drawn behind its children.
+- Shape and corner radius come from its CSS `border-radius`.
+- It follows the element through scrolling, resizing, CSS transitions and JS animation.
+- Without WebGL2 it falls back to `backdrop-filter`. The element gets `data-liquid-glass="webgl"` or `"fallback"` for styling.
+
+## What is behind the glass
+
+Browsers do not let WebGL read page pixels, so the glass has to be told what is behind it. The default, `backdrop: 'auto'`, reads the page. It picks up CSS backgrounds (colors, images, gradients) of the page and the element's ancestors, plus large backgrounds painted before it, such as a full-screen `<video>`, `<canvas>` or fixed gradient `<div>`. When that is not enough, say what is behind:
+
+| `backdrop` | Use it for |
+| --- | --- |
+| `'auto'` | CSS backgrounds and full-screen media (default) |
+| `'#hero-video'` or an element | a specific `<img>`, `<video>`, `<canvas>`, or an element's CSS background, where it sits on the page |
+| `'/wallpaper.jpg'` | an image covering the viewport, like a fixed wallpaper |
+| `{ source, fit, position, anchor }` | an image/canvas/video fitted like `object-fit` into `'viewport'`, `'document'` or an element |
+| `(ctx, region) => { … }` | anything else: draw it yourself in page coordinates |
+| `[ … ]` | several of the above, bottom to top |
+
+Everything is registered in page coordinates, so the part of the photo under a card is the part of the photo under that card. `auto` captures **backgrounds only**. Text and images in the page flow are not captured; paint them yourself if they pass under the glass (see [Content under the glass](#content-under-the-glass)).
+
+## Options
 
 ```js
-import { LiquidGlassWebGL } from 'apple-liquid-glass-webgl';
-const v1 = new LiquidGlassWebGL(canvas, { material: 'regular', fusion: true });
+new LiquidGlass(element, {
+  tint: 0.2,            // milky layer, 0–1.5 (default 0: clear)
+  tintTone: 'dark',     // 'light' (default), 'dark', or 'auto' from the backdrop
+  frost: 0.3,           // blur behind the lens, as a ratio of the short side (default 0)
+  backdrop: 'auto',
+  material: { refraction: 70 },   // partial V2 material, see below
+});
 ```
 
-Both classes can run at once. Materials are not interchangeable: V2 throws on V1 preset names and on unknown keys rather than applying a value in the wrong unit.
+| Option | Default | |
+| --- | --- | --- |
+| `tint`, `tintTone`, `frost`, `opacity` | `0`, `'light'`, `0`, `1` | The look. Use `tintTone: 'dark'` behind white text. |
+| `backdrop` | `'auto'` | See above. |
+| `material` | V2 default | Partial [material](#material). Unknown keys throw. |
+| `targets` | — | Selector or elements: draw several descendants as glass on one canvas. |
+| `shape`, `radius` | from CSS | `'rect' \| 'pill' \| 'circle'`, CSS px. |
+| `live` | `'auto'` | Redraw every frame. `auto` is on while a video plays or a canvas is in the backdrop. |
+| `fallback` | `'css'` | `'css'`, `'none'`, or `(element) => {}`. |
+| `maxDpr` | `2` | Resolution cap. |
+| `zIndex` | `-1` | Glass layer inside the element: behind its content. |
+| `respectReducedTransparency` | `true` | Near-opaque glass under `prefers-reduced-transparency`. |
 
-## Elements
+```js
+const glass = new LiquidGlass('.card', options);
+await glass.ready;                 // first frame drawn, images loaded
+glass.update({ tint: 0.4 });       // merge options
+glass.refresh();                   // re-read selectors and repaint
+glass.destroy();                   // restores the element, frees the WebGL context
 
-```ts
-{ id, shape, x, y, width, height | size,
-  radius?,                     // explicit CSS-px corner (V2), else roundness ratio
-  tint?, tintTone?,            // V2: per-surface tint opacity, 'light' | 'dark' | 'auto'
-  frost?, opacity?,            // V2: per-surface softness ratio / fade
-  pressure?, pressureAxes? }   // V2: pressed lens 0..1, per-axis squash weights [x, y]
+LiquidGlass.isSupported();         // WebGL2 available
+LiquidGlass.from('.card');         // the instance on an element
+LiquidGlass.refreshAll();          // repaint everything next frame
 ```
 
-`pressure` squashes what is seen through the glass while a control is held. `pressureAxes` (default `[1, 1]`) weights that squash per axis, so a capsule can flatten without shortening. Overlapping V2 surfaces resolve in element order; V1 `fusion` / `mergeRadius` do not apply to V2.
+## Recipes
 
-## V2 material
+### Readable text
 
-`getDefaultMaterialV2()` returns a fresh copy. Ratios are relative to the component short side, so one material scales from a 40 px toggle to a 400 px card.
+Clear glass over a busy photo is beautiful and unreadable. Give text a body. `tint` ramps in gently, so readable values sit around 0.5–0.8:
+
+```js
+new LiquidGlass('.panel', { frost: 0.45, tint: 0.5, tintTone: 'light' }); // dark text
+new LiquidGlass('.toast', { frost: 0.3, tint: 0.7, tintTone: 'dark' });   // white text
+```
+
+### A grid of cards
+
+Each `LiquidGlass` uses one WebGL context, and browsers allow about 16. Put a group on one canvas:
+
+```js
+new LiquidGlass('.card-grid', { targets: '.card', frost: 0.3, tint: 0.2 });
+```
+
+Cards added or removed later are picked up. For per-card looks, pass `targets: [{ element, tint, frost }]`.
+
+### Video, canvas and WebGL backgrounds
+
+A full-screen `<video>` or `<canvas>` behind the page is found by `auto` and redrawn while it changes. Point at it explicitly if it is smaller or not behind everything: `backdrop: '#bg-video'`.
+
+A WebGL canvas (three.js, Pixi, …) is cleared after each frame. Create it with `preserveDrawingBuffer: true`, or call `LiquidGlass.refreshAll()` right after you render.
+
+### React, Vue, Svelte
+
+Mount after the element exists and destroy on unmount. This is safe under React StrictMode's double mount.
+
+```jsx
+function Glass({ options, ...props }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const glass = new LiquidGlass(ref.current, options);
+    return () => glass.destroy();
+  }, []);
+  return <div ref={ref} {...props} />;
+}
+```
+
+```js
+// Vue
+onMounted(() => { glass = new LiquidGlass(el.value, { tint: 0.2 }); });
+onBeforeUnmount(() => glass.destroy());
+
+// Svelte action: <nav use:liquidGlass={{ tint: 0.2 }}>
+export const liquidGlass = (node, options) => {
+  const glass = new LiquidGlass(node, options);
+  return { update: (next) => glass.update(next), destroy: () => glass.destroy() };
+};
+```
+
+Importing is safe during server rendering. Construct only in the browser (effects, `onMounted`).
+
+### Content under the glass
+
+Draw extra layers with a painter. The context is already in page coordinates, so `getBoundingClientRect()` values land where they are on screen:
+
+```js
+const title = document.querySelector('h1');
+new LiquidGlass('.sticky-bar', {
+  backdrop: ['auto', (ctx) => {
+    const box = title.getBoundingClientRect();
+    const style = getComputedStyle(title);
+    ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    ctx.fillStyle = style.color;
+    ctx.textBaseline = 'top';
+    ctx.fillText(title.textContent, box.left, box.top);
+  }],
+});
+```
+
+### Changes the page does not announce
+
+Scroll, resize, CSS transitions and inline-style or class changes on the element, its ancestors or its backdrop elements are all picked up. Drawing into a canvas, or moving something unrelated that sits behind the glass, is not: call `LiquidGlass.refreshAll()`, or set `live: true` while it happens.
+
+## Navbar and switch
+
+Ready-made controls with the pressed liquid lens, drag, springs, keyboard and ARIA. Size them with CSS; like `LiquidGlass`, they read the page behind them.
+
+```js
+import { LiquidGlassNavbar, LiquidGlassSwitch } from 'apple-liquid-glass-webgl';
+
+const nav = new LiquidGlassNavbar('#nav', {        // #nav { width: 330px; height: 56px }
+  items: [
+    { value: 'home', label: 'Home' },
+    { value: 'work', label: 'Work', icon: '▣' },
+    { value: 'read', label: 'Read' },
+  ],
+  value: 'home',
+  onChange: (value, index) => router.push(value),
+});
+
+const toggle = new LiquidGlassSwitch('#dark-mode', { // #dark-mode { width: 64px; height: 30px }
+  checked: false,
+  onChange: (checked) => document.documentElement.classList.toggle('dark', checked),
+});
+
+nav.setValue('work');                  // controlled update, no onChange
+toggle.setChecked(true, { notify: true });
+```
+
+Options shared with `LiquidGlass`: `backdrop`, `material`, `live`. The navbar also takes `tint` (track, default `0.86`), `labelColor`, `fontSize`, `lens`. Both take `disabled` and `ariaLabel`, and dispatch a bubbling `change` event. An unsized container gets 312×72 (navbar) or 92×40 (switch). Leave `overflow` visible: the pressed lens grows past the track.
+
+## Material
+
+`getDefaultMaterialV2()` returns a fresh copy. Ratios are relative to each surface's short side, so one material works from a 40 px toggle to a 400 px card.
 
 | Group | Key | Default | Meaning |
 | --- | --- | ---: | --- |
 | Transmission | `refraction` | `84` | Body bending strength (0–110) |
-| | `edgeReach` | `0.17` | Capture distance / short side. `0` disables capture |
+| | `edgeReach` | `0.17` | Edge capture distance / short side. `0` disables capture |
 | | `edgeWidth` | `0.11` | Capture band width / short half-side |
-| | `dispersion` | `2.0` | RGB sample split, display px |
-| | `frost` | `0` | Pre-blur radius / short side (softness ratio) |
-| | `backdropBlur` | `0` | Pre-blur radius, CSS px. Combines with `frost` in quadrature |
+| | `dispersion` | `2.0` | RGB split, display px |
+| | `frost` | `0` | Pre-blur radius / short side (per-element `frost` overrides) |
+| | `backdropBlur` | `0` | Pre-blur radius in CSS px; combines with `frost` |
 | | `body` | `0.72` | Glass body density |
 | | `absorption` | `0.58` | Path absorption |
-| | `tint` | `0` | Tint opacity (element `tint` overrides) |
+| | `tint` | `0` | Tint opacity (per-element `tint` overrides) |
 | Reflection | `rim` | `0.24` | Edge light |
-| | `reflection` | `0.31` | Backdrop reflection |
-| | `highlight` | `0.34` | Specular highlight |
+| | `reflection` | `0.31` | Backdrop reflection in the rim |
+| | `highlight` | `0.34` | Specular highlight; `0` removes it |
 | | `lightAngle` | `136` | Fallback light direction, degrees |
 | | `echo` | `0.28` | Inner echo |
 | Interface | `hairline` | `0.92` | Contour line strength |
 | | `hairWidth` | `0.52` | Contour line width |
-| | `roundness` | `0.47` | Corner radius / short half-side |
+| | `roundness` | `0.47` | Corner radius / short half-side, when there is no CSS radius |
 
-`frost` and `backdropBlur` are the same operation — the backdrop is blurred *before* the lens bends it — differing only in units. Old pixel-based `edgeReach` values divide by the intended component short side.
+The playground edits every value live; **Copy code** gives you the material.
 
-Live backdrops: transmission updates every frame; the light probe is rate-limited (~84 ms), read back on a Worker so frames never wait on the GPU, and the detected light direction eases over ~280 ms.
+## Canvas renderer
 
-## Ready-made navbar and switch
-
-The package includes framework-free controls that create their own canvas layers, pointer/keyboard interaction, spring animation and accessibility state. Give each control a container and a backdrop image, canvas or video:
+`LiquidGlassWebGLV2` is the renderer underneath. Use it when you own the canvas and compose the frame yourself: canvas apps, games, WebGL scenes. Coordinates are canvas CSS pixels, and the backdrop is whatever you hand it.
 
 ```js
-import {
-  LiquidGlassNavbar,
-  LiquidGlassSwitch,
-} from 'apple-liquid-glass-webgl/controls';
+import { LiquidGlassWebGLV2 } from 'apple-liquid-glass-webgl';
 
-const navbar = new LiquidGlassNavbar(document.querySelector('#navbar'), {
-  backdrop: '/wallpaper.jpg',
-  items: [
-    { value: 'gallery', label: 'Gallery', icon: '▣' },
-    { value: 'featured', label: 'Featured', icon: '▰' },
-  ],
-  value: 'gallery',
-  onChange: (value) => console.log(value),
-});
-
-const toggle = new LiquidGlassSwitch(document.querySelector('#toggle'), {
-  backdrop: '/wallpaper.jpg',
-  checked: false,
-  onChange: (checked) => console.log(checked),
-});
-
-await Promise.all([navbar.ready, toggle.ready]);
-
-// Controlled updates and cleanup:
-navbar.setValue('featured');
-toggle.setChecked(true);
-navbar.destroy();
-toggle.destroy();
+const glass = new LiquidGlassWebGLV2(canvas, { compositeMode: 'overlay' });
+glass.setBackdrop(sceneCanvas);         // canvas/video: live, image: static
+glass.setElements([
+  { id: 'bar', shape: 'pill', x: 100, y: 28, width: 560, height: 66, tint: 0.2 },
+  { id: 'lens', shape: 'circle', x: 300, y: 200, size: 120, pressure: 0.6 },
+]);
+glass.render();
 ```
 
-The navbar defaults to the compact `312 × 96` short-pill geometry. Set `width` / `height` to change it. Resting material can be customized with `material`; pressed transmission remains on the tuned control recipe while reflection and interface values inherit from that material.
+- **Elements:** `{ id, shape: 'rect' | 'pill' | 'circle', x, y, width, height | size, radius, tint, tintTone, frost, opacity, pressure, pressureAxes }`. `pressure` (0–1) squashes what is seen through a held control; `pressureAxes` weights it per axis.
+- **Backdrop:** `setBackdrop(source, { update: 'auto' | 'static' | 'live' })`, `loadBackdrop(url)`, `updateBackdrop()` after you draw into a static source. `compositeMode: 'replace'` (default) paints the backdrop too; `'overlay'` leaves the rest of the canvas transparent.
+- **Frames:** `render()` is a no-op when nothing changed, and `render({ force: true })` always draws. `start()` / `stop()` run a loop for live sources.
+- **Hit testing:** `hitTestEvent(event)`, `hitTest(x, y)` and `distanceAt(x, y)` use the shader's own geometry.
+- Also: `setMaterial(partial)`, `updateElement(id, patch)`, `resize()`, `destroy()`, `onContextLost` / `onContextRestored` (context loss is handled), `effectiveMaterial` (after reduced transparency).
 
-A complete dependency-installed Vanilla example is in [`examples/controls-quickstart`](examples/controls-quickstart): run `npm install && npm start` inside that directory.
+<details>
+<summary>V1 renderer</summary>
 
-## V1 material
-
-`getDefaultMaterial()` / `makeMaterial('regular' | 'clear' | 'lens')`. Lengths are CSS pixels; `sizeAdaptation` (default `1`) fits them to small controls — the rim caps at 30 % of the short side and height, blur and highlights follow.
-
-| Group | Keys (default) |
-| --- | --- |
-| Shape | `radius` 64, `squircle` 2, `mergeRadius` 52, `bevel` 34, `height` 21, `sizeAdaptation` 1 |
-| Optics | `ior` 2, `dispersion` 0.06, `refractScale` 3, `meniscus` 1, `blurPlateau` 4.5, `blurRim` 11, `opticalDensity` 0.4 |
-| Lighting | `specular` 0.89, `specPower` 29.5, `highlightAdapt` 0.91, `highlightWidth` 0.87, `highlightSharpness` 0.55, `highlightBase` 0.3, `fresnel` 0.65, `saturation` 1.35, `brightness` 0, `tintAmount` 0.02, `tintAdapt` 0.14 |
-| Edge | `shadow` 0.09, `shadowSize` 4, `shadowOffset` 0, `lightX` -0.18, `lightY` 0.08, `edgeLine` 0.3, `edgeWidth` 0.5, `edgeDark` 0.02 |
-
-Plus `tintColor: [1, 1, 1]` and `debug: 0` (1 thickness, 2 normals, 3 dispersion). The backdrop is stored in `SRGB8_ALPHA8` and filtered in linear light; output is dithered sub-LSB.
-
-## Backdrops
+`LiquidGlassWebGL` is the original frosted model: bevel height field, variable blur, and smooth-union fusion of nearby shapes. Same element and backdrop API; its material is separate and not interchangeable with V2.
 
 ```js
-await glass.loadBackdrop('/img.jpg');                 // static, uploads once
-glass.setBackdrop(canvasOrVideo);                     // live source: auto-detected, loop starts
-glass.setBackdrop(src, { update: 'static', autoStart: false });
-glass.updateBackdrop();                               // re-upload a static source you drew into
-glass.start(); glass.stop();
+import { LiquidGlassWebGL, makeMaterial } from 'apple-liquid-glass-webgl';
+const v1 = new LiquidGlassWebGL(canvas, { material: 'regular', fusion: true }); // 'regular' | 'clear' | 'lens'
 ```
 
-`compositeMode: 'replace'` (default) paints the backdrop across the canvas; `'overlay'` leaves everything outside the glass transparent. Browsers do not expose composited DOM pixels to WebGL — supply the backdrop yourself. Cross-origin sources need CORS. Live uploads use `RGBA8` with sRGB decoded in-shader, which keeps Chrome/ANGLE on the GPU-to-GPU path on Windows.
+Lengths are CSS pixels, and `sizeAdaptation` fits them to small controls. `setFusion(enabled, mergeRadius)` controls merging. See `src/index.d.ts` for every material key.
+</details>
 
-## Rendering
+## Limits
 
-```js
-glass.render();                 // no-op when nothing changed
-glass.render({ force: true });  // always draws (for readPixels)
-glass.markDirty();              // after mutating glass.material in place
-glass.markBackdropDirty();      // after drawing into a static backdrop source
-```
-
-Every mutator marks the surface dirty; the backdrop mip chain has its own flag, so moving a shape redraws only the glass pass. Live backdrops always redraw. `autoResize` (on) redraws on canvas resize. Pass `preserveDrawingBuffer: true` if you read the canvas back after composite.
-
-The shader carries 16 shapes per pass; distant clusters are split into passes automatically (V1 warns when a single fused cluster exceeds 16).
-
-## Hit testing
-
-Evaluates the same SDF as the shader — a circle's corners miss, a fused bridge hits.
-
-```js
-const el = glass.hitTestEvent(event);           // element | null
-const { x, y } = glass.pointerPosition(event);  // canvas CSS px
-glass.hitTest(x, y, { tolerance: 8 });
-glass.distanceAt(x, y);                         // signed, negative inside
-```
-
-## Context loss & accessibility
-
-Context loss is handled: the canvas keeps its last frame, calls become no-ops, and programs/textures are rebuilt on restore (`onContextLost`, `onContextRestored`, `glass.contextLost`).
-
-`prefers-reduced-transparency: reduce` swaps in a near-opaque material (no refraction, dispersion or scattering; shape, edge and shadow remain). Opt out with `respectReducedTransparency: false`; `glass.effectiveMaterial` is what is actually in use.
-
-## API
-
-```js
-LiquidGlassWebGL.isSupported()
-glass.setMaterial('clear' | { blurPlateau: 4 })
-glass.setElements(list, shouldRender = true)
-glass.addElement(el) / updateElement(id, patch) / removeElement(id)
-glass.setFusion(true, 52)          // V1 only
-glass.resize() / destroy()
-```
-
-Exports: `SHAPES`, `COMPOSITE_MODES`, `BACKDROP_UPDATES`, `DEFAULT_MATERIAL`, `getDefaultMaterial`, `makeMaterial`, geometry helpers `sdGroup`, `hitTestElements`, `connectedElementGroups`, `groupElements`.
-From `/v2`: `DEFAULT_MATERIAL_V2`, `getDefaultMaterialV2`, `makeMaterialV2`, `distanceToElementsV2`, `hitTestElementsV2`.
-
-## Playground
-
-```bash
-npm install && npm run serve      # http://localhost:8765
-```
-
-Four scenes (Press, iPhone Home, live Scroll feed, wallpaper gallery), V1/V2 switch with independent materials, every parameter as slider + typed value (double-click a label to reset it), light/dark glass, navigation-lens geometry for the Press selector, image/video backdrop upload, fps / CPU / buffer readout. **Copy link** serialises the session into the URL; **Copy code** emits the reproducing snippet.
+- About 16 WebGL contexts per page. A `LiquidGlass` element or switch uses one and a navbar uses two. Group with `targets`.
+- `auto` captures backgrounds, not text, borders or shadows. Use a painter for those.
+- Scale and translate transforms are followed; rotation is not.
+- Cross-origin images need CORS headers.
 
 ## Development
 
 ```bash
-npm test                     # unit (node --test) + browser pages (Playwright)
-npm run test:visual          # SwiftShader golden comparison; --update to re-record
-npm run shot out.png -- --scene 0 --size 1200x720 --no-panel
-npm run pack:check
+npm install
+npm run serve             # playground at http://localhost:8765, example at /examples/landing/
+npm test                  # unit tests + browser pages in headless Chromium
+npm run test:visual       # golden screenshots; --update to re-record
 ```
 
-`tests/*.test.mjs` cover geometry, material and permalink rules. `tests/*.html` each export `window.runTest()` and cover live/static backdrops, context loss, dirty tracking (draw-call counts), V2 optics and light probing. Baselines live in `shots/baseline/<renderer>/`.
-
-Pushes to `main` run [`ci.yml`](.github/workflows/ci.yml), then [`publish-npm.yml`](.github/workflows/publish-npm.yml) publishes with provenance when `package.json` is ahead of npm (needs the `NPM_TOKEN` secret).
+Pushes to `main` run [CI](.github/workflows/ci.yml); [publish-npm.yml](.github/workflows/publish-npm.yml) publishes when `package.json` is ahead of npm.
 
 ## License
 
