@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8">
+<canvas style="width:640px;height:400px"></canvas>
+<script type="module">
+import { LiquidGlassWebGLV2 } from '../src/v2.js';
+window.runTest = () => {
+  const backing = document.createElement('canvas');
+  backing.width = 640; backing.height = 400;
+  const ctx = backing.getContext('2d');
+  ctx.fillStyle = '#689ac0'; ctx.fillRect(0, 0, 640, 400);
+  const glass = new LiquidGlassWebGLV2(document.querySelector('canvas'), {
+    autoResize: false, elements: [{shape:'pill', x:70,y:220,w:500,h:110}],
+  });
+  glass.setBackdrop(backing, {update:'live',autoStart:false,shouldRender:false});
+  const gl = glass.renderer.gl;
+  let draws = 0;
+  const draw = gl.drawArrays.bind(gl);
+  gl.drawArrays = (...args) => { draws++; return draw(...args); };
+  try {
+    for (let i = 0; i < 32; i++) {
+      ctx.fillStyle = i % 2 ? '#21415e' : '#afbcda';
+      ctx.fillRect(i * 7, 0, 6, 400);
+      draws = 0;
+      glass.render({dpr:1});
+    }
+    // Wall + downsample mip chain + background + glass. No unused V1 upsample.
+    if (draws !== glass.renderer.mipLevels + 2) throw new Error(`Unexpected live V2 passes: ${draws}`);
+    return {checks:[`live draws=${draws}`, 'unused V1 reconstruction skipped']};
+  } finally { glass.destroy(); }
+};
+</script>

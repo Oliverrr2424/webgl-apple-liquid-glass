@@ -145,7 +145,7 @@ export function attachPressEffects({
       // point on release.
       press.sliderTarget = press.sliderTarget >= 0.5 ? 1 : 0;
       if (!cancelled) {
-        const selectionBar = press.sliderTrackId === 'selection-track';
+        const selectionBar = press.sliderTrackId.includes('selection-track');
         announce(selectionBar
           ? (press.sliderTarget ? 'Discover selected.' : 'Home selected.')
           : (press.sliderTarget ? 'Green toggle on.' : 'Green toggle off.'));

@@ -4,8 +4,9 @@
     {
       "name": "liquid-glass",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8765"],
-      "port": 8765
+      "runtimeArgs": ["-c", "import os, runpy, sys; sys.argv = ['http.server', os.environ.get('PORT', '8765')]; runpy.run_module('http.server', run_name='__main__')"],
+      "port": 8765,
+      "autoPort": true
     }
   ]
 }

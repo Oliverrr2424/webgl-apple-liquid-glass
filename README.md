@@ -1,14 +1,11 @@
 # apple-liquid-glass-webgl
 
-Reusable WebGL2 liquid glass surfaces for folders, rectangles, pills, and circles, with the
-original frosted V1 renderer and the clear optical V2 renderer available side by side.
+Framework-free WebGL2 liquid glass. Two renderers, one element contract:
 
-This package is framework-free and renders Apple-inspired translucent surfaces with screen-space refraction, variable blur, Fresnel reflection, chromatic dispersion, edge highlights, and contact shadows.
+- **V1** `LiquidGlassWebGL` — the frosted original: bevel height field, variable blur, smooth-union fusion.
+- **V2** `LiquidGlassWebGLV2` — the clear optical model: edge capture, pre-blurred refraction, pressed lens.
 
-## V2 demos
-
-The current playground interactions are captured below. The final recording is the
-live scrolling backdrop demo.
+Shapes: `folder`, `rect`, `pill`, `circle`. Coordinates are CSS pixels. Backdrops are images, canvases, videos, `ImageBitmap` or `OffscreenCanvas`.
 
 <table align="center" width="100%">
   <tr>
@@ -29,359 +26,215 @@ live scrolling backdrop demo.
   <img src="assets/readme/v2-glass-showcase.gif" alt="Liquid Glass V2 live scrolling backdrop" width="100%">
 </p>
 
+Playground: [oliverrr2424.github.io/webgl-apple-liquid-glass](https://oliverrr2424.github.io/webgl-apple-liquid-glass/)
+
 ## Install
 
 ```bash
 npm install apple-liquid-glass-webgl
 ```
 
-WebGL2 is required. Give the canvas a CSS width and height before rendering.
-
-Check support before constructing, so a browser without WebGL2 can fall back instead of catching a constructor throw:
+WebGL2 required. Give the canvas a CSS size before rendering. Feature-detect instead of catching the constructor:
 
 ```js
-if (LiquidGlassWebGL.isSupported()) {
-  const glass = new LiquidGlassWebGL(canvas);
-} else {
-  panel.classList.add('css-fallback');
-}
+if (!LiquidGlassWebGL.isSupported()) panel.classList.add('css-fallback');
 ```
 
-## Usage
+## Quick start
 
 ```js
-import { LiquidGlassWebGL } from 'apple-liquid-glass-webgl';
+import { LiquidGlassWebGLV2, getDefaultMaterialV2 } from 'apple-liquid-glass-webgl/v2';
 
-const canvas = document.querySelector('canvas');
-const glass = new LiquidGlassWebGL(canvas, {
-  material: 'regular',
-  fusion: true,
+const glass = new LiquidGlassWebGLV2(document.querySelector('canvas'), {
+  material: getDefaultMaterialV2(),
+  compositeMode: 'overlay',          // transparent outside the glass
 });
 
-await glass.setWallpaper('/images/wallpaper.jpg');
+await glass.loadBackdrop('/images/wallpaper.jpg');
 glass.setElements([
-  { id: 'folder', shape: 'folder', x: 80, y: 80, width: 220, height: 220 },
-  { id: 'rect', shape: 'rect', x: 360, y: 100, width: 280, height: 190 },
-  { id: 'pill', shape: 'pill', x: 700, y: 130, width: 250, height: 110 },
-  { id: 'circle', shape: 'circle', x: 1000, y: 130, size: 110 },
+  { id: 'bar',  shape: 'pill', x: 100, y: 28, width: 560, height: 66 },
+  { id: 'card', shape: 'rect', x: 18, y: 120, width: 357, height: 78, tint: 0.86, tintTone: 'light' },
 ]);
 glass.render();
 ```
 
-The component accepts CSS-pixel coordinates. Content such as app icons, labels, or buttons can be drawn in a separate canvas layer above the WebGL canvas. Optical lengths automatically scale down when a component's short side is too small for the configured bevel: the refracting rim is capped at 30% of that side, and glass height, blur, highlights, and their backdrop probes follow the same scale. Large components and materials that already use a narrow bevel are unchanged.
+V1 is the same API with a different material and `fusion`:
 
-## V1 and V2 can be used together
+```js
+import { LiquidGlassWebGL } from 'apple-liquid-glass-webgl';
+const v1 = new LiquidGlassWebGL(canvas, { material: 'regular', fusion: true });
+```
 
-`LiquidGlassWebGL` remains the original V1 API. `LiquidGlassWebGLV2` is the transparent/clear
-optical model. They are separate classes with separate material objects, so an application can
-render both versions at once without a global mode or an implicit parameter conversion.
+Both classes can run at once. Materials are not interchangeable: V2 throws on V1 preset names and on unknown keys rather than applying a value in the wrong unit.
+
+## Elements
+
+```ts
+{ id, shape, x, y, width, height | size,
+  radius?,                     // explicit CSS-px corner (V2), else roundness ratio
+  tint?, tintTone?,            // V2: per-surface tint opacity, 'light' | 'dark' | 'auto'
+  frost?, opacity?,            // V2: per-surface softness ratio / fade
+  pressure?, pressureAxes? }   // V2: pressed lens 0..1, per-axis squash weights [x, y]
+```
+
+`pressure` squashes what is seen through the glass while a control is held. `pressureAxes` (default `[1, 1]`) weights that squash per axis, so a capsule can flatten without shortening. Overlapping V2 surfaces resolve in element order; V1 `fusion` / `mergeRadius` do not apply to V2.
+
+## V2 material
+
+`getDefaultMaterialV2()` returns a fresh copy. Ratios are relative to the component short side, so one material scales from a 40 px toggle to a 400 px card.
+
+| Group | Key | Default | Meaning |
+| --- | --- | ---: | --- |
+| Transmission | `refraction` | `84` | Body bending strength (0–110) |
+| | `edgeReach` | `0.17` | Capture distance / short side. `0` disables capture |
+| | `edgeWidth` | `0.11` | Capture band width / short half-side |
+| | `dispersion` | `2.0` | RGB sample split, display px |
+| | `frost` | `0` | Pre-blur radius / short side (softness ratio) |
+| | `backdropBlur` | `0` | Pre-blur radius, CSS px. Combines with `frost` in quadrature |
+| | `body` | `0.72` | Glass body density |
+| | `absorption` | `0.58` | Path absorption |
+| | `tint` | `0` | Tint opacity (element `tint` overrides) |
+| Reflection | `rim` | `0.24` | Edge light |
+| | `reflection` | `0.31` | Backdrop reflection |
+| | `highlight` | `0.34` | Specular highlight |
+| | `lightAngle` | `136` | Fallback light direction, degrees |
+| | `echo` | `0.28` | Inner echo |
+| Interface | `hairline` | `0.92` | Contour line strength |
+| | `hairWidth` | `0.52` | Contour line width |
+| | `roundness` | `0.47` | Corner radius / short half-side |
+
+`frost` and `backdropBlur` are the same operation — the backdrop is blurred *before* the lens bends it — differing only in units. Old pixel-based `edgeReach` values divide by the intended component short side.
+
+Live backdrops: transmission updates every frame; the light probe is rate-limited (~84 ms), read back on a Worker so frames never wait on the GPU, and the detected light direction eases over ~280 ms.
+
+## Ready-made navbar and switch
+
+The package includes framework-free controls that create their own canvas layers, pointer/keyboard interaction, spring animation and accessibility state. Give each control a container and a backdrop image, canvas or video:
 
 ```js
 import {
-  LiquidGlassWebGL,
-  LiquidGlassWebGLV2,
-  getDefaultMaterial,
-  getDefaultMaterialV2,
-} from 'apple-liquid-glass-webgl';
+  LiquidGlassNavbar,
+  LiquidGlassSwitch,
+} from 'apple-liquid-glass-webgl/controls';
 
-const v1 = new LiquidGlassWebGL(document.querySelector('#frosted'), {
-  material: getDefaultMaterial(),
-  fusion: true,
-});
-const v2 = new LiquidGlassWebGLV2(document.querySelector('#transparent'), {
-  material: getDefaultMaterialV2(),
-});
-
-for (const glass of [v1, v2]) {
-  glass.setElements([
-    { id: 'panel', shape: 'rect', x: 40, y: 40, width: 320, height: 180 },
-  ], false);
-  await glass.loadBackdrop('/images/wallpaper.jpg', { shouldRender: false });
-  glass.render();
-}
-```
-
-V2 can also be imported from the explicit subpath:
-
-```js
-import { LiquidGlassWebGLV2, getDefaultMaterialV2 } from 'apple-liquid-glass-webgl/v2';
-```
-
-The two material contracts are intentionally not interchangeable. V2 rejects V1 preset names
-and unknown V2 material keys instead of silently applying a value with the wrong unit. Element
-position, size and shape can be shared between renderers, but every material value is stored and
-evaluated independently.
-
-| Similar concept | V1 calculation | V2 calculation |
-| --- | --- | --- |
-| `dispersion` | Spread around the refractive index, used in three Snell-law evaluations | Direct display-space RGB sample split in pixels |
-| `edgeWidth` | CSS-pixel contour/highlight line width | Fraction of the short half-side used by the edge capture field |
-| Corner control | `radius` is a CSS-pixel radius capped by the shape size | `roundness` is a ratio of the short half-side; its default matches V1's 23.5% cap |
-| Refraction | `ior × height × refractScale` through a bevel height field | `refraction` for body bending plus one independent `edgeReach` capture distance |
-| Tint | Fixed/adaptive `tintColor` mixed by `tintAmount` | Component-level light/dark material selected by `tint` opacity |
-
-V2 surfaces remain separate and resolve overlap in element order; V1's `fusion` and
-`mergeRadius` smooth-union controls do not apply to V2.
-
-V2 also accepts optional `tint` and `tintTone` values on each element. `tint` overrides the global
-material value only for that surface, so a legibility-first notification can use a coherent milky
-tint while folders and the dock remain clear in the same renderer. `tintTone` can force a stable
-`light` or `dark` treatment; its default `auto` tone is selected from the average backdrop below
-the whole component rather than from each pixel:
-
-```js
-glass.setElements([
-  { id: 'folder', shape: 'folder', x: 24, y: 180, size: 104 },
-  {
-    id: 'notification', shape: 'rect', x: 18, y: 70,
-    width: 357, height: 78, tint: 0.86, tintTone: 'light',
-  },
-]);
-```
-
-Both versions use the same visible shape contract: `folder` and `rect` are rounded boxes,
-`pill` is a capsule, and `circle` uses the short half-side. In particular, V2 `folder` has no
-special tab or cut-out. This keeps shared layouts pixel-aligned while the two optical models
-remain independent.
-
-### V2 default material parameters
-
-The Playground exposes `refraction` from `0` to `110`. Edge capture is opt-in:
-both `edgeReach` and `edgeWidth` default to zero.
-
-| Group | Parameter | Default |
-| --- | --- | ---: |
-| Transmission | `refraction` | `90.00` |
-| Transmission | `edgeReach` | `0.00` |
-| Transmission | `edgeWidth` | `0.00` |
-| Transmission | `dispersion` | `2.00` |
-| Transmission | `frost` | `0.18` ratio of the component short side |
-| Transmission | `body` | `0.72` |
-| Transmission | `absorption` | `0.58` |
-| Transmission | `tint` | `0.00` |
-| Reflection | `rim` | `0.72` |
-| Reflection | `reflection` | `0.68` |
-| Reflection | `highlight` | `0.38` |
-| Reflection | `lightAngle` | `136.00` |
-| Reflection | `echo` | `0.28` |
-| Interface | `hairline` | `0.92` |
-| Interface | `hairWidth` | `0.52` |
-| Shape | `roundness` | `0.47` |
-
-For live backdrops, V2 updates its optical transmission every frame but rate-limits the
-low-resolution light probe and eases the detected highlight direction over roughly 280 ms.
-Reflection also samples a softened backdrop. These safeguards reduce highlight flashing on
-moving high-contrast content without freezing refraction or changing the parameter contract.
-
-## V1 default material parameters
-
-`getDefaultMaterial()` returns a fresh copy of the package's default material parameters on every call. This makes it safe to customize the result without mutating the package defaults.
-
-```js
-import { getDefaultMaterial, LiquidGlassWebGL } from 'apple-liquid-glass-webgl';
-
-const material = getDefaultMaterial();
-material.blurRim = 32;
-
-const glass = new LiquidGlassWebGL(canvas, { material });
-```
-
-`makeMaterial()` with no argument is also equivalent to `getDefaultMaterial()`. The exported `DEFAULT_MATERIAL` constant contains the same values for read-only inspection.
-
-| Group | Parameter | Default |
-| --- | --- | ---: |
-| Shape | `radius` | `64.00` |
-| Shape | `squircle` | `2.00` |
-| Shape | `mergeRadius` | `52.00` |
-| Shape | `bevel` | `34.00` |
-| Shape | `height` | `21.00` |
-| Shape | `sizeAdaptation` | `1.00` |
-| Optics | `ior` | `2.00` |
-| Optics | `dispersion` | `0.06` |
-| Optics | `refractScale` | `3.00` |
-| Optics | `meniscus` | `1.00` |
-| Optics | `blurPlateau` | `4.50` |
-| Optics | `blurRim` | `11.00` |
-| Optics | `opticalDensity` | `0.40` |
-| Lighting | `specular` | `0.89` |
-| Lighting | `specPower` | `29.50` |
-| Lighting | `highlightAdapt` | `0.91` |
-| Lighting | `highlightWidth` | `0.87` |
-| Lighting | `highlightSharpness` | `0.55` |
-| Lighting | `highlightBase` | `0.30` |
-| Lighting | `fresnel` | `0.65` |
-| Lighting | `saturation` | `1.35` |
-| Lighting | `brightness` | `0.00` |
-| Lighting | `tintAmount` | `0.02` |
-| Lighting | `tintAdapt` | `0.14` |
-| Edge | `shadow` | `0.09` |
-| Edge | `shadowSize` | `4.00` |
-| Edge | `shadowOffset` | `0.00` |
-| Edge | `lightX` | `-0.18` |
-| Edge | `lightY` | `0.08` |
-| Edge | `edgeLine` | `0.30` |
-| Edge | `edgeWidth` | `0.50` |
-| Edge | `edgeDark` | `0.02` |
-
-The returned object also includes `tintColor: [1, 1, 1]` and `debug: 0`. Parameter names use the JavaScript API names; for example, `highlightAdapt` is the “Light adaptation” control and `edgeLine` is the “Edge highlight” control. Set `sizeAdaptation` to `0` when material lengths must remain absolute; intermediate values blend between absolute and fitted optics.
-
-Backdrop RGB is stored in `SRGB8_ALPHA8`: image uploads decode to linear light, every downsample and tent-upsample pass filters linear radiance, and writes encode back to sRGB. Alpha remains linear for the optical-density channel. Wide blur blends in the reconstructed chain to avoid coarse-mip breathing; final glass output receives a sub-LSB triangular dither to suppress dark-gradient banding. `tintAdapt` controls the component-level light/dark material switch (`0` keeps `tintColor` fixed, `1` fully follows the backdrop below the component).
-
-## Live backdrops and overlay mode
-
-Use `compositeMode: 'overlay'` when the original backdrop remains visible underneath the WebGL canvas. Pixels outside the glass stay transparent, while the supplied backdrop source is sampled for refraction and blur.
-
-```js
-const glass = new LiquidGlassWebGL(canvas, {
-  compositeMode: 'overlay',
-  elements: [
-    { id: 'panel', shape: 'rect', x: 80, y: 80, width: 520, height: 360 },
+const navbar = new LiquidGlassNavbar(document.querySelector('#navbar'), {
+  backdrop: '/wallpaper.jpg',
+  items: [
+    { value: 'gallery', label: 'Gallery', icon: '▣' },
+    { value: 'featured', label: 'Featured', icon: '▰' },
   ],
+  value: 'gallery',
+  onChange: (value) => console.log(value),
 });
 
-// Canvas, OffscreenCanvas, and video sources are detected as live. The
-// renderer starts automatically and uploads their latest frame before drawing.
-glass.setBackdrop(animatedCanvas);
+const toggle = new LiquidGlassSwitch(document.querySelector('#toggle'), {
+  backdrop: '/wallpaper.jpg',
+  checked: false,
+  onChange: (checked) => console.log(checked),
+});
 
-// Stop the render loop when the view is hidden or unmounted.
-glass.stop();
+await Promise.all([navbar.ready, toggle.ready]);
+
+// Controlled updates and cleanup:
+navbar.setValue('featured');
+toggle.setChecked(true);
+navbar.destroy();
+toggle.destroy();
 ```
 
-Static image sources upload once:
+The navbar defaults to the compact `312 × 96` short-pill geometry. Set `width` / `height` to change it. Resting material can be customized with `material`; pressed transmission remains on the tuned control recipe while reflection and interface values inherit from that material.
+
+A complete dependency-installed Vanilla example is in [`examples/controls-quickstart`](examples/controls-quickstart): run `npm install && npm start` inside that directory.
+
+## V1 material
+
+`getDefaultMaterial()` / `makeMaterial('regular' | 'clear' | 'lens')`. Lengths are CSS pixels; `sizeAdaptation` (default `1`) fits them to small controls — the rim caps at 30 % of the short side and height, blur and highlights follow.
+
+| Group | Keys (default) |
+| --- | --- |
+| Shape | `radius` 64, `squircle` 2, `mergeRadius` 52, `bevel` 34, `height` 21, `sizeAdaptation` 1 |
+| Optics | `ior` 2, `dispersion` 0.06, `refractScale` 3, `meniscus` 1, `blurPlateau` 4.5, `blurRim` 11, `opticalDensity` 0.4 |
+| Lighting | `specular` 0.89, `specPower` 29.5, `highlightAdapt` 0.91, `highlightWidth` 0.87, `highlightSharpness` 0.55, `highlightBase` 0.3, `fresnel` 0.65, `saturation` 1.35, `brightness` 0, `tintAmount` 0.02, `tintAdapt` 0.14 |
+| Edge | `shadow` 0.09, `shadowSize` 4, `shadowOffset` 0, `lightX` -0.18, `lightY` 0.08, `edgeLine` 0.3, `edgeWidth` 0.5, `edgeDark` 0.02 |
+
+Plus `tintColor: [1, 1, 1]` and `debug: 0` (1 thickness, 2 normals, 3 dispersion). The backdrop is stored in `SRGB8_ALPHA8` and filtered in linear light; output is dithered sub-LSB.
+
+## Backdrops
 
 ```js
-await glass.loadBackdrop('/images/wallpaper.jpg');
+await glass.loadBackdrop('/img.jpg');                 // static, uploads once
+glass.setBackdrop(canvasOrVideo);                     // live source: auto-detected, loop starts
+glass.setBackdrop(src, { update: 'static', autoStart: false });
+glass.updateBackdrop();                               // re-upload a static source you drew into
+glass.start(); glass.stop();
 ```
 
-The update behavior can be selected explicitly:
+`compositeMode: 'replace'` (default) paints the backdrop across the canvas; `'overlay'` leaves everything outside the glass transparent. Browsers do not expose composited DOM pixels to WebGL — supply the backdrop yourself. Cross-origin sources need CORS. Live uploads use `RGBA8` with sRGB decoded in-shader, which keeps Chrome/ANGLE on the GPU-to-GPU path on Windows.
+
+## Rendering
 
 ```js
-glass.setBackdrop(source, { update: 'live' });
-glass.setBackdrop(source, { update: 'static', autoStart: false });
-glass.updateBackdrop(); // manually upload the latest static-source pixels
-glass.start();
-glass.stop();
+glass.render();                 // no-op when nothing changed
+glass.render({ force: true });  // always draws (for readPixels)
+glass.markDirty();              // after mutating glass.material in place
+glass.markBackdropDirty();      // after drawing into a static backdrop source
 ```
 
-The default `compositeMode: 'replace'` preserves the original behavior and draws the supplied backdrop across the full WebGL canvas. Browsers do not expose arbitrary composited DOM/CSS pixels to WebGL, so the backdrop must be supplied explicitly as an image, canvas, video, ImageBitmap, or OffscreenCanvas. Cross-origin sources must permit CORS access.
+Every mutator marks the surface dirty; the backdrop mip chain has its own flag, so moving a shape redraws only the glass pass. Live backdrops always redraw. `autoResize` (on) redraws on canvas resize. Pass `preserveDrawingBuffer: true` if you read the canvas back after composite.
+
+The shader carries 16 shapes per pass; distant clusters are split into passes automatically (V1 warns when a single fused cluster exceeds 16).
 
 ## Hit testing
 
-`hitTest()` evaluates the same signed distance field as the shader, so a pointer lands on the shape rather than on its bounding box: the corners of a circle are not clickable, and inside a fused group the bridge between two components is.
+Evaluates the same SDF as the shader — a circle's corners miss, a fused bridge hits.
 
 ```js
-canvas.addEventListener('pointerdown', (event) => {
-  const element = glass.hitTestEvent(event); // null outside the surface
-  if (element) startDragging(element.id);
-});
-
-const { x, y } = glass.pointerPosition(event); // canvas-relative CSS pixels
-glass.hitTest(x, y, { tolerance: 8 });         // slack for coarse pointers
-glass.distanceAt(x, y);                        // signed distance, negative inside
+const el = glass.hitTestEvent(event);           // element | null
+const { x, y } = glass.pointerPosition(event);  // canvas CSS px
+glass.hitTest(x, y, { tolerance: 8 });
+glass.distanceAt(x, y);                         // signed, negative inside
 ```
 
-A gap between two components only closes into a bridge while it is narrower than about half the fusion distance; past that, `mergeRadius` only softens the approach.
+## Context loss & accessibility
 
-## Rendering behaviour
+Context loss is handled: the canvas keeps its last frame, calls become no-ops, and programs/textures are rebuilt on restore (`onContextLost`, `onContextRestored`, `glass.contextLost`).
 
-`render()` returns without touching the GPU when nothing changed since the last frame, so an animation loop over a static scene is free. Every mutator marks the component dirty; a live backdrop always redraws. The sampled backdrop and its mip chain have a separate dirty flag, so moving a shape or changing its material only redraws the visible glass passes.
-
-```js
-glass.render();                  // no-op when clean
-glass.render({ force: true });   // always draws, for pixel read-back
-glass.markDirty();               // after mutating glass.material in place
-glass.markBackdropDirty();       // after changing a backdrop source in place
-```
-
-Pass `preserveDrawingBuffer: true` if you read the canvas back with `readPixels` or `toDataURL` after the frame has been composited.
-
-## Context loss and accessibility
-
-A GPU context can be lost at any time. The component takes over recovery: the canvas holds its last frame, every call is a safe no-op while the context is gone, and programs, render targets and backdrop textures are rebuilt when the browser restores it.
-
-```js
-const glass = new LiquidGlassWebGL(canvas, {
-  onContextLost: () => showPlaceholder(),
-  onContextRestored: () => hidePlaceholder(),
-});
-
-glass.contextLost; // true while the surface is frozen
-```
-
-Under `prefers-reduced-transparency: reduce` the material falls back to a near-opaque surface: refraction, dispersion and scattering are removed while the shape, edge and shadow stay. Opt out with `respectReducedTransparency: false`, and read `glass.effectiveMaterial` for the parameters actually in use.
-
-`autoResize` (on by default) redraws when the canvas element is resized, which dirty tracking would otherwise miss in an app that renders on demand.
+`prefers-reduced-transparency: reduce` swaps in a near-opaque material (no refraction, dispersion or scattering; shape, edge and shadow remain). Opt out with `respectReducedTransparency: false`; `glass.effectiveMaterial` is what is actually in use.
 
 ## API
 
 ```js
-LiquidGlassWebGL.isSupported();
-
-glass.setMaterial('clear');
-glass.setMaterial({ blurPlateau: 4, edgeLine: 0.2 });
-glass.setBackdrop(animatedCanvas, { update: 'live' });
-glass.updateBackdrop();
-glass.start();
-glass.stop();
-glass.setFusion(true, 52); // smooth-union distance in CSS pixels
-glass.setWallpaperIndex(0);
-glass.addElement({ id: 'new-folder', shape: 'folder', x: 20, y: 20, size: 180 });
-glass.updateElement('new-folder', { x: 40 });
-glass.removeElement('new-folder');
-glass.hitTest(x, y);
-glass.resize();
-glass.destroy();
+LiquidGlassWebGL.isSupported()
+glass.setMaterial('clear' | { blurPlateau: 4 })
+glass.setElements(list, shouldRender = true)
+glass.addElement(el) / updateElement(id, patch) / removeElement(id)
+glass.setFusion(true, 52)          // V1 only
+glass.resize() / destroy()
 ```
 
-Available presets are `regular`, `clear`, and `lens`. Available shapes are `folder`, `rect`, `pill`, and `circle`. With `fusion` enabled, nearby elements are evaluated as one smooth-union distance field, so their silhouette, normals, refraction, highlights, and shadow merge continuously.
-
-The shader carries 16 shapes per pass. Elements too far apart to influence each other are split into separate passes automatically, so the 16 shape limit applies per fused cluster rather than per scene; a cluster larger than that is still split, and logs a warning explaining that the silhouette will not bridge across every one of them.
-
-The geometry helpers behind all of this are exported for use without a canvas — `sdGroup`, `hitTestElements`, `connectedElementGroups` and `groupElements`.
-
-V2 mirrors the backdrop, element, lifecycle, resize and hit-test methods used above through
-`LiquidGlassWebGLV2`. It additionally exports `getDefaultMaterialV2()`, `makeMaterialV2()`,
-`distanceToElementsV2()` and `hitTestElementsV2()`. It deliberately has no `setFusion()` method.
+Exports: `SHAPES`, `COMPOSITE_MODES`, `BACKDROP_UPDATES`, `DEFAULT_MATERIAL`, `getDefaultMaterial`, `makeMaterial`, geometry helpers `sdGroup`, `hitTestElements`, `connectedElementGroups`, `groupElements`.
+From `/v2`: `DEFAULT_MATERIAL_V2`, `getDefaultMaterialV2`, `makeMaterialV2`, `distanceToElementsV2`, `hitTestElementsV2`.
 
 ## Playground
 
-The interactive demo used to develop the material is deployed at
-[oliverrr2424.github.io/webgl-apple-liquid-glass](https://oliverrr2424.github.io/webgl-apple-liquid-glass/), or run it locally:
-
 ```bash
-npm install
-npm run serve
+npm install && npm run serve      # http://localhost:8765
 ```
 
-Open [http://localhost:8765](http://localhost:8765). It drives the published component through its public API, and the inspector covers:
-
-- Eight scenes: four wallpapers, plus fixed iPhone Home Page, Notification, and Control Centre references, and a scrolling feed that exercises the live backdrop path.
-- Component editing: add, retype, resize and delete surfaces; drag them, or select one and use the arrow keys (`Shift` for ten pixels, `Alt` to resize, `[` and `]` to cycle, `Delete` to remove).
-- Every material parameter as both a slider and a typed value. Double click a parameter name to reset just that one; modified parameters are marked.
-- A V1 Original / V2 Transparent switch. Each version retains its own tuned material while you compare them, and shared links record which renderer and parameter contract they use.
-- **Copy link** puts the whole session in the URL, **Copy code** emits the snippet that reproduces it.
-- A frame-rate, CPU-per-frame, drawing-buffer and pass-count readout. A static scene reports `idle`, because dirty tracking skips the GPU entirely.
-- Local image or looping-video uploads, and the thickness, normals and dispersion debug outputs.
+Four scenes (Press, iPhone Home, live Scroll feed, wallpaper gallery), V1/V2 switch with independent materials, every parameter as slider + typed value (double-click a label to reset it), light/dark glass, navigation-lens geometry for the Press selector, image/video backdrop upload, fps / CPU / buffer readout. **Copy link** serialises the session into the URL; **Copy code** emits the reproducing snippet.
 
 ## Development
 
 ```bash
-npm test                     # unit tests, then the browser test pages
-npm run test:visual          # golden image comparison
-npm run test:visual:update   # record a baseline for this renderer
-npm run shot shots/liquid-glass.png -- --scene 0 --size 1200x720 --no-panel
+npm test                     # unit (node --test) + browser pages (Playwright)
+npm run test:visual          # SwiftShader golden comparison; --update to re-record
+npm run shot out.png -- --scene 0 --size 1200x720 --no-panel
 npm run pack:check
 ```
 
-`tests/*.test.mjs` are Node unit tests over the geometry and material rules. `tests/*.html` are browser pages, each exporting `window.runTest()`; they cover live and static backdrops, context loss and recovery, and the dirty-tracking contract by counting draw calls.
+`tests/*.test.mjs` cover geometry, material and permalink rules. `tests/*.html` each export `window.runTest()` and cover live/static backdrops, context loss, dirty tracking (draw-call counts), V2 optics and light probing. Baselines live in `shots/baseline/<renderer>/`.
 
-Visual regression forces ANGLE's deterministic SwiftShader backend. Baselines live in `shots/baseline/<renderer>/`; Linux's Subzero JIT and macOS's LLVM JIT have separate golden sets because a small number of edge pixels round differently. A missing baseline fails the run, and rejected frames are written to `shots/tmp-*.png`.
-
-## Automated npm publishing
-
-Every push to `main` runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and then [`.github/workflows/publish-npm.yml`](.github/workflows/publish-npm.yml), which publishes with provenance when the version in `package.json` is newer than the version already on npm. Publishing depends on the test job, so a failing test blocks the release.
-
-To enable publishing, add a repository secret named `NPM_TOKEN` containing an npm token with permission to publish `apple-liquid-glass-webgl`. Bump the package version before pushing a release to `main`.
+Pushes to `main` run [`ci.yml`](.github/workflows/ci.yml), then [`publish-npm.yml`](.github/workflows/publish-npm.yml) publishes with provenance when `package.json` is ahead of npm (needs the `NPM_TOKEN` secret).
 
 ## License
 

@@ -2,7 +2,7 @@ import {
   VS_FULLSCREEN, VS_GLASS, FS_BLIT, FS_DOWN, FS_UP, FS_WALLPAPER, FS_GLASS,
 } from './shaders.js';
 import { MAX_GLASS_SHAPES } from './geometry.js';
-import { FS_GLASS_V2 } from './v2-shaders.js?frost-ratio=1';
+import { FS_GLASS_V2 } from './v2-shaders.js?press-lens=2';
 
 function compile(gl, type, src) {
   const s = gl.createShader(type);
@@ -359,6 +359,10 @@ export class GlassRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_BASE_LEVEL, 0);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, this.mipLevels - 1);
 
+    // V2 only samples tex's downsample pyramid. The reconstructed blurTex
+    // chain below belongs to V1; rebuilding it on live V2 frames is wasted work.
+    if (this.materialVersion === 2) return;
+
     // Seed the coarsest reconstructed level, then walk back toward full
     // resolution with a tent filter. Restricting BASE/MAX_LEVEL keeps sampling
     // a different mip image from the one attached for drawing, avoiding a
@@ -559,6 +563,8 @@ export class GlassRenderer {
     const tintTones = new Float32Array(MAX_GLASS_SHAPES);
     const frosts = new Float32Array(MAX_GLASS_SHAPES);
     const opacities = new Float32Array(MAX_GLASS_SHAPES);
+    const pressures = new Float32Array(MAX_GLASS_SHAPES);
+    const pressAxes = new Float32Array(MAX_GLASS_SHAPES * 2);
     shapes.forEach((element, i) => {
       const short = Math.min(element.w, element.h);
       centers[i * 2] = (element.x + element.w / 2) * dpr;
@@ -583,6 +589,9 @@ export class GlassRenderer {
       // component short side. V1 keeps its authored CSS-pixel blur lengths.
       frosts[i] = element.frost ?? m.frost;
       opacities[i] = element.opacity ?? 1;
+      pressures[i] = element.pressure ?? 0;
+      pressAxes[i * 2] = element.pressureAxes?.[0] ?? 1;
+      pressAxes[i * 2 + 1] = element.pressureAxes?.[1] ?? 1;
     });
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -612,9 +621,12 @@ export class GlassRenderer {
     gl.uniform1fv(loc.uShapeTintLights, tintTones);
     gl.uniform1fv(loc.uShapeFrosts, frosts);
     gl.uniform1fv(loc.uShapeOpacities, opacities);
+    gl.uniform1fv(loc.uShapePressures, pressures);
+    gl.uniform2fv(loc.uShapePressAxes, pressAxes);
     gl.uniform2fv(loc.uLightDirs, lights);
     gl.uniform1f(loc.uRefraction, m.refraction * dpr);
-    gl.uniform1f(loc.uEdgeReach, m.edgeReach * dpr);
+    gl.uniform1f(loc.uEdgeReach, m.edgeReach);
+    gl.uniform1f(loc.uBackdropBlur, (m.backdropBlur ?? 0) * dpr);
     gl.uniform1f(loc.uEdgeWidth, m.edgeWidth);
     gl.uniform1f(loc.uDispersion, m.dispersion);
     gl.uniform1f(loc.uBody, m.body);

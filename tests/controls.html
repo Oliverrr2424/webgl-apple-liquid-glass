@@ -1,0 +1,63 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; background: #111; }
+  #navbar { width: 360px; height: 144px; }
+  #toggle { width: 230px; height: 150px; }
+</style>
+<div id="navbar"></div>
+<div id="toggle"></div>
+<script type="module">
+  import {
+    LiquidGlassNavbar, LiquidGlassSwitch, PRESSED_CONTROL_MATERIAL_V2,
+  } from '../src/controls.js';
+
+  const backdrop = document.createElement('canvas');
+  backdrop.width = 720;
+  backdrop.height = 300;
+  const context = backdrop.getContext('2d');
+  const gradient = context.createLinearGradient(0, 0, 720, 300);
+  gradient.addColorStop(0, '#174e85');
+  gradient.addColorStop(1, '#d88242');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 720, 300);
+
+  let navChange = null;
+  let switchChange = null;
+  const navbar = new LiquidGlassNavbar(document.querySelector('#navbar'), {
+    backdrop,
+    items: [
+      { value: 'gallery', label: 'Gallery', icon: '▣' },
+      { value: 'featured', label: 'Featured', icon: '▰' },
+    ],
+    value: 'gallery',
+    onChange: (value) => { navChange = value; },
+  });
+  const toggle = new LiquidGlassSwitch(document.querySelector('#toggle'), {
+    backdrop,
+    checked: false,
+    onChange: (value) => { switchChange = value; },
+  });
+  await Promise.all([navbar.ready, toggle.ready]);
+
+  window.runTest = async () => {
+    if (document.querySelectorAll('#navbar canvas').length !== 6) throw new Error('navbar layers not mounted');
+    if (document.querySelectorAll('#toggle canvas').length !== 6) throw new Error('switch layers not mounted');
+    if (navbar.value !== 'gallery') throw new Error('initial navbar value lost');
+    if (toggle.checked) throw new Error('initial switch state lost');
+    if (navbar.pressGlass.material.refraction !== PRESSED_CONTROL_MATERIAL_V2.refraction) {
+      throw new Error('navbar pressed material is not fixed');
+    }
+    navbar.container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    toggle.container.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    if (navbar.value !== 'featured' || navChange !== 'featured') throw new Error('navbar keyboard change failed');
+    if (!toggle.checked || switchChange !== true) throw new Error('switch keyboard change failed');
+    if (navbar.container.getAttribute('role') !== 'tablist') throw new Error('navbar role missing');
+    if (toggle.container.getAttribute('aria-checked') !== 'true') throw new Error('switch aria state missing');
+    navbar.destroy();
+    toggle.destroy();
+    if (document.querySelector('#navbar canvas')) throw new Error('navbar destroy leaked layers');
+    return { checks: ['navbar mount/change/destroy', 'switch mount/change/destroy', 'fixed press material'] };
+  };
+</script>

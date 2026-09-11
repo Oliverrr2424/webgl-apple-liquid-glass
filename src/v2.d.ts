@@ -4,11 +4,14 @@ export type LiquidGlassV2BackdropUpdate = 'auto' | 'static' | 'live';
 
 export interface LiquidGlassV2Material {
   refraction: number;
+  /** Capture distance / component short side (0.17 = 15.3px on a 90px surface). */
   edgeReach: number;
   edgeWidth: number;
   dispersion: number;
-  /** Dimensionless softness ratio, resolved against each component's short side. */
+  /** Softness ratio: backdrop pre-blur radius as a fraction of each component's short side. */
   frost: number;
+  /** Absolute backdrop pre-blur radius in CSS pixels; combines with frost. Default 0. */
+  backdropBlur: number;
   body: number;
   absorption: number;
   tint: number;
@@ -35,11 +38,16 @@ export interface LiquidGlassV2Element {
   /** Override the material tint opacity for this surface. This lets a tinted
    * notification share a renderer with clear folders and controls. */
   tint?: number;
-  /** Override the dimensionless backdrop softness ratio for this surface. */
+  /** Override the softness (size-relative pre-blur) ratio for this surface. */
   frost?: number;
   /** Premultiplied surface opacity. Primarily useful for seamless transitions
    * between a live glass pass and a cheaper resting representation. */
   opacity?: number;
+  /** Pressed-in optical squash while held, from 0 (resting) to 1 (pressed). */
+  pressure?: number;
+  /** Per-axis weight of the pressed squash, `[x, y]` each 0..1 (default `[1, 1]`).
+   * Lower x keeps a wide capsule's length while pressed; lower y keeps its height. */
+  pressureAxes?: [number, number];
   /** Select a coherent light or dark tint for the whole surface. The default
    * is `light`, matching the switch material. `auto` derives its tone from a
    * fixed-size backdrop probe below the component, independent of its size. */

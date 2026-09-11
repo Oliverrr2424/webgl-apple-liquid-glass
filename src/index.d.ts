@@ -209,3 +209,12 @@ export type {
   LiquidGlassV2Material, LiquidGlassV2Element, ResolvedLiquidGlassV2Element,
   LiquidGlassV2BackdropOptions, LiquidGlassV2Options,
 } from './v2.js';
+export {
+  LiquidGlassNavbar, LiquidGlassSwitch,
+  PRESSED_CONTROL_MATERIAL_V2, DEFAULT_NAVIGATION_LENS,
+  getPressedControlMaterialV2,
+} from './controls.js';
+export type {
+  LiquidGlassNavbarItem, LiquidGlassNavbarOptions, LiquidGlassSwitchOptions,
+  LiquidGlassNavigationLens,
+} from './controls.js';

@@ -1,0 +1,100 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>canvas { width: 320px; height: 240px; }</style>
+<canvas id="output"></canvas>
+<script type="module">
+import { LiquidGlassWebGLV2 } from '../src/v2.js';
+
+window.runTest = () => {
+  const output = document.querySelector('#output');
+  const backdrop = document.createElement('canvas');
+  backdrop.width = 640; backdrop.height = 480;
+  const ctx = backdrop.getContext('2d');
+  for (let x = 0; x < 640; x += 8) {
+    ctx.fillStyle = x % 16 ? '#fff' : '#000';
+    ctx.fillRect(x, 0, 8, 480);
+  }
+  const glass = new LiquidGlassWebGLV2(output, {
+    preserveDrawingBuffer: true, autoResize: false,
+    material: { frost: 0, body: 0, absorption: 0, rim: 0, hairline: 0, dispersion: 0 },
+  });
+  const element = { id: 'test', shape: 'rect', x: 20, y: 20, w: 260, h: 200 };
+  const render = (frost = 0, pressure = 0, tint = 0, tintTone = 'light', backdropBlur = 0) => {
+    glass.material.backdropBlur = backdropBlur;
+    glass.setElements([{ ...element, frost, pressure, tint, tintTone }], false);
+    glass.setBackdrop(backdrop, { update: 'static', autoStart: false, shouldRender: false });
+    glass.render({ force: true });
+    const gl = glass.renderer.gl;
+    const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+    gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    return pixels;
+  };
+  const sample = (pixels, x, y) => {
+    const gl = glass.renderer.gl;
+    const dpr = gl.drawingBufferWidth / output.clientWidth;
+    return pixels[((gl.drawingBufferHeight - 1 - Math.round(y * dpr)) * gl.drawingBufferWidth + Math.round(x * dpr)) * 4];
+  };
+  const contrast = (pixels, fromX = 80, toX = 220, y = 120) => {
+    const values = Array.from({ length: toX - fromX }, (_, i) => sample(pixels, fromX + i, y));
+    return Math.max(...values) - Math.min(...values);
+  };
+  try {
+    const clear = render();
+    const frosted = render(0, 0, 0, 'light', 24);
+    if (contrast(frosted) >= contrast(clear) * 0.4) throw new Error('Pre-blur retained sharp backdrop stripes');
+    if (sample(clear, 8, 8) !== sample(frosted, 8, 8)) throw new Error('Pre-blur blurred outside the glass');
+
+    // Softness is the same pre-blur, resolved against the component's short
+    // side: at one ratio a small surface keeps more of the stripes than a
+    // large one, and softness adds to an absolute pre-blur.
+    const softened = render(0.3);
+    if (contrast(softened) >= contrast(clear) * 0.5) throw new Error('Softness did not pre-blur the backdrop');
+    const large = { ...element };
+    Object.assign(element, { x: 60, y: 90, w: 120, h: 60 });
+    const smallSoftened = contrast(render(0.3), 90, 150, 120);
+    Object.assign(element, large);
+    if (smallSoftened <= contrast(softened) + 20) {
+      throw new Error(`Softness did not scale with component size: small=${smallSoftened}, large=${contrast(softened)}`);
+    }
+    // Two comparable radii (0.3 of a 200px side and 3px) combine to a softer
+    // result than either alone.
+    const combined = render(0.3, 0, 0, 'light', 3);
+    if (contrast(combined) > Math.min(contrast(render(0.3)), contrast(render(0, 0, 0, 'light', 3))) - 8) {
+      throw new Error('Softness and pre-blur did not combine');
+    }
+
+    const pressed = render(0, 1);
+    let changed = 0;
+    for (let x = 80; x < 220; x++) changed += Math.abs(sample(clear, x, 120) - sample(pressed, x, 120));
+    if (changed / 140 < 5) throw new Error('Pressure did not create interior refraction');
+    const released = render();
+    if (clear.some((value, i) => value !== released[i])) throw new Error('Released pressure did not restore resting optics');
+    const light = render(0.3, 0, 1.2, 'light');
+    const dark = render(0.3, 0, 1.2, 'dark');
+    if (sample(light, 160, 120) - sample(dark, 160, 120) < 80) throw new Error('Dark tint did not darken the same backing');
+
+    // A linear ramp turns sample displacement into a measurable red-channel
+    // difference. Doubling the component must roughly double capture reach.
+    const gradient = ctx.createLinearGradient(0, 0, 640, 0);
+    gradient.addColorStop(0, '#000'); gradient.addColorStop(1, '#fff');
+    ctx.fillStyle = gradient; ctx.fillRect(0, 0, 640, 480);
+    glass.material.refraction = 0;
+    // Keep the caustic support proportional at both sizes (its 8px floor
+    // would otherwise distort the ratio for the smaller component).
+    glass.material.edgeWidth = 0.22;
+    element.x = 100;
+    const capture = (size) => {
+      element.w = size; element.h = size;
+      glass.material.edgeReach = 0;
+      const baseline = sample(render(), 101, 20 + size / 2);
+      glass.material.edgeReach = 0.15;
+      return sample(render(), 101, 20 + size / 2) - baseline;
+    };
+    const small = capture(100), large2 = capture(200);
+    if (small < 5 || large2 / small < 1.7 || large2 / small > 2.4) {
+      throw new Error(`Capture did not scale with size: ${small}, ${large2}`);
+    }
+    return { checks: ['pre-blur contrast', 'sharp outside', 'size-relative softness', 'softness + pre-blur', 'pressure and release', 'dark tint', `capture scaling=${small}/${large2}`] };
+  } finally { glass.destroy(); }
+};
+</script>
