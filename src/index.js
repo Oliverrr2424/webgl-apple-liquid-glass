@@ -1,4 +1,4 @@
-import { GlassRenderer, MIPS } from './renderer.js?press-lens=2';
+import { GlassRenderer, MIPS } from './renderer.js';
 import {
   DEFAULT_MATERIAL, PRESETS, REDUCED_TRANSPARENCY_MATERIAL,
   getDefaultMaterial, makeMaterial,
@@ -481,10 +481,13 @@ export {
   LiquidGlassWebGLV2, DEFAULT_MATERIAL_V2, REDUCED_TRANSPARENCY_MATERIAL_V2,
   SLIDERS_V2, getDefaultMaterialV2, makeMaterialV2,
   distanceToElementsV2, hitTestElementsV2,
-} from './v2.js?press-lens=2';
+} from './v2.js';
+
+// The DOM layer: page elements and ready-made controls backed by V2.
+export { LiquidGlass } from './dom.js';
 
 export {
   LiquidGlassNavbar, LiquidGlassSwitch,
   PRESSED_CONTROL_MATERIAL_V2, DEFAULT_NAVIGATION_LENS,
   getPressedControlMaterialV2,
-} from './controls.js?controls=1';
+} from './controls.js';

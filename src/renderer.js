@@ -2,7 +2,7 @@ import {
   VS_FULLSCREEN, VS_GLASS, FS_BLIT, FS_DOWN, FS_UP, FS_WALLPAPER, FS_GLASS,
 } from './shaders.js';
 import { MAX_GLASS_SHAPES } from './geometry.js';
-import { FS_GLASS_V2 } from './v2-shaders.js?press-lens=2';
+import { FS_GLASS_V2 } from './v2-shaders.js';
 
 function compile(gl, type, src) {
   const s = gl.createShader(type);

@@ -1,0 +1,147 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; }
+  body { height: 1200px; }
+  #stage {
+    position: absolute; left: 0; top: 0; width: 400px; height: 280px;
+    background: linear-gradient(90deg, rgb(255, 0, 0), rgb(0, 0, 255));
+  }
+  #quadrants {
+    position: absolute; left: 0; top: 0; width: 400px; height: 280px;
+    background-size: 100% 100%; background-repeat: no-repeat;
+  }
+  .card { position: fixed; left: 100px; top: 60px; width: 200px; height: 120px; border-radius: 18px; }
+  #hidden { display: none; width: 80px; height: 40px; }
+  #plain { width: 60px; height: 30px; position: static; }
+</style>
+<div id="stage"></div>
+<div id="quadrants" hidden></div>
+<div id="card" class="card"></div>
+<div id="hidden"></div>
+<div id="plain"></div>
+<script type="module">
+  import { LiquidGlass, LiquidGlassWebGLV2 } from '../src/index.js';
+
+  // Every optical term off: the glass must reproduce exactly what is behind it.
+  const NEUTRAL = {
+    refraction: 0, edgeReach: 0, dispersion: 0, body: 0, absorption: 0, tint: 0,
+    rim: 0, reflection: 0, highlight: 0, echo: 0, hairline: 0,
+  };
+  const frames = (count = 3) => new Promise((resolve) => {
+    const step = () => (--count <= 0 ? resolve() : requestAnimationFrame(step));
+    requestAnimationFrame(step);
+  });
+
+  /** Viewport pixel of the surface's glass, read in the same task as a draw. */
+  function sample(surface, points) {
+    const { glass, canvas, element } = surface;
+    glass.render({ force: true, dpr: glass.lastFrame.dpr });
+    const copy = document.createElement('canvas');
+    copy.width = canvas.width;
+    copy.height = canvas.height;
+    const context = copy.getContext('2d');
+    context.drawImage(canvas, 0, 0);
+    const rect = element.getBoundingClientRect();
+    const dpr = glass.lastFrame.dpr;
+    const bleed = surface.bleed();
+    return points.map(([x, y]) => [...context.getImageData(
+      Math.round((x - rect.left + bleed) * dpr), Math.round((y - rect.top + bleed) * dpr), 1, 1,
+    ).data]);
+  }
+
+  const close = (actual, expected, tolerance = 8) =>
+    expected.every((value, index) => Math.abs(actual[index] - value) <= tolerance);
+
+  function expectColor(label, actual, expected) {
+    if (!close(actual, expected)) {
+      throw new Error(`${label}: expected rgb(${expected}) got rgba(${actual})`);
+    }
+  }
+
+  window.runTest = async () => {
+    const checks = [];
+
+    // 1. CSS gradient backdrop, found automatically.
+    const card = new LiquidGlass('#card', { material: NEUTRAL });
+    await card.ready;
+    if (card.element.dataset.liquidGlass !== 'webgl') throw new Error('surface did not enter webgl mode');
+    if (card.glass.elements[0].shape !== 'rect' || card.glass.elements[0].radius !== 18) {
+      throw new Error('CSS border-radius was not picked up');
+    }
+    const [left, middle] = sample(card, [[110, 120], [200, 120]]);
+    expectColor('gradient left', left, [Math.round(255 * 290 / 400), 0, Math.round(255 * 110 / 400)]);
+    expectColor('gradient middle', middle, [128, 0, 128]);
+    checks.push('auto CSS gradient registration');
+
+    // 2. Image backdrop by selector, with vertical and horizontal registration.
+    const image = document.createElement('canvas');
+    image.width = 64;
+    image.height = 64;
+    const pixels = image.getContext('2d');
+    [['#f00', 0, 0], ['#0f0', 32, 0], ['#00f', 0, 32], ['#fff', 32, 32]].forEach(([color, x, y]) => {
+      pixels.fillStyle = color;
+      pixels.fillRect(x, y, 32, 32);
+    });
+    const quadrants = document.querySelector('#quadrants');
+    quadrants.style.backgroundImage = `url(${image.toDataURL()})`;
+    quadrants.hidden = false;
+    card.update({ backdrop: '#quadrants' });
+    await frames(4);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await frames(3);
+    // The card spans x 100–300, y 60–180; the quadrants meet at (200, 140).
+    const [tl, tr, bl, br] = sample(card, [[150, 90], [250, 90], [150, 165], [250, 165]]);
+    expectColor('top-left', tl, [255, 0, 0]);
+    expectColor('top-right', tr, [0, 255, 0]);
+    expectColor('bottom-left', bl, [0, 0, 255]);
+    expectColor('bottom-right', br, [255, 255, 255]);
+    checks.push('image backdrop registration');
+
+    // 3. Scrolling moves the page under a fixed surface.
+    window.scrollTo(0, 200);
+    await frames(4);
+    const [scrolled] = sample(card, [[150, 90]]);
+    const canvasColor = [255, 255, 255];
+    expectColor('scrolled backdrop', scrolled, canvasColor);
+    window.scrollTo(0, 0);
+    await frames(4);
+    const [restored] = sample(card, [[150, 90]]);
+    expectColor('scrolled back', restored, [255, 0, 0]);
+    checks.push('scroll re-registration');
+
+    // JS animation libraries move elements with inline styles and no events.
+    // At viewport x=230 the page is green; a stale frame would still show red.
+    card.element.style.transform = 'translateX(60px)';
+    await frames(4);
+    const [moved] = sample(card, [[230, 90]]);
+    expectColor('inline transform', moved, [0, 255, 0]);
+    card.element.style.transform = '';
+    await frames(4);
+    checks.push('inline style motion');
+
+    // 4. Not laid out yet: no throw, draws once visible.
+    const hidden = new LiquidGlass('#hidden');
+    await frames(3);
+    if (hidden.glass) throw new Error('hidden element created a context before layout');
+    document.querySelector('#hidden').style.display = 'block';
+    await Promise.race([hidden.ready, frames(20).then(() => { throw new Error('hidden surface never became ready'); })]);
+    new LiquidGlassWebGLV2(document.createElement('canvas')).setElements([{ width: 0, height: 0 }]);
+    checks.push('zero-size layout');
+
+    // 5. destroy restores the element.
+    const plainElement = document.querySelector('#plain');
+    const plain = new LiquidGlass(plainElement);
+    if (plainElement.style.position !== 'relative') throw new Error('static element was not positioned');
+    if (LiquidGlass.from(plainElement) !== plain) throw new Error('from() did not return the instance');
+    plain.destroy();
+    hidden.destroy();
+    if (plainElement.querySelector('canvas') || plainElement.style.position || plainElement.hasAttribute('data-liquid-glass')) {
+      throw new Error('destroy did not restore the element');
+    }
+    checks.push('destroy restores element');
+
+    card.destroy();
+    return { checks };
+  };
+</script>

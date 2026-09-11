@@ -42,8 +42,11 @@ const launchArgs = process.platform === 'darwin'
   ? ['--use-gl=angle', '--use-angle=metal', '--enable-unsafe-swiftshader']
   : ['--use-angle=default', '--enable-unsafe-swiftshader'];
 
+// `node tools/browser-tests.mjs controls dom` runs only pages whose name matches.
+const only = process.argv.slice(2);
 const pages = (await readdir(resolve(root, 'tests')))
   .filter((name) => name.endsWith('.html'))
+  .filter((name) => !only.length || only.some((part) => name.includes(part)))
   .sort();
 
 let browser;
