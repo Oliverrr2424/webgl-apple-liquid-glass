@@ -196,10 +196,11 @@ function controlCentre(w, h) {
 function scrollingFeed(w, h) {
   // Oversized controls make the moving backdrop and edge pull easy to inspect
   // at a glance, even when the inspector is closed on a wide display.
-  const margin = Math.max(30, Math.min(90, w * 0.065));
   const controlHeight = Math.max(96, Math.min(144, h * 0.235));
   const barWidth = Math.min(760, w * 0.60);
   const gap = Math.max(18, controlHeight * 0.22);
+  const groupWidth = barWidth + gap + controlHeight;
+  const margin = Math.max(24, (w - groupWidth) * 0.5);
   const top = Math.max(24, h * 0.04);
   return [
     {
@@ -217,32 +218,24 @@ function scrollingFeed(w, h) {
 // glass surface, so it can stretch independently from the bar underneath it.
 function pressEffects(w, h) {
   const width = Math.min(540, w * 0.64);
-  const compactWidth = Math.min(312, w * 0.39);
   const barHeight = Math.max(62, Math.min(82, h * 0.105));
-  const compactHeight = Math.min(96, barHeight * 1.16);
   const x = (w - width) / 2;
-  const compactX = (w - compactWidth) / 2;
   const thumbWidth = width * 0.48;
-  // The resting thumb starts one inset inside the track. Subtract that inset
-  // from half the track so its visible right edge lands exactly on the 50%
-  // divider instead of spilling into the second item.
-  const compactThumbWidth = compactWidth * 0.5 - compactHeight * 0.08;
   const orb = Math.max(76, Math.min(104, h * 0.12));
   const toggleWidth = Math.min(190, w * 0.30);
   const toggleHeight = Math.max(58, Math.min(70, h * 0.09));
   const buttonWidth = Math.min(282, w * 0.42);
   const buttonHeight = Math.max(58, Math.min(72, h * 0.09));
-  // Five specimen centres share one regular vertical rhythm. Basing the
+  // Four specimen centres share one regular vertical rhythm. Basing the
   // spacing on centres keeps pills and the circular control evenly balanced.
   const firstCenterY = Math.max(barHeight * 0.5 + 32, h * 0.14);
   const lastCenterY = Math.min(h - orb * 0.5 - 32, h * 0.86);
-  const stepY = (lastCenterY - firstCenterY) / 4;
-  const centersY = Array.from({ length: 5 }, (_, index) => firstCenterY + stepY * index);
+  const stepY = (lastCenterY - firstCenterY) / 3;
+  const centersY = Array.from({ length: 4 }, (_, index) => firstCenterY + stepY * index);
   const y = centersY[0] - barHeight / 2;
-  const compactY = centersY[1] - compactHeight / 2;
-  const buttonY = centersY[2] - buttonHeight / 2;
-  const toggleY = centersY[3] - toggleHeight / 2;
-  const orbY = centersY[4] - orb / 2;
+  const buttonY = centersY[1] - buttonHeight / 2;
+  const toggleY = centersY[2] - toggleHeight / 2;
+  const orbY = centersY[3] - orb / 2;
   return [
     {
       id: 'selection-track', shape: 'pill', label: 'Selectable liquid-glass track',
@@ -258,22 +251,6 @@ function pressEffects(w, h) {
       // it removes this tint and reveals the clear liquid-glass material.
       tint: 0.34, tintTone: 'dark', frost: 0.32, x: x + barHeight * 0.08,
       y: y + barHeight * 0.08, w: thumbWidth, h: barHeight * 0.84,
-    },
-    {
-      id: 'compact-selection-track', shape: 'pill', label: 'Compact liquid-glass track',
-      interaction: 'selection-slider', sliderThumb: 'compact-selection-thumb',
-      navigationLens: true, navLabels: ['▣  Gallery', '▰  Featured'],
-      // A deliberately cramped two-item bar exercises the overlap and edge
-      // capture seen in narrow navigation layouts.
-      tint: 0.86, tintTone: 'light',
-      x: compactX, y: compactY, w: compactWidth, h: compactHeight,
-    },
-    {
-      id: 'compact-selection-thumb', shape: 'pill', label: 'Compact draggable selection',
-      interaction: 'selection-thumb', sliderTrack: 'compact-selection-track',
-      tint: 0.34, tintTone: 'dark', frost: 0.32,
-      x: compactX + compactHeight * 0.08, y: compactY + compactHeight * 0.08,
-      w: compactThumbWidth, h: compactHeight * 0.84,
     },
     {
       id: 'hold-button', shape: 'pill', label: 'Press-and-hold glass button',

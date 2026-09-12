@@ -33,9 +33,9 @@
 
     const frameDocument = iframe.contentDocument;
     const hosts = [...frameDocument.querySelectorAll('[data-playground-control]')];
-    if (hosts.length !== 3) throw new Error(`Press mounted ${hosts.length} public controls instead of 3`);
+    if (hosts.length !== 2) throw new Error(`Press mounted ${hosts.length} public controls instead of 2`);
     const duplicated = page.__lg.glass.elements.filter((element) => (
-      ['selection-thumb', 'compact-selection-thumb', 'green-toggle-thumb'].includes(element.id)
+      ['selection-thumb', 'green-toggle-thumb'].includes(element.id)
     ));
     if (duplicated.length) throw new Error(`shared canvas duplicated public controls: ${duplicated.map(({ id }) => id).join(', ')}`);
 
@@ -79,7 +79,7 @@
 
     page.__lg.setVersion('v2');
     await wait(350);
-    if (frameDocument.querySelectorAll('[data-playground-control]').length !== 3) {
+    if (frameDocument.querySelectorAll('[data-playground-control]').length !== 2) {
       throw new Error('V2 public controls did not remount');
     }
 
@@ -92,7 +92,7 @@
 
     return {
       checks: [
-        'Press uses three public controls',
+        'Press uses two public controls',
         'no shared-canvas duplicate',
         'switch opposite-side tap/current-side no-op/drag committed',
         'navbar click selected',

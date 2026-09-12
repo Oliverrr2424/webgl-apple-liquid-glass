@@ -12,13 +12,13 @@ import { getDefaultMaterialV2 } from '../src/v2-material.js?press-lens=2';
 import {
   SCENES, PHONE_WALLPAPER_PRESETS, SCENE_WALLPAPER_PRESETS, ICON_SOURCES,
   attachIconImages, isAnimated, sceneById, panelLayout,
-} from './scenes.js?scroll-ui=1';
-import { drawSceneBackdrop } from './content.js?scroll-ui=1';
+} from './scenes.js?scroll-ui=3';
+import { drawSceneBackdrop } from './content.js?scroll-ui=3';
 import {
   drawGlassContents, drawLabel, drawBadge, drawSelection, drawPressEffectsFrame,
   drawPressEffectsOverlay, drawScrollSceneOverlay,
   drawPhoneSceneOverlay, drawPhonePanelOverlay,
-} from './overlay.js?scroll-ui=1';
+} from './overlay.js?scroll-ui=3';
 import { createInspector } from './inspector.js?press-lens=2';
 import { createComponentEditor } from './components.js?size-controls=2';
 import { attachStageInteractions } from './interactions.js?phone-scenes=8';
@@ -32,7 +32,7 @@ import {
 import { createStats } from './stats.js';
 import { DEFAULT_NAV_LENS, NAV_LENS_SLIDERS, decodeState, toCode, writeHash } from './permalink.js?press-lens=3';
 import { PHONE_ICON_SOURCES, attachPhoneIconImages, phoneFrame } from './phone.js?phone-scenes=8';
-import { t, applyI18n, initPreferences, onLanguageChange } from './i18n.js?press-lens=2';
+import { t, applyI18n, initPreferences, getLanguage, onLanguageChange } from './i18n.js?press-lens=2';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -89,7 +89,6 @@ const store = {
   press: null,
   sliderPositions: new Map([
     ['selection-track', 0],
-    ['compact-selection-track', 0],
     ['green-toggle-track', 0],
   ]),
   wallZoom: 1,
@@ -728,10 +727,10 @@ function drawOverlayLayer({ width, height, dpr }) {
         if (element.id === 'hold-button' || element.id === 'hold-orb') drawGlassContents(uiContext, element);
       }
     } else {
-      if (scene.scrollUi) drawScrollSceneOverlay(uiContext, glass.elements);
+      if (scene.scrollUi) drawScrollSceneOverlay(uiContext, glass.elements, getLanguage());
       for (const element of glass.elements) {
         if (store.showIcons && !scene.scrollUi) drawGlassContents(uiContext, element);
-        if (store.showLabels) { drawLabel(uiContext, element); drawBadge(uiContext, element); }
+        if (store.showLabels && !scene.scrollUi) { drawLabel(uiContext, element); drawBadge(uiContext, element); }
       }
       const selected = glass.elements.find((element) => element.id === store.selectedId);
       if (selected) drawSelection(uiContext, selected);
@@ -774,6 +773,7 @@ function frame(now) {
       dpr: size.renderDpr,
       zoom: store.wallZoom,
       scroll: (now - sceneStart) * 0.055,
+      language: getLanguage(),
       image: backdropSourceFor(scene),
     });
     if (scene.interactionLab) {
@@ -1860,6 +1860,7 @@ onLanguageChange(() => {
   syncVersionUI();
   syncSceneUI();
   componentEditor.render();
+  invalidate({ content: true });
 });
 
 renderScenePicker();

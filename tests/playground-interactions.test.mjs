@@ -85,15 +85,10 @@ test('pressed navigation lens defaults match the tuned geometry', () => {
   });
 });
 
-test('Press scene includes a narrower navigation stress case', () => {
+test('Press scene keeps one canonical public navigation specimen', () => {
   const elements = sceneById('press').layout(1200, 760);
   const regular = elements.find((element) => element.id === 'selection-track');
   const compact = elements.find((element) => element.id === 'compact-selection-track');
-  const thumb = elements.find((element) => element.id === 'compact-selection-thumb');
-  assert.ok(compact.w < regular.w);
-  assert.ok(compact.w <= 312);
-  assert.ok(compact.h > regular.h);
-  assert.ok(Math.abs(thumb.x + thumb.w - (compact.x + compact.w / 2)) < 1e-9);
-  assert.equal(compact.navigationLens, true);
-  assert.equal(compact.sliderThumb, 'compact-selection-thumb');
+  assert.ok(regular);
+  assert.equal(compact, undefined);
 });

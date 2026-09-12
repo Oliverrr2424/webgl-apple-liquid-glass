@@ -121,57 +121,60 @@ function drawMicrophone(ctx, x, y, size, color) {
   ctx.restore();
 }
 
+function drawActionGlyph(ctx, x, y, size, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(2, size * 0.075);
+  ctx.lineCap = 'round';
+  const widths = [0.72, 0.54, 0.66];
+  const knobs = [-0.12, 0.14, -0.03];
+  for (let index = 0; index < 3; index++) {
+    const lineY = y + (index - 1) * size * 0.25;
+    const half = size * widths[index] * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x - half, lineY);
+    ctx.lineTo(x + half, lineY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x + size * knobs[index], lineY, size * 0.085, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 /** Search and action chrome for the oversized live-scroll material specimen. */
-export function drawScrollSceneOverlay(ctx, elements) {
+export function drawScrollSceneOverlay(ctx, elements, language = 'en') {
   const toolbar = elements.find((element) => element.id === 'toolbar');
   const action = elements.find((element) => element.id === 'search');
   if (!toolbar) return;
 
   const unit = toolbar.h;
   const foreground = 'rgba(247,248,252,.94)';
-  const secondary = 'rgba(226,229,238,.64)';
-  const appSize = unit * 0.43;
-  const appX = toolbar.x + unit * 0.13;
-  const appY = toolbar.y - unit * 0.08;
-  drawIcon(ctx, { c0: '#36aaff', c1: '#0874de', t: 'S', small: true }, appX, appY, appSize);
-  drawMagnifier(ctx, toolbar.x + unit * 0.28, toolbar.y + unit * 0.60, unit * 0.28, foreground);
+  const secondary = 'rgba(226,229,238,.70)';
+  const centerY = toolbar.y + unit * 0.5;
+  drawMagnifier(ctx, toolbar.x + unit * 0.34, centerY - unit * 0.02, unit * 0.25, foreground);
 
   ctx.save();
   ctx.fillStyle = foreground;
-  ctx.textAlign = 'left';
+  ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `650 ${Math.max(18, unit * 0.23)}px -apple-system, "SF Pro Display", "PingFang SC", system-ui, sans-serif`;
-  ctx.fillText('视觉库', toolbar.x + unit * 0.68, toolbar.y + unit * 0.40);
+  ctx.font = `650 ${Math.max(18, unit * 0.20)}px -apple-system, "SF Pro Display", "PingFang SC", system-ui, sans-serif`;
+  ctx.fillText(language === 'zh' ? '搜索' : 'Search', toolbar.x + toolbar.w * 0.5, centerY - unit * 0.105);
   ctx.fillStyle = secondary;
-  ctx.font = `560 ${Math.max(17, unit * 0.21)}px -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif`;
-  ctx.fillText('搜索', toolbar.x + unit * 0.68, toolbar.y + unit * 0.67);
+  ctx.font = `560 ${Math.max(11, unit * 0.105)}px -apple-system, "SF Pro Text", system-ui, sans-serif`;
+  ctx.letterSpacing = '0.08em';
+  ctx.fillText(
+    language === 'zh' ? '在动态背景中查找' : 'FIND IN LIVE BACKDROP',
+    toolbar.x + toolbar.w * 0.5,
+    centerY + unit * 0.145,
+  );
   ctx.restore();
-  drawMicrophone(ctx, toolbar.x + toolbar.w - unit * 0.28, toolbar.y + unit * 0.50, unit * 0.25, foreground);
+  drawMicrophone(ctx, toolbar.x + toolbar.w - unit * 0.34, centerY, unit * 0.22, foreground);
 
   if (action) {
-    drawMagnifier(ctx, action.x + action.w * 0.46, action.y + action.h * 0.45, action.h * 0.34, foreground);
+    drawActionGlyph(ctx, action.x + action.w * 0.5, action.y + action.h * 0.5, action.h * 0.42, foreground);
   }
-
-  const rowY = toolbar.y + toolbar.h + unit * 0.18;
-  const rowIconSize = unit * 0.34;
-  drawIcon(ctx, { c0: '#2fb8ff', c1: '#176be8', t: '↗', small: true }, toolbar.x + unit * 0.10, rowY, rowIconSize);
-  ctx.save();
-  ctx.fillStyle = foreground;
-  ctx.font = `620 ${Math.max(18, unit * 0.20)}px -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif`;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('操作按钮', toolbar.x + unit * 0.58, rowY + rowIconSize * 0.52);
-  ctx.strokeStyle = secondary;
-  ctx.lineWidth = Math.max(2, unit * 0.025);
-  ctx.lineCap = 'round';
-  const chevronX = toolbar.x + toolbar.w - unit * 0.22;
-  const chevronY = rowY + rowIconSize * 0.52;
-  ctx.beginPath();
-  ctx.moveTo(chevronX - unit * 0.05, chevronY - unit * 0.07);
-  ctx.lineTo(chevronX + unit * 0.02, chevronY);
-  ctx.lineTo(chevronX - unit * 0.05, chevronY + unit * 0.07);
-  ctx.stroke();
-  ctx.restore();
 }
 
 export function drawLabel(ctx, f) {

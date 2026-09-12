@@ -7,8 +7,6 @@ import { LiquidGlassNavbar, LiquidGlassSwitch } from '../src/controls.js';
 export const PLAYGROUND_CONTROL_IDS = Object.freeze([
   'selection-track',
   'selection-thumb',
-  'compact-selection-track',
-  'compact-selection-thumb',
   'green-toggle-track',
   'green-toggle-thumb',
 ]);

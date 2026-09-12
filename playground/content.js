@@ -101,7 +101,7 @@ export function drawAppContent(ctx, width, height, tint = '#2b3a5c') {
  * edges travel underneath it, which is the hardest case for a static blur
  * approximation and the reason the backdrop is uploaded live here.
  */
-export function drawFeed(ctx, width, height, scroll, tint = '#1d2430') {
+export function drawFeed(ctx, width, height, scroll, tint = '#1d2430', language = 'en') {
   const gradient = ctx.createLinearGradient(0, 0, 0, height);
   gradient.addColorStop(0, tint);
   gradient.addColorStop(1, '#05070b');
@@ -121,20 +121,22 @@ export function drawFeed(ctx, width, height, scroll, tint = '#1d2430') {
     const cardWidth = width - margin * 2;
     card(ctx, margin, y, cardWidth, cardHeight, seed);
     ctx.save();
-    const titles = ['Liquid motion', 'Through the glass', 'Colour in transit', 'Optical rhythm'];
-    const subtitles = ['LIVE MATERIAL STUDY', 'SCROLLING BACKDROP', 'REFRACTION TEST', 'EDGE RESPONSE'];
+    const titles = language === 'zh'
+      ? ['液态流动', '透过玻璃', '色彩迁移', '光学节奏']
+      : ['Liquid motion', 'Through the glass', 'Colour in transit', 'Optical rhythm'];
+    const subtitles = language === 'zh'
+      ? ['实时材质研究', '滚动背景', '折射测试', '边缘响应']
+      : ['LIVE MATERIAL STUDY', 'SCROLLING BACKDROP', 'REFRACTION TEST', 'EDGE RESPONSE'];
     const index = ((seed % titles.length) + titles.length) % titles.length;
     const copyX = margin + Math.max(24, cardHeight * 0.16);
     const copyY = y + cardHeight * 0.46;
     ctx.fillStyle = 'rgba(255,255,255,.94)';
-    ctx.font = `700 ${Math.max(24, Math.min(48, cardHeight * 0.20))}px -apple-system, "SF Pro Display", system-ui, sans-serif`;
+    ctx.font = `650 ${Math.max(24, Math.min(36, cardHeight * 0.155))}px -apple-system, "SF Pro Display", "PingFang SC", system-ui, sans-serif`;
     ctx.textBaseline = 'alphabetic';
     ctx.fillText(titles[index], copyX, copyY, cardWidth * 0.62);
-    ctx.fillStyle = 'rgba(255,255,255,.68)';
-    ctx.font = `650 ${Math.max(11, Math.min(16, cardHeight * 0.065))}px -apple-system, "SF Pro Text", system-ui, sans-serif`;
-    ctx.letterSpacing = '0.11em';
-    ctx.fillText(subtitles[index], copyX, copyY + cardHeight * 0.15);
-    ctx.letterSpacing = '0px';
+    ctx.fillStyle = 'rgba(255,255,255,.72)';
+    ctx.font = `560 ${Math.max(13, Math.min(17, cardHeight * 0.072))}px -apple-system, "SF Pro Text", system-ui, sans-serif`;
+    ctx.fillText(subtitles[index], copyX, copyY + cardHeight * 0.13);
     ctx.restore();
   }
 }
@@ -153,7 +155,7 @@ export function drawSceneBackdrop(ctx, scene, options) {
     return;
   }
   if (scene.backdrop.type === 'feed') {
-    drawFeed(ctx, width, height, scroll, scene.backdrop.tint);
+    drawFeed(ctx, width, height, scroll, scene.backdrop.tint, options.language);
     return;
   }
   if (scene.backdrop.type === 'phone') {
