@@ -26,8 +26,8 @@ test('V2 materials are independent copies with their own parameter ranges', () =
   assert.deepEqual(SLIDERS_V2.find(([key]) => key === 'refraction'),
     ['refraction', 0, 110, 1]);
   assert.equal(DEFAULT_MATERIAL_V2.refraction, 84);
-  assert.equal(DEFAULT_MATERIAL_V2.edgeReach, 0.17);
-  assert.equal(DEFAULT_MATERIAL_V2.edgeWidth, 0.11);
+  assert.equal(DEFAULT_MATERIAL_V2.edgeReach, 0.14);
+  assert.equal(DEFAULT_MATERIAL_V2.edgeWidth, 0.21);
   assert.equal(DEFAULT_MATERIAL_V2.frost, 0);
 });
 

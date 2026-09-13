@@ -727,7 +727,12 @@ function drawOverlayLayer({ width, height, dpr }) {
         if (element.id === 'hold-button' || element.id === 'hold-orb') drawGlassContents(uiContext, element);
       }
     } else {
-      if (scene.scrollUi) drawScrollSceneOverlay(uiContext, glass.elements, getLanguage());
+      if (scene.scrollUi) {
+        drawScrollSceneOverlay(uiContext, glass.elements, getLanguage(), {
+          showIcons: store.showIcons,
+          showLabels: store.showLabels,
+        });
+      }
       for (const element of glass.elements) {
         if (store.showIcons && !scene.scrollUi) drawGlassContents(uiContext, element);
         if (store.showLabels && !scene.scrollUi) { drawLabel(uiContext, element); drawBadge(uiContext, element); }
@@ -978,8 +983,8 @@ function syncGlassTone() {
 }
 for (const button of document.querySelectorAll('[data-glass-tone]')) button.addEventListener('click', () => {
   store.glassTone = button.dataset.glassTone;
-  if (store.version === 'v2' && store.glassTone === 'dark') {
-    store.material.tint = 1;
+  if (store.version === 'v2') {
+    store.material.tint = store.glassTone === 'dark' ? 1 : 0;
     inspector?.sync();
     syncPresetButtons(null);
     applyMaterial();

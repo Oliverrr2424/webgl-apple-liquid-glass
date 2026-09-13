@@ -739,11 +739,12 @@ class LiquidGlassControl {
     this.activePointerId = event.pointerId;
     this.releasing = false;
     this.releaseMix = 0;
-    // A switch press blooms the knob where it is. Dragging follows the pointer;
-    // a stationary press is resolved on release so the knob never jumps away
-    // while held. Like a navbar, clicking the other side selects it while
-    // clicking the already-selected side is a no-op.
-    this.positionTarget = this.kind === 'switch' ? start : this.progressForPointer(event);
+    // Like the navbar, the pressed lens snaps to the side under the finger:
+    // holding the other side pulls the enlarged knob there, and release
+    // commits it. Pressing the already-selected side blooms in place and is a
+    // no-op on release. Dragging afterwards follows the pointer.
+    const progress = this.progressForPointer(event);
+    this.positionTarget = this.kind === 'switch' ? Math.round(progress) : progress;
     try {
       this.container.setPointerCapture?.(event.pointerId);
     } catch {
@@ -769,11 +770,8 @@ class LiquidGlassControl {
     if (!this.dragging || event.pointerId !== this.activePointerId) return;
     event.preventDefault();
     this.dragging = false;
-    const { start, moved } = this.press ?? { start: Math.round(this.positionTarget), moved: true };
+    const { start } = this.press ?? { start: Math.round(this.positionTarget) };
     if (event.type === 'pointercancel') this.positionTarget = start;
-    else if (this.kind === 'switch' && !moved) {
-      this.positionTarget = Math.round(this.progressForPointer(event));
-    }
     else this.positionTarget = Math.round(this.positionTarget);
     this.activePointerId = null;
     this.press = null;

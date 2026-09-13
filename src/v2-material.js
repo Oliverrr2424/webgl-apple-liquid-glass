@@ -4,8 +4,8 @@
 export const DEFAULT_MATERIAL_V2 = Object.freeze({
   refraction: 84,
   // Capture distance as a fraction of the component's short side.
-  edgeReach: 0.17,
-  edgeWidth: 0.11,
+  edgeReach: 0.14,
+  edgeWidth: 0.21,
   dispersion: 2.0,
   // Softness ratio. Like backdropBlur it blurs the backdrop before refraction,
   // but its radius is resolved against each component's short side, so the

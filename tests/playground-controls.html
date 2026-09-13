@@ -89,6 +89,47 @@
     if (page.__lg.store.material.tint !== 1) {
       throw new Error(`dark glass left V2 tint at ${page.__lg.store.material.tint}`);
     }
+    frameDocument.querySelector('[data-glass-tone="light"]').click();
+    await wait(120);
+    if (page.__lg.store.material.tint !== 0) {
+      throw new Error(`light glass did not reset V2 tint to 0 (${page.__lg.store.material.tint})`);
+    }
+    frameDocument.querySelector('[data-glass-tone="dark"]').click();
+    await wait(120);
+    if (page.__lg.store.material.tint !== 1) {
+      throw new Error(`dark glass did not reset V2 tint to 1 (${page.__lg.store.material.tint})`);
+    }
+
+    page.__lg.setScene('scrol');
+    await wait(350);
+    const uiCanvas = frameDocument.querySelector('#ui');
+    const overlayPixels = () => {
+      const { width, height } = uiCanvas;
+      const data = uiCanvas.getContext('2d').getImageData(0, 0, width, height).data;
+      let count = 0;
+      for (let index = 3; index < data.length; index += 4) {
+        if (data[index] > 20) count++;
+      }
+      return count;
+    };
+    const iconsOff = frameDocument.querySelector('[data-icon-mode="off"]');
+    const iconsOn = frameDocument.querySelector('[data-icon-mode="on"]');
+    const labelsOff = frameDocument.querySelector('[data-label-mode="off"]');
+    const labelsOn = frameDocument.querySelector('[data-label-mode="on"]');
+    iconsOff.click();
+    labelsOff.click();
+    await wait(120);
+    const cleanPixels = overlayPixels();
+    iconsOn.click();
+    await wait(120);
+    const iconPixels = overlayPixels();
+    iconsOff.click();
+    labelsOn.click();
+    await wait(120);
+    const labelPixels = overlayPixels();
+    if (cleanPixels !== 0 || iconPixels <= cleanPixels || labelPixels <= cleanPixels || iconPixels === labelPixels) {
+      throw new Error(`scroll View toggles did not change overlay content (${cleanPixels}/${iconPixels}/${labelPixels})`);
+    }
 
     return {
       checks: [
@@ -97,7 +138,8 @@
         'switch opposite-side tap/current-side no-op/drag committed',
         'navbar click selected',
         'V1 fallback/V2 remount',
-        'dark glass sets V2 tint to 1.00',
+        'glass tone defaults reset V2 tint (light 0/dark 1)',
+        'scroll View icon/label toggles change overlay content',
       ],
     };
   };

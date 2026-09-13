@@ -144,35 +144,39 @@ function drawActionGlyph(ctx, x, y, size, color) {
 }
 
 /** Search and action chrome for the oversized live-scroll material specimen. */
-export function drawScrollSceneOverlay(ctx, elements, language = 'en') {
+export function drawScrollSceneOverlay(ctx, elements, language = 'en', options = {}) {
   const toolbar = elements.find((element) => element.id === 'toolbar');
   const action = elements.find((element) => element.id === 'search');
   if (!toolbar) return;
 
+  const showIcons = options.showIcons ?? true;
+  const showLabels = options.showLabels ?? true;
   const unit = toolbar.h;
   const foreground = 'rgba(247,248,252,.94)';
   const secondary = 'rgba(226,229,238,.70)';
   const centerY = toolbar.y + unit * 0.5;
-  drawMagnifier(ctx, toolbar.x + unit * 0.34, centerY - unit * 0.02, unit * 0.25, foreground);
+  if (showIcons) drawMagnifier(ctx, toolbar.x + unit * 0.34, centerY - unit * 0.02, unit * 0.25, foreground);
 
-  ctx.save();
-  ctx.fillStyle = foreground;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = `650 ${Math.max(18, unit * 0.20)}px -apple-system, "SF Pro Display", "PingFang SC", system-ui, sans-serif`;
-  ctx.fillText(language === 'zh' ? '搜索' : 'Search', toolbar.x + toolbar.w * 0.5, centerY - unit * 0.105);
-  ctx.fillStyle = secondary;
-  ctx.font = `560 ${Math.max(11, unit * 0.105)}px -apple-system, "SF Pro Text", system-ui, sans-serif`;
-  ctx.letterSpacing = '0.08em';
-  ctx.fillText(
-    language === 'zh' ? '在动态背景中查找' : 'FIND IN LIVE BACKDROP',
-    toolbar.x + toolbar.w * 0.5,
-    centerY + unit * 0.145,
-  );
-  ctx.restore();
-  drawMicrophone(ctx, toolbar.x + toolbar.w - unit * 0.34, centerY, unit * 0.22, foreground);
+  if (showLabels) {
+    ctx.save();
+    ctx.fillStyle = foreground;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `650 ${Math.max(18, unit * 0.20)}px -apple-system, "SF Pro Display", "PingFang SC", system-ui, sans-serif`;
+    ctx.fillText(language === 'zh' ? '搜索' : 'Search', toolbar.x + toolbar.w * 0.5, centerY - unit * 0.105);
+    ctx.fillStyle = secondary;
+    ctx.font = `560 ${Math.max(11, unit * 0.105)}px -apple-system, "SF Pro Text", system-ui, sans-serif`;
+    ctx.letterSpacing = '0.08em';
+    ctx.fillText(
+      language === 'zh' ? '在动态背景中查找' : 'FIND IN LIVE BACKDROP',
+      toolbar.x + toolbar.w * 0.5,
+      centerY + unit * 0.145,
+    );
+    ctx.restore();
+  }
+  if (showIcons) drawMicrophone(ctx, toolbar.x + toolbar.w - unit * 0.34, centerY, unit * 0.22, foreground);
 
-  if (action) {
+  if (showIcons && action) {
     drawActionGlyph(ctx, action.x + action.w * 0.5, action.y + action.h * 0.5, action.h * 0.42, foreground);
   }
 }

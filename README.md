@@ -211,8 +211,8 @@ Control containers carry `data-liquid-glass="webgl" | "fallback"` too, so one CS
 | Group | Key | Default | Meaning |
 | --- | --- | ---: | --- |
 | Transmission | `refraction` | `84` | Body bending strength (0–110) |
-| | `edgeReach` | `0.17` | Edge capture distance / short side. `0` disables capture |
-| | `edgeWidth` | `0.11` | Capture band width / short half-side |
+| | `edgeReach` | `0.14` | Edge capture distance / short side. `0` disables capture |
+| | `edgeWidth` | `0.21` | Capture band width / short half-side |
 | | `dispersion` | `2.0` | RGB split, display px |
 | | `frost` | `0` | Pre-blur radius / short side (per-element `frost` overrides) |
 | | `backdropBlur` | `0` | Pre-blur radius in CSS px; combines with `frost` |
