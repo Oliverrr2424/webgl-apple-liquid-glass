@@ -2,20 +2,20 @@
 
 Apple-style liquid glass for the web, rendered with WebGL2. Point it at an element and it refracts what is actually behind that element on the page, while it scrolls, resizes and animates.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-reel.gif" alt="Four liquid-glass surfaces over a liquid marble backdrop, then over the Earth with the background pre-blur ramped up behind them" width="100%">
+</p>
+
 <table align="center" width="100%">
   <tr>
-    <td align="center" width="50%">
-      <img src="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-home-warm-interaction.gif" alt="Liquid Glass V2 Home screen interaction on the warm wallpaper" width="100%">
+    <td align="center" width="36%" valign="top">
+      <img src="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-home.gif" alt="Swiping between two iPhone Home screen pages, folders and widgets rendered as liquid glass" width="100%">
     </td>
-    <td align="center" width="50%">
-      <img src="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-home-sunset-interaction.gif" alt="Liquid Glass V2 Home screen interaction on the sunset wallpaper" width="100%">
+    <td align="center" width="64%" valign="top">
+      <img src="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-press.gif" alt="Press effects: a selected capsule dragged along its track, a button held until it blooms, a toggle flipped" width="100%">
     </td>
   </tr>
 </table>
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-press-effects-interaction.gif" alt="Liquid Glass V2 press effects interaction" width="100%">
-</p>
 
 [Playground](https://oliverrr2424.github.io/webgl-apple-liquid-glass/) · [Landing page example](examples/landing)
 
@@ -63,7 +63,7 @@ new LiquidGlass(element, {
   tintTone: 'dark',     // 'light' (default), 'dark', or 'auto' from the backdrop
   frost: 0.3,           // blur behind the lens, as a ratio of the short side (default 0)
   backdrop: 'auto',
-  material: { refraction: 70 },   // partial V2 material, see below
+  material: { refraction: 70 },   // partial material, see below
 });
 ```
 
@@ -71,7 +71,7 @@ new LiquidGlass(element, {
 | --- | --- | --- |
 | `tint`, `tintTone`, `frost`, `opacity` | `0`, `'light'`, `0`, `1` | The look. Use `tintTone: 'dark'` behind white text. |
 | `backdrop` | `'auto'` | See above. |
-| `material` | V2 default | Partial [material](#material). Unknown keys throw. |
+| `material` | package default | Partial [material](#material). Unknown keys throw. |
 | `targets` | — | Selector or elements: draw several descendants as glass on one canvas. |
 | `shape`, `radius` | from CSS | `'rect' \| 'pill' \| 'circle'`, CSS px. |
 | `live` | `'auto'` | Redraw every frame. `auto` turns itself on while a `<canvas>` below the glass is in view or a `<video>` there is playing, including ones `auto` found for you. |
@@ -206,7 +206,7 @@ Control containers carry `data-liquid-glass="webgl" | "fallback"` too, so one CS
 
 ## Material
 
-`getDefaultMaterialV2()` returns a fresh copy. Ratios are relative to each surface's short side, so one material works from a 40 px toggle to a 400 px card.
+`getDefaultMaterial()` returns a fresh copy. Ratios are relative to each surface's short side, so one material works from a 40 px toggle to a 400 px card.
 
 | Group | Key | Default | Meaning |
 | --- | --- | ---: | --- |
@@ -232,12 +232,12 @@ The playground edits every value live; **Copy code** gives you the material.
 
 ## Canvas renderer
 
-`LiquidGlassWebGLV2` is the renderer underneath. Use it when you own the canvas and compose the frame yourself: canvas apps, games, WebGL scenes. Coordinates are canvas CSS pixels, and the backdrop is whatever you hand it.
+`LiquidGlassWebGL` is the renderer underneath. Use it when you own the canvas and compose the frame yourself: canvas apps, games, WebGL scenes. Coordinates are canvas CSS pixels, and the backdrop is whatever you hand it.
 
 ```js
-import { LiquidGlassWebGLV2 } from 'apple-liquid-glass-webgl';
+import { LiquidGlassWebGL } from 'apple-liquid-glass-webgl';
 
-const glass = new LiquidGlassWebGLV2(canvas, { compositeMode: 'overlay' });
+const glass = new LiquidGlassWebGL(canvas, { compositeMode: 'overlay' });
 glass.setBackdrop(sceneCanvas);         // canvas/video: live, image: static
 glass.setElements([
   { id: 'bar', shape: 'pill', x: 100, y: 28, width: 560, height: 66, tint: 0.2 },
@@ -251,19 +251,6 @@ glass.render();
 - **Frames:** `render()` is a no-op when nothing changed, and `render({ force: true })` always draws. `start()` / `stop()` run a loop for live sources.
 - **Hit testing:** `hitTestEvent(event)`, `hitTest(x, y)` and `distanceAt(x, y)` use the shader's own geometry.
 - Also: `setMaterial(partial)`, `updateElement(id, patch)`, `resize()`, `destroy()`, `onContextLost` / `onContextRestored` (context loss is handled), `effectiveMaterial` (after reduced transparency).
-
-<details>
-<summary>V1 renderer</summary>
-
-`LiquidGlassWebGL` is the original frosted model: bevel height field, variable blur, and smooth-union fusion of nearby shapes. Same element and backdrop API; its material is separate and not interchangeable with V2.
-
-```js
-import { LiquidGlassWebGL, makeMaterial } from 'apple-liquid-glass-webgl';
-const v1 = new LiquidGlassWebGL(canvas, { material: 'regular', fusion: true }); // 'regular' | 'clear' | 'lens'
-```
-
-Lengths are CSS pixels, and `sizeAdaptation` fits them to small controls. `setFusion(enabled, mergeRadius)` controls merging. See `src/index.d.ts` for every material key.
-</details>
 
 ## Limits
 

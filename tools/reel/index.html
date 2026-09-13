@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Liquid Glass — reel stage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: #000; overflow: hidden; }
+  #stage {
+    position: absolute; left: 0; top: 0;
+    width: 1920px; height: 1080px;
+    background: #000; overflow: hidden;
+    transform-origin: 0 0;
+  }
+  #stage canvas { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+  #bg { z-index: 0; }
+  #glass { z-index: 1; }
+  #fg { z-index: 2; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="bg" width="1920" height="1080"></canvas>
+    <canvas id="glass" width="1920" height="1080"></canvas>
+    <canvas id="fg" width="1920" height="1080"></canvas>
+  </div>
+  <script type="module" src="./reel.js"></script>
+</body>
+</html>
