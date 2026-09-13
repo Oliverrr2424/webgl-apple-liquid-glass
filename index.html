@@ -9,16 +9,16 @@
   * { box-sizing: border-box; }
   :root {
     color-scheme: dark;
-    --panel: #0f1217;
-    --panel-header: rgba(15,18,23,.82);
-    --surface: #171b23;
-    --surface-raised: #1e242f;
+    --panel: #080808;
+    --panel-header: rgba(8,8,8,.86);
+    --surface: #111111;
+    --surface-raised: #1a1a1a;
     --surface-inset: rgba(255,255,255,.035);
     --line: rgba(255,255,255,.09);
     --line-strong: rgba(255,255,255,.18);
-    --muted: #8e97a8;
-    --faint: #6c7688;
-    --text: #eef1f7;
+    --muted: #a0a0a0;
+    --faint: #747474;
+    --text: #f2f2f2;
     --accent: #93b6ff;
     --accent-text: #d9e6ff;
     --accent-soft: rgba(147,182,255,.15);
@@ -49,10 +49,10 @@
     --danger: #c94343;
     --shadow-pop: 0 10px 28px rgba(18,28,45,.12);
   }
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d10; color: var(--text);
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #030303; color: var(--text);
     font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
   #app { display: grid; grid-template-columns: minmax(0, 1fr) 372px; height: 100%; }
-  #stage { position: relative; min-width: 0; overflow: hidden; background: #0b0c0f; }
+  #stage { position: relative; min-width: 0; overflow: hidden; background: #050505; }
   #content, #scrim, #baseGl, #gl, #pressGl, #ui { position: absolute; inset: 0; display: block; }
   #baseGl { visibility: hidden; pointer-events: none; }
   #scrim { pointer-events: none; }
@@ -68,7 +68,7 @@
   #phoneGestureTips[hidden] { display: none; }
   .gestureTip[hidden] { display: none; }
   .gestureTip { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 7px; width: 150px; padding: 6px 7px; color: rgba(246,248,255,.84); border: 1px solid rgba(255,255,255,.14); border-radius: 9px; background: rgba(14,16,22,.58); backdrop-filter: blur(10px); box-shadow: 0 6px 16px rgba(0,0,0,.28); opacity: .5; pointer-events: auto; transition: opacity .25s ease, background .2s ease, border-color .2s ease; animation: gestureTipFade 6.5s ease-in-out infinite; }
-  .gestureTip:hover { opacity: .98; background: rgba(30,38,58,.72); border-color: rgba(154,186,255,.4); animation-play-state: paused; }
+  .gestureTip:hover { opacity: .98; background: rgba(28,28,28,.78); border-color: rgba(154,186,255,.4); animation-play-state: paused; }
   .gestureTip strong { display: block; color: rgba(255,255,255,.96); font-size: 10.5px; font-weight: 600; line-height: 1.2; }
   .gestureTip small { display: block; margin-top: 2px; overflow: hidden; color: rgba(220,228,242,.7); font-size: 9px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
   .gestureTipIcon { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 20px; color: rgba(198,215,255,.95); border: 1px solid rgba(154,186,255,.4); border-radius: 50%; font-size: 12px; }
@@ -83,13 +83,13 @@
   .gestureTip--notification:nth-child(2) { animation-delay: -2.1s; }
   .gestureTip--control:nth-child(3) { animation-delay: -4.2s; }
   @keyframes gestureTipFade { 0%, 100% { opacity: .34; } 35%, 65% { opacity: .78; } }
-  #unsupported { position: absolute; inset: 0; z-index: 5; display: grid; place-content: center; gap: 8px; padding: 40px; text-align: center; background: #0b0d10; color: #eff2f8; }
+  #unsupported { position: absolute; inset: 0; z-index: 5; display: grid; place-content: center; gap: 8px; padding: 40px; text-align: center; background: #050505; color: #f2f2f2; }
   /* An id selector outranks the user agent's [hidden] rule, so say it here. */
   #unsupported[hidden] { display: none; }
   #unsupported h2 { font-size: 16px; margin: 0; }
   #unsupported p { max-width: 42ch; margin: 0 auto; color: #8e97a8; font-size: 12px; }
   body.unsupported #panel { opacity: .35; pointer-events: none; }
-  #showPanel { position: absolute; z-index: 4; top: 18px; right: 20px; display: none; min-height: 32px; padding: 0 14px; color: #eef1f7; border: 1px solid rgba(255,255,255,.24); border-radius: 999px; background: rgba(12,15,20,.62); backdrop-filter: blur(14px); box-shadow: 0 8px 24px rgba(0,0,0,.18); font-size: 11px; }
+  #showPanel { position: absolute; z-index: 4; top: 18px; right: 20px; display: none; min-height: 32px; padding: 0 14px; color: #f2f2f2; border: 1px solid rgba(255,255,255,.24); border-radius: 999px; background: rgba(8,8,8,.68); backdrop-filter: blur(14px); box-shadow: 0 8px 24px rgba(0,0,0,.18); font-size: 11px; }
   body.hide-panel #showPanel { display: inline-flex; align-items: center; justify-content: center; }
 
   /* ------------------------------------------------------------------ panel */
@@ -168,6 +168,13 @@
   .segmented button:hover { background: transparent; color: var(--text); }
   .segmented button.active { background: var(--surface-raised); color: var(--text); font-weight: 600;
     box-shadow: 0 1px 3px rgba(0,0,0,.22); }
+  /* The legacy renderer is a footnote, not half the control: a small chip on
+     the left, with the current material taking the rest of the row. */
+  .segmented.rendererSwitch { grid-template-columns: 62px minmax(0, 1fr); align-items: center; }
+  .rendererSwitch button[data-renderer-version="v1"] { min-height: 22px; padding: 0 6px;
+    font-size: 9.5px; letter-spacing: .01em; opacity: .5; }
+  .rendererSwitch button[data-renderer-version="v1"]:hover,
+  .rendererSwitch button[data-renderer-version="v1"].active { opacity: .85; }
   [data-theme="light"] .segmented button.active { background: #fff; box-shadow: 0 1px 3px rgba(18,28,45,.14); }
   .versionNote { min-height: 30px; margin: 8px 2px 0; color: var(--muted); font-size: 10px; }
   .debugGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -272,12 +279,12 @@
     </div>
     <button id="showPanel" type="button" data-i18n="panel.inspector" data-i18n-aria="panel.show" aria-label="Show inspector" title="Show inspector">Inspector</button>
     <div id="loadState" data-i18n="loadState">Loading source imagery</div>
-    <div id="stageHud"><div class="eyebrow" id="hudVersion">LIQUID GLASS / V1</div><strong id="hudScene">Alpine Lake</strong><span id="hudKind">Natural landscape</span></div>
+    <div id="stageHud"><div class="eyebrow" id="hudVersion">LIQUID GLASS</div><strong id="hudScene">Alpine Lake</strong><span id="hudKind">Natural landscape</span></div>
     <div id="unsupported" hidden>
       <h2 data-i18n="unsupported.title">WebGL2 is unavailable</h2>
       <p><span data-i18n="unsupported.bodyA">This playground needs a WebGL2 context. The material cannot be rendered here, but</span>
         <code>LiquidGlassWebGL.isSupported()</code> <span data-i18n="unsupported.bodyB">and</span>
-        <code>LiquidGlassWebGLV2.isSupported()</code>
+        <code>LiquidGlassWebGL.isSupported()</code>
         <span data-i18n="unsupported.bodyC">report the same thing in your own app so you
         can fall back to a CSS surface.</span></p>
     </div>
@@ -303,10 +310,10 @@
     </header>
     <div class="panelBody">
       <div class="section">
-        <div class="sectionHeader"><h2 data-i18n="section.renderer">Renderer</h2><span class="sectionMeta" id="rendererVersion">V1 original</span></div>
-        <div class="segmented">
-          <button type="button" data-renderer-version="v1" data-i18n="renderer.v1">V1 Original</button>
-          <button type="button" data-renderer-version="v2" data-i18n="renderer.v2">V2 Transparent</button>
+        <div class="sectionHeader"><h2 data-i18n="section.renderer">Renderer</h2><span class="sectionMeta" id="rendererVersion">Current</span></div>
+        <div class="segmented rendererSwitch">
+          <button type="button" data-renderer-version="v1" data-i18n="renderer.v1">Legacy</button>
+          <button type="button" data-renderer-version="v2" data-i18n="renderer.v2">Current</button>
         </div>
         <p class="versionNote" id="versionNote">The original frosted material with smooth-union fusion.</p>
         <div class="segmented" id="glassToneControl" role="group" aria-label="Glass appearance">
@@ -400,7 +407,7 @@
         </div>
       </div>
       <div class="section">
-        <div class="sectionHeader"><h2 data-i18n="section.material">Material</h2><span class="sectionMeta" id="materialVersion">V1 parameters</span></div>
+        <div class="sectionHeader"><h2 data-i18n="section.material">Material</h2><span class="sectionMeta" id="materialVersion">Default parameters</span></div>
         <div id="sliders"></div>
         <details class="sliderGroup" id="navLensGroup" hidden>
           <summary><span class="sliderGroupName" data-i18n="group.navLens">Navigation lens (Press scene)</span><span class="sliderGroupChevron" aria-hidden="true"></span></summary>

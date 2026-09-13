@@ -28,17 +28,17 @@ const STRINGS = {
     'section.material': 'Material',
 
     'meta.thisFrame': 'this frame',
-    'meta.v1': 'V1 original',
-    'meta.v2': 'V2 transparent',
-    'meta.v1params': 'V1 parameters',
-    'meta.v2params': 'V2 parameters',
+    'meta.v1': 'Legacy',
+    'meta.v2': 'Current',
+    'meta.v1params': 'Legacy parameters',
+    'meta.v2params': 'Default parameters',
     'meta.shaderOutput': 'shader output',
     'meta.selectThenArrows': 'select, then arrow keys',
 
-    'renderer.v1': 'V1 Original',
-    'renderer.v2': 'V2 Transparent',
-    'note.v1': 'The original frosted material with smooth-union fusion.',
-    'note.v2': 'Clear edge-capture optics. Its values are independent from V1, including same-named controls.',
+    'renderer.v1': 'Legacy',
+    'renderer.v2': 'Current',
+    'note.v1': 'Legacy frosted renderer, retained for comparison.',
+    'note.v2': 'The package’s default clear edge-capture optics.',
 
     'preset.regular': 'Regular',
     'preset.clear': 'Clear',
@@ -112,8 +112,8 @@ const STRINGS = {
     'debug.dispersion': 'Dispersion',
 
     'tip.v1': 'Drag components together: inside the fusion distance they form one surface, so the silhouette, refraction and highlight flow through a shared bridge. A gap only closes while it is narrower than about half the fusion distance.',
-    'tip.v2': 'V2 keeps the centre nearly straight-through and captures nearby backdrop transitions only in the edge field. Roundness is a ratio; optical lengths are scaled independently.',
-    'tip.locked': 'This reference scene has a fixed iPhone layout, but every liquid-glass component can be selected and pressed. Switch between V1 and V2, then adjust only that renderer’s material parameters.',
+    'tip.v2': 'Liquid Glass keeps the centre nearly straight-through and captures nearby backdrop transitions only in the edge field. Roundness is a ratio; optical lengths are scaled independently.',
+    'tip.locked': 'This reference scene has a fixed iPhone layout, but every liquid-glass component can be selected and pressed. Adjust the current renderer’s material parameters, or use Legacy for comparison.',
     'tip.interaction': 'Press and drag either side of the selected capsule. It expands and brightens while it follows your finger. Hold the standalone glass controls to see their white bloom and spring-back.',
 
     'kb.prefix': 'Keyboard:',
@@ -258,17 +258,17 @@ const STRINGS = {
     'section.material': '材质',
 
     'meta.thisFrame': '当前帧',
-    'meta.v1': 'V1 经典',
-    'meta.v2': 'V2 透明',
-    'meta.v1params': 'V1 参数',
-    'meta.v2params': 'V2 参数',
+    'meta.v1': '旧版',
+    'meta.v2': '当前版本',
+    'meta.v1params': '旧版参数',
+    'meta.v2params': '默认参数',
     'meta.shaderOutput': '着色器输出',
     'meta.selectThenArrows': '选中后用方向键移动',
 
-    'renderer.v1': 'V1 经典',
-    'renderer.v2': 'V2 透明',
-    'note.v1': '经典的磨砂材质，支持平滑融合。',
-    'note.v2': '清澈的边缘捕捉光学。参数与 V1 相互独立，同名参数互不影响。',
+    'renderer.v1': '旧版',
+    'renderer.v2': '当前版本',
+    'note.v1': '保留用于对比的旧版磨砂渲染器。',
+    'note.v2': '本包默认的清澈边缘捕捉光学。',
 
     'preset.regular': '常规',
     'preset.clear': '清透',
@@ -342,8 +342,8 @@ const STRINGS = {
     'debug.dispersion': '色散',
 
     'tip.v1': '把组件拖到一起：在融合距离内它们会合并为一个表面，轮廓、折射和高光会流过共同的桥接。只有当缝隙小于融合距离的一半左右时才会闭合。',
-    'tip.v2': 'V2 让中心区域近乎直通，只在边缘区域捕捉附近的背景变化。圆角是比例值；光学长度独立缩放。',
-    'tip.locked': '这个参考场景使用固定的 iPhone 布局，但每个液态玻璃组件都可以选中和按压。可在 V1 与 V2 之间切换，然后只调整当前渲染器的材质参数。',
+    'tip.v2': 'Liquid Glass 让中心区域近乎直通，只在边缘区域捕捉附近的背景变化。圆角是比例值；光学长度独立缩放。',
+    'tip.locked': '这个参考场景使用固定的 iPhone 布局，但每个液态玻璃组件都可以选中和按压。你可以调整当前渲染器的材质参数，或切换到旧版进行对比。',
     'tip.interaction': '按住并拖动选中胶囊的任意一侧，它会跟随手指放大并变亮。按住其他独立的玻璃控件，可以看到它们的白色泛光与回弹。',
 
     'kb.prefix': '快捷键：',

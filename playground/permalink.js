@@ -4,7 +4,7 @@
 // tuning session lives in the URL hash and can be copied out as the exact code
 // that reproduces it.
 
-import { DEFAULT_MATERIAL, getDefaultMaterial } from '../src/index.js?press-lens=2';
+import { DEFAULT_MATERIAL_V1, getDefaultMaterialV1 } from '../src/index.js?press-lens=2';
 import { DEFAULT_MATERIAL_V2, getDefaultMaterialV2 } from '../src/v2.js?press-lens=2';
 import { DEFAULT_NAVIGATION_LENS } from '../src/controls.js?controls=1';
 
@@ -28,7 +28,7 @@ function encodeNavLens(navLens = {}) {
 }
 
 const versionOf = (value) => value === 'v2' ? 'v2' : 'v1';
-const defaultsFor = (version) => versionOf(version) === 'v2' ? DEFAULT_MATERIAL_V2 : DEFAULT_MATERIAL;
+const defaultsFor = (version) => versionOf(version) === 'v2' ? DEFAULT_MATERIAL_V2 : DEFAULT_MATERIAL_V1;
 
 function encodeMaterial(material, defaults) {
   return Object.keys(defaults)
@@ -135,7 +135,7 @@ export function writeHash(state) {
 /** The code that reproduces the current session with the published package. */
 export function toCode(state) {
   const version = versionOf(state.version);
-  const defaults = version === 'v2' ? getDefaultMaterialV2() : getDefaultMaterial();
+  const defaults = version === 'v2' ? getDefaultMaterialV2() : getDefaultMaterialV1();
   const defaultDefinition = defaultsFor(version);
   const overrides = Object.keys(defaultDefinition)
     .filter((key) => typeof state.material[key] === 'number'
@@ -154,10 +154,10 @@ export function toCode(state) {
     : '// Draw your own content into a canvas and pass it to glass.setBackdrop().';
 
   const imports = version === 'v2'
-    ? "import { LiquidGlassWebGLV2, getDefaultMaterialV2 } from 'apple-liquid-glass-webgl';"
-    : "import { LiquidGlassWebGL, getDefaultMaterial } from 'apple-liquid-glass-webgl';";
-  const getMaterial = version === 'v2' ? 'getDefaultMaterialV2' : 'getDefaultMaterial';
-  const GlassClass = version === 'v2' ? 'LiquidGlassWebGLV2' : 'LiquidGlassWebGL';
+    ? "import { LiquidGlassWebGL, getDefaultMaterial } from 'apple-liquid-glass-webgl';"
+    : "import { LiquidGlassWebGL, getDefaultMaterial } from 'apple-liquid-glass-webgl/v1';";
+  const getMaterial = 'getDefaultMaterial';
+  const GlassClass = 'LiquidGlassWebGL';
   const options = version === 'v2' ? ['  material,'] : ['  material,', `  fusion: ${state.fusion},`];
 
   return [

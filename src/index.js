@@ -95,7 +95,7 @@ function matchMediaSafe(query) {
  * A small, framework-free WebGL2 component for Apple-inspired liquid glass.
  * Coordinates and dimensions are CSS pixels relative to the supplied canvas.
  */
-export class LiquidGlassWebGL {
+export class LiquidGlassWebGLV1 {
   /**
    * Whether this environment can run the component, so callers can fall back to
    * a CSS surface without catching a constructor throw. The probe canvas is
@@ -471,13 +471,27 @@ export class LiquidGlassWebGL {
 }
 
 export {
-  DEFAULT_MATERIAL, PRESETS, REDUCED_TRANSPARENCY_MATERIAL, getDefaultMaterial, makeMaterial,
-  MAX_GLASS_SHAPES, MIPS, connectedElementGroups, groupElements, hitTestElements, sdGroup,
+  DEFAULT_MATERIAL as DEFAULT_MATERIAL_V1,
+  PRESETS as PRESETS_V1,
+  REDUCED_TRANSPARENCY_MATERIAL as REDUCED_TRANSPARENCY_MATERIAL_V1,
+  getDefaultMaterial as getDefaultMaterialV1,
+  makeMaterial as makeMaterialV1,
+  MAX_GLASS_SHAPES, MIPS, connectedElementGroups, groupElements,
+  hitTestElements as hitTestElementsV1, sdGroup,
 };
 
-// V2 is additive: the original class and material above remain the stable V1
-// API, while the transparent optical model has its own class and parameters.
+// The transparent optical model is the package's primary renderer. V2-suffixed
+// exports remain as compatibility aliases for applications that adopted it
+// while it was being developed separately.
 export {
+  LiquidGlassWebGLV2 as LiquidGlassWebGL,
+  DEFAULT_MATERIAL_V2 as DEFAULT_MATERIAL,
+  REDUCED_TRANSPARENCY_MATERIAL_V2 as REDUCED_TRANSPARENCY_MATERIAL,
+  SLIDERS_V2 as SLIDERS,
+  getDefaultMaterialV2 as getDefaultMaterial,
+  makeMaterialV2 as makeMaterial,
+  distanceToElementsV2 as distanceToElements,
+  hitTestElementsV2 as hitTestElements,
   LiquidGlassWebGLV2, DEFAULT_MATERIAL_V2, REDUCED_TRANSPARENCY_MATERIAL_V2,
   SLIDERS_V2, getDefaultMaterialV2, makeMaterialV2,
   distanceToElementsV2, hitTestElementsV2,

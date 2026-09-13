@@ -61,7 +61,7 @@ test('the exported code only sets parameters that were changed', () => {
   state.material.blurRim = 32;
   const code = toCode({ ...state, backdropSrc: './wallpaper.webp' });
 
-  assert.match(code, /import \{ LiquidGlassWebGL, getDefaultMaterial \}/);
+  assert.match(code, /apple-liquid-glass-webgl\/v1/);
   assert.match(code, /material\.blurRim = 32;/);
   assert.match(code, /fusion: true,/);
   assert.match(code, /await glass\.loadBackdrop\('\.\/wallpaper\.webp'\);/);
@@ -85,7 +85,7 @@ test('every serialised parameter name is a real material parameter', () => {
   }
 });
 
-test('V2 share links and code use only the V2 material contract', () => {
+test('current share links and code use the package default material contract', () => {
   const state = session({
     version: 'v2',
     material: getDefaultMaterialV2(),
@@ -102,11 +102,11 @@ test('V2 share links and code use only the V2 material contract', () => {
   assert.deepEqual(decoded.material, { dispersion: 1.4, edgeWidth: 0.31 });
 
   const code = toCode({ ...state, backdropSrc: null });
-  assert.match(code, /LiquidGlassWebGLV2, getDefaultMaterialV2/);
-  assert.match(code, /new LiquidGlassWebGLV2/);
+  assert.match(code, /import \{ LiquidGlassWebGL, getDefaultMaterial \}/);
+  assert.match(code, /new LiquidGlassWebGL/);
   assert.match(code, /material\.dispersion = 1\.4/);
   assert.doesNotMatch(code, /fusion:/);
-  assert.doesNotMatch(code, /getDefaultMaterial\(\)/);
+  assert.match(code, /getDefaultMaterial\(\)/);
 });
 
 test('same-named parameters are decoded against the selected version only', () => {

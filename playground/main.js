@@ -5,8 +5,8 @@
 // renderer. Anything awkward here is awkward for everyone, which is the point.
 
 import {
-  LiquidGlassWebGL, LiquidGlassWebGLV2, connectedElementGroups,
-  makeMaterial,
+  LiquidGlassWebGL, LiquidGlassWebGLV1, connectedElementGroups,
+  makeMaterialV1,
 } from '../src/index.js?press-lens=2';
 import { getDefaultMaterialV2 } from '../src/v2-material.js?press-lens=2';
 import {
@@ -64,7 +64,7 @@ const uiContext = uiCanvas.getContext('2d');
 const shared = decodeState();
 const initialVersion = shared ? (shared.version === 'v2' ? 'v2' : 'v1') : 'v2';
 const materials = {
-  v1: makeMaterial('regular'),
+  v1: makeMaterialV1('regular'),
   v2: getDefaultMaterialV2(),
 };
 
@@ -150,7 +150,7 @@ function effectiveFusion() {
 }
 
 function createGlass(targetCanvas = glCanvas, material = store.material) {
-  const GlassClass = store.version === 'v2' ? LiquidGlassWebGLV2 : LiquidGlassWebGL;
+  const GlassClass = store.version === 'v2' ? LiquidGlassWebGL : LiquidGlassWebGLV1;
   const options = {
     compositeMode: 'overlay',
     material,
@@ -1437,7 +1437,7 @@ function syncPresetButtons(active) {
 for (const button of document.querySelectorAll('[data-preset]')) {
   button.addEventListener('click', () => {
     if (store.version !== 'v1') return;
-    Object.assign(store.material, makeMaterial(button.dataset.preset));
+    Object.assign(store.material, makeMaterialV1(button.dataset.preset));
     applyMaterial();
     inspector.sync();
     syncPresetButtons(button.dataset.preset);
@@ -1447,7 +1447,7 @@ for (const button of document.querySelectorAll('[data-preset]')) {
 }
 
 $('resetMaterial').addEventListener('click', () => {
-  const defaults = store.version === 'v2' ? getDefaultMaterialV2() : makeMaterial('regular');
+  const defaults = store.version === 'v2' ? getDefaultMaterialV2() : makeMaterialV1('regular');
   Object.assign(store.material, defaults);
   Object.assign(store.navLens, DEFAULT_NAV_LENS);
   applyMaterial();
@@ -1471,7 +1471,7 @@ function syncVersionUI() {
   $('rendererVersion').textContent = t(isV2 ? 'meta.v2' : 'meta.v1');
   $('materialVersion').textContent = t(isV2 ? 'meta.v2params' : 'meta.v1params');
   $('versionNote').textContent = t(isV2 ? 'note.v2' : 'note.v1');
-  $('hudVersion').textContent = isV2 ? 'LIQUID GLASS / V2 TRANSPARENT' : 'LIQUID GLASS / V1 ORIGINAL';
+  $('hudVersion').textContent = isV2 ? 'LIQUID GLASS' : 'LIQUID GLASS / LEGACY';
   $('materialTip').textContent = locked
     ? t('tip.locked')
     : t(isV2 ? 'tip.v2' : 'tip.v1');

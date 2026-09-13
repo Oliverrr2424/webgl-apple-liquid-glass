@@ -8,8 +8,8 @@
 <canvas id="v2"></canvas>
 <script type="module">
   import {
-    LiquidGlassWebGL, LiquidGlassWebGLV2,
-    getDefaultMaterial, getDefaultMaterialV2,
+    LiquidGlassWebGL, LiquidGlassWebGLV1,
+    getDefaultMaterial, getDefaultMaterialV1,
   } from '../src/index.js';
 
   const backdrop = document.querySelector('#backdrop');
@@ -24,15 +24,15 @@
   context.fillRect(0, 0, backdrop.width, backdrop.height);
 
   const element = { id: 'surface', shape: 'folder', x: 60, y: 38, width: 120, height: 84 };
-  const v1 = new LiquidGlassWebGL(document.querySelector('#v1'), {
+  const v1 = new LiquidGlassWebGLV1(document.querySelector('#v1'), {
     compositeMode: 'overlay', preserveDrawingBuffer: true, autoResize: false,
-    material: getDefaultMaterial(), elements: [element],
+    material: getDefaultMaterialV1(), elements: [element],
   });
   v1.setBackdrop(backdrop, { update: 'static', autoStart: false, shouldRender: false });
 
-  const v2 = new LiquidGlassWebGLV2(document.querySelector('#v2'), {
+  const v2 = new LiquidGlassWebGL(document.querySelector('#v2'), {
     compositeMode: 'overlay', preserveDrawingBuffer: true, autoResize: false,
-    material: getDefaultMaterialV2(), elements: [element],
+    material: getDefaultMaterial(), elements: [element],
   });
   v2.setBackdrop(backdrop, { update: 'static', autoStart: false, shouldRender: false });
 

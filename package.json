@@ -26,15 +26,19 @@
   "sideEffects": false,
   "main": "./src/index.js",
   "module": "./src/index.js",
-  "types": "./src/index.d.ts",
+  "types": "./src/main.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.d.ts",
+      "types": "./src/main.d.ts",
       "default": "./src/index.js"
     },
     "./v2": {
       "types": "./src/v2.d.ts",
       "default": "./src/v2.js"
+    },
+    "./v1": {
+      "types": "./src/v1.d.ts",
+      "default": "./src/v1.js"
     },
     "./dom": {
       "types": "./src/dom.d.ts",
@@ -52,6 +56,7 @@
   "files": [
     "src/index.js",
     "src/index.d.ts",
+    "src/main.d.ts",
     "src/renderer.js",
     "src/shaders.js",
     "src/material.js",
@@ -61,6 +66,8 @@
     "src/v2-shaders.js",
     "src/v2-material.js",
     "src/v2-geometry.js",
+    "src/v1.js",
+    "src/v1.d.ts",
     "src/dom.js",
     "src/dom.d.ts",
     "src/dom-backdrop.js",

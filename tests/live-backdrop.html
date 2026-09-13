@@ -10,7 +10,7 @@
   <body>
     <canvas id="output"></canvas>
     <script type="module">
-      import { LiquidGlassWebGL } from '../src/index.js';
+      import { LiquidGlassWebGL } from '../src/v1.js';
 
       const nextFrames = (count = 3) => new Promise((resolve) => {
         const step = () => count-- > 0 ? requestAnimationFrame(step) : resolve();
