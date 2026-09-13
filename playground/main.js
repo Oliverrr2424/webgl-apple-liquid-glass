@@ -1465,10 +1465,9 @@ function syncVersionUI() {
   syncGlassTone();
   syncNavLensControls();
   const locked = Boolean(currentScene().lockedComponents);
-  for (const button of document.querySelectorAll('[data-renderer-version]')) {
-    button.classList.toggle('active', button.dataset.rendererVersion === store.version);
-  }
-  $('rendererVersion').textContent = t(isV2 ? 'meta.v2' : 'meta.v1');
+  const rendererToggle = $('rendererToggle');
+  rendererToggle.textContent = t(isV2 ? 'meta.v2' : 'meta.v1');
+  rendererToggle.classList.toggle('legacy', !isV2);
   $('materialVersion').textContent = t(isV2 ? 'meta.v2params' : 'meta.v1params');
   $('versionNote').textContent = t(isV2 ? 'note.v2' : 'note.v1');
   $('hudVersion').textContent = isV2 ? 'LIQUID GLASS' : 'LIQUID GLASS / LEGACY';
@@ -1513,9 +1512,9 @@ function setRendererVersion(version, { announceChange = true } = {}) {
   if (announceChange) announce(t('announce.switched', { version: t(version === 'v2' ? 'meta.v2' : 'meta.v1') }));
 }
 
-for (const button of document.querySelectorAll('[data-renderer-version]')) {
-  button.addEventListener('click', () => setRendererVersion(button.dataset.rendererVersion));
-}
+$('rendererToggle').addEventListener('click', () => {
+  setRendererVersion(store.version === 'v2' ? 'v1' : 'v2');
+});
 
 function syncToggleButtons() {
   const flags = {

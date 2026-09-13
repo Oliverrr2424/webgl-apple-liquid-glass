@@ -35,8 +35,7 @@ const STRINGS = {
     'meta.shaderOutput': 'shader output',
     'meta.selectThenArrows': 'select, then arrow keys',
 
-    'renderer.v1': 'Legacy',
-    'renderer.v2': 'Current',
+    'renderer.switch': 'Switch renderer',
     'note.v1': 'Legacy frosted renderer, retained for comparison.',
     'note.v2': 'The package’s default clear edge-capture optics.',
 
@@ -265,8 +264,7 @@ const STRINGS = {
     'meta.shaderOutput': '着色器输出',
     'meta.selectThenArrows': '选中后用方向键移动',
 
-    'renderer.v1': '旧版',
-    'renderer.v2': '当前版本',
+    'renderer.switch': '切换渲染器',
     'note.v1': '保留用于对比的旧版磨砂渲染器。',
     'note.v2': '本包默认的清澈边缘捕捉光学。',
 

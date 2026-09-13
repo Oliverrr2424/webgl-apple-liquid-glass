@@ -32,6 +32,15 @@
     await wait(500);
 
     const frameDocument = iframe.contentDocument;
+    const rendererToggle = frameDocument.querySelector('#rendererToggle');
+    if (rendererToggle.classList.contains('legacy')) throw new Error('renderer button did not show the current V2 state');
+    if (frameDocument.querySelector('#glassToneControl').hidden) throw new Error('V2 glass tone buttons are hidden');
+    if (!frameDocument.querySelector('#presetToolbar').hidden || !frameDocument.querySelector('#fusionControl').hidden) {
+      throw new Error('V1-only buttons were shown with V2');
+    }
+    if (!frameDocument.querySelector('[title^="refraction -"]') || frameDocument.querySelector('[title^="radius -"]')) {
+      throw new Error('V2 material controls were mixed with V1 controls');
+    }
     const hosts = [...frameDocument.querySelectorAll('[data-playground-control]')];
     if (hosts.length !== 2) throw new Error(`Press mounted ${hosts.length} public controls instead of 2`);
     const duplicated = page.__lg.glass.elements.filter((element) => (
@@ -71,14 +80,27 @@
     const discover = navigation.querySelector('[data-index="1"]');
     if (discover.getAttribute('aria-selected') !== 'true') throw new Error('navbar click-to-select regressed');
 
-    page.__lg.setVersion('v1');
+    rendererToggle.click();
     await wait(250);
+    if (page.__lg.store.version !== 'v1' || !rendererToggle.classList.contains('legacy')) {
+      throw new Error('renderer button did not switch to V1');
+    }
+    if (!frameDocument.querySelector('#glassToneControl').hidden) throw new Error('V2-only glass tone buttons were shown with V1');
+    if (frameDocument.querySelector('#presetToolbar').hidden || frameDocument.querySelector('#fusionControl').hidden) {
+      throw new Error('V1-only buttons stayed hidden with V1');
+    }
+    if (!frameDocument.querySelector('[title^="radius -"]') || frameDocument.querySelector('[title^="refraction -"]')) {
+      throw new Error('V1 material controls were mixed with V2 controls');
+    }
     if (frameDocument.querySelectorAll('[data-playground-control]').length) {
       throw new Error('V1 comparison kept V2 public controls mounted');
     }
 
-    page.__lg.setVersion('v2');
+    rendererToggle.click();
     await wait(350);
+    if (page.__lg.store.version !== 'v2' || rendererToggle.classList.contains('legacy')) {
+      throw new Error('renderer button did not switch back to V2');
+    }
     if (frameDocument.querySelectorAll('[data-playground-control]').length !== 2) {
       throw new Error('V2 public controls did not remount');
     }
@@ -134,6 +156,7 @@
     return {
       checks: [
         'Press uses two public controls',
+        'renderer button switches versions with isolated controls',
         'no shared-canvas duplicate',
         'switch opposite-side tap/current-side no-op/drag committed',
         'navbar click selected',

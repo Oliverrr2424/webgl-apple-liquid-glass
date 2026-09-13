@@ -168,13 +168,13 @@
   .segmented button:hover { background: transparent; color: var(--text); }
   .segmented button.active { background: var(--surface-raised); color: var(--text); font-weight: 600;
     box-shadow: 0 1px 3px rgba(0,0,0,.22); }
-  /* The legacy renderer is a footnote, not half the control: a small chip on
-     the left, with the current material taking the rest of the row. */
-  .segmented.rendererSwitch { grid-template-columns: 62px minmax(0, 1fr); align-items: center; }
-  .rendererSwitch button[data-renderer-version="v1"] { min-height: 22px; padding: 0 6px;
-    font-size: 9.5px; letter-spacing: .01em; opacity: .5; }
-  .rendererSwitch button[data-renderer-version="v1"]:hover,
-  .rendererSwitch button[data-renderer-version="v1"].active { opacity: .85; }
+  /* The legacy renderer is a footnote, not a choice with equal billing: the
+     section header carries one small button that swaps between them, and the
+     note underneath always describes whichever is running. */
+  .metaButton { min-height: 20px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px;
+    background: transparent; color: var(--faint); font-size: 10px; letter-spacing: .01em; }
+  .metaButton:hover { color: var(--text); border-color: var(--accent-line); background: var(--surface-inset); }
+  .metaButton.legacy { color: var(--accent-text); border-color: var(--accent-line); background: var(--accent-soft); }
   [data-theme="light"] .segmented button.active { background: #fff; box-shadow: 0 1px 3px rgba(18,28,45,.14); }
   .versionNote { min-height: 30px; margin: 8px 2px 0; color: var(--muted); font-size: 10px; }
   .debugGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -310,11 +310,7 @@
     </header>
     <div class="panelBody">
       <div class="section">
-        <div class="sectionHeader"><h2 data-i18n="section.renderer">Renderer</h2><span class="sectionMeta" id="rendererVersion">Current</span></div>
-        <div class="segmented rendererSwitch">
-          <button type="button" data-renderer-version="v1" data-i18n="renderer.v1">Legacy</button>
-          <button type="button" data-renderer-version="v2" data-i18n="renderer.v2">Current</button>
-        </div>
+        <div class="sectionHeader"><h2 data-i18n="section.renderer">Renderer</h2><button type="button" class="metaButton" id="rendererToggle" data-i18n-aria="renderer.switch" aria-label="Switch renderer" data-i18n-title="renderer.switch" title="Switch renderer">Current</button></div>
         <p class="versionNote" id="versionNote">The original frosted material with smooth-union fusion.</p>
         <div class="segmented" id="glassToneControl" role="group" aria-label="Glass appearance">
           <button type="button" data-glass-tone="light" data-i18n="glass.light">Light glass</button>
