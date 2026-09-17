@@ -3,7 +3,54 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Liquid Glass — Playground</title>
+<title>Apple Liquid Glass Playground — apple-liquid-glass-webgl</title>
+<meta name="description" content="Live playground for apple-liquid-glass-webgl, the zero-dependency WebGL2 library that gives any HTML element Apple-style liquid glass: real refraction of the page behind it, not just a backdrop-filter blur. Tune every material parameter and copy the code.">
+<link rel="canonical" href="https://oliverrr2424.github.io/webgl-apple-liquid-glass/">
+<link rel="alternate" type="text/plain" href="https://oliverrr2424.github.io/webgl-apple-liquid-glass/llms.txt" title="Summary for AI assistants">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="apple-liquid-glass-webgl">
+<meta property="og:title" content="Apple Liquid Glass Playground — apple-liquid-glass-webgl">
+<meta property="og:description" content="Tune Apple-style liquid glass live — refraction, edge capture, dispersion, rim light — then copy the material as code. npm install apple-liquid-glass-webgl">
+<meta property="og:url" content="https://oliverrr2424.github.io/webgl-apple-liquid-glass/">
+<meta property="og:image" content="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-reel.gif">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Apple Liquid Glass Playground — apple-liquid-glass-webgl">
+<meta name="twitter:description" content="A zero-dependency WebGL2 library for Apple-style liquid glass on any HTML element. Tune the material live and copy the code.">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-reel.gif">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "@id": "https://oliverrr2424.github.io/webgl-apple-liquid-glass/#playground",
+      "name": "Apple Liquid Glass Playground",
+      "url": "https://oliverrr2424.github.io/webgl-apple-liquid-glass/",
+      "applicationCategory": "DeveloperApplication",
+      "browserRequirements": "Requires WebGL2",
+      "description": "An interactive playground for apple-liquid-glass-webgl: every optical parameter of the liquid glass material as a live slider, over real wallpapers and an iPhone-style home screen, with a button that copies the resulting material as code.",
+      "isPartOf": { "@id": "https://oliverrr2424.github.io/webgl-apple-liquid-glass/#software" },
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "inLanguage": ["en", "zh-Hans"]
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "@id": "https://oliverrr2424.github.io/webgl-apple-liquid-glass/#software",
+      "name": "apple-liquid-glass-webgl",
+      "alternateName": "Apple Liquid Glass WebGL",
+      "description": "A zero-dependency WebGL2 JavaScript library that renders Apple-style liquid glass on any HTML element. It repaints the page behind the element and refracts it in a fragment shader, so the refraction works in Chrome, Safari and Firefox alike, unlike the SVG displacement maps driven through backdrop-filter: url(#filter) that only Chromium honours. The element's own DOM is untouched, so text stays selectable and accessible. Works with React, Next.js, Vue, Svelte or plain HTML, and falls back to backdrop-filter where WebGL2 is unavailable.",
+      "applicationCategory": "DeveloperApplication",
+      "codeRepository": "https://github.com/Oliverrr2424/webgl-apple-liquid-glass",
+      "programmingLanguage": ["JavaScript", "GLSL"],
+      "softwareVersion": "2.5.1",
+      "license": "https://spdx.org/licenses/MIT.html",
+      "url": "https://www.npmjs.com/package/apple-liquid-glass-webgl",
+      "author": { "@type": "Person", "name": "Oliverrr2424", "url": "https://github.com/Oliverrr2424" },
+      "subjectOf": { "@id": "https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/#article" }
+    }
+  ]
+}
+</script>
 <link rel="preload" as="image" href="./assets/wallpapers/home-page-warm.png">
 <style>
   * { box-sizing: border-box; }

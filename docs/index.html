@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apple Liquid Glass for the Web — works in Safari and Firefox, not just Chrome</title>
+<meta name="description" content="apple-liquid-glass-webgl gives any HTML element Apple-style Liquid Glass with real WebGL2 refraction — in Chrome, Safari and Firefox alike, because it never touches the Chromium-only backdrop-filter: url(#filter) trick. Works with React, Vue, Svelte, Next.js or plain HTML, and keeps your DOM intact. One line: new LiquidGlass('.navbar').">
+<link rel="canonical" href="https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/">
+<link rel="alternate" hreflang="en" href="https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/">
+<link rel="alternate" hreflang="zh-Hans" href="https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/zh/">
+<link rel="alternate" hreflang="x-default" href="https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/">
+<meta name="author" content="Oliverrr2424">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="apple-liquid-glass-webgl">
+<meta property="og:title" content="Apple Liquid Glass for the Web — works in Safari and Firefox, not just Chrome">
+<meta property="og:description" content="Real WebGL2 refraction on any HTML element, in every browser with WebGL2 — no Chromium-only backdrop-filter SVG trick, and your DOM stays intact.">
+<meta property="og:url" content="https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/">
+<meta property="og:image" content="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-reel.gif">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Apple Liquid Glass for the Web — works in Safari and Firefox, not just Chrome">
+<meta name="twitter:description" content="Point it at an element and it refracts what is actually behind it — in every browser with WebGL2, with your DOM left intact.">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-reel.gif">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #15181d; --muted: #5c6472; --line: rgba(20,26,38,.12);
+    --surface: #f6f7f9; --code: #f1f3f6; --accent: #2f66e0; --accent-soft: rgba(47,102,224,.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0c0e; --fg: #eceef2; --muted: #a0a7b4; --line: rgba(255,255,255,.12);
+      --surface: #131519; --code: #16181d; --accent: #93b6ff; --accent-soft: rgba(147,182,255,.12); }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%; }
+  main, header, footer { width: min(100% - 32px, 760px); margin-inline: auto; }
+  header { padding: 56px 0 8px; }
+  h1 { font-size: clamp(30px, 6vw, 42px); line-height: 1.15; letter-spacing: -.03em; margin: 0 0 12px; }
+  h2 { font-size: 24px; letter-spacing: -.02em; margin: 44px 0 10px; scroll-margin-top: 20px; }
+  h3 { font-size: 18px; letter-spacing: -.01em; margin: 26px 0 6px; scroll-margin-top: 20px; }
+  .lede { font-size: 19px; color: var(--muted); margin: 0 0 20px; }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  nav.links { display: flex; flex-wrap: wrap; gap: 14px; font-size: 15px; padding: 0 0 8px; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  code { background: var(--code); padding: .15em .4em; border-radius: 5px; font-size: .9em; }
+  pre { background: var(--code); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto; font-size: 13.5px; line-height: 1.6; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 15px; display: block; overflow-x: auto; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; }
+  .answer { background: var(--accent-soft); border-left: 3px solid var(--accent);
+    padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+  .answer p { margin: 0; }
+  figure { margin: 24px 0; }
+  figure img { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); display: block; }
+  figcaption { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  footer { border-top: 1px solid var(--line); margin-top: 56px; padding: 22px 0 60px;
+    color: var(--muted); font-size: 14px; }
+  .toc { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 18px; margin: 28px 0; }
+  .toc ul { margin: 6px 0 0; padding-left: 20px; }
+  .toc li { margin: 3px 0; }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareSourceCode",
+      "@id": "https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/#software",
+      "name": "apple-liquid-glass-webgl",
+      "alternateName": "Apple Liquid Glass WebGL",
+      "description": "A zero-dependency WebGL2 JavaScript library that renders Apple-style Liquid Glass on any HTML element. It repaints the page behind the element and refracts it in a fragment shader, so the refraction works in Chrome, Safari and Firefox alike, unlike the SVG displacement maps driven through backdrop-filter: url(#filter) that only Chromium honours. The element's own DOM is untouched, so text stays selectable and accessible. Works with React, Next.js, Vue, Svelte or plain HTML, and falls back to backdrop-filter where WebGL2 is unavailable.",
+      "applicationCategory": "DeveloperApplication",
+      "featureList": [
+        "Real refraction of the live page behind any HTML element",
+        "Works in every browser with WebGL2, including Safari 15+ and Firefox",
+        "Keeps the DOM: text stays selectable and screen-reader accessible",
+        "Edge capture, chromatic dispersion, rim light and specular highlight from the real backdrop",
+        "Ready-made Liquid Glass navbar and switch controls",
+        "Automatic CSS backdrop-filter fallback and prefers-reduced-transparency support"
+      ],
+      "codeRepository": "https://github.com/Oliverrr2424/webgl-apple-liquid-glass",
+      "programmingLanguage": ["JavaScript", "GLSL"],
+      "runtimePlatform": "Browser (WebGL2)",
+      "softwareVersion": "2.5.1",
+      "license": "https://spdx.org/licenses/MIT.html",
+      "operatingSystem": "Any browser with WebGL2",
+      "url": "https://www.npmjs.com/package/apple-liquid-glass-webgl",
+      "downloadUrl": "https://www.npmjs.com/package/apple-liquid-glass-webgl",
+      "installUrl": "https://www.npmjs.com/package/apple-liquid-glass-webgl",
+      "keywords": "apple liquid glass, liquid glass effect, iOS 26 liquid glass, glassmorphism, WebGL2, refraction, backdrop-filter alternative, SVG displacement map alternative, liquid glass Safari, liquid glass Firefox, frosted glass, React, Next.js, Vue, Svelte, vanilla JavaScript",
+      "author": { "@type": "Person", "name": "Oliverrr2424", "url": "https://github.com/Oliverrr2424" },
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    },
+    {
+      "@type": "TechArticle",
+      "@id": "https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/#article",
+      "headline": "Apple Liquid Glass for the Web: documentation for apple-liquid-glass-webgl",
+      "about": { "@id": "https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/#software" },
+      "inLanguage": "en",
+      "proficiencyLevel": "Beginner",
+      "dependencies": "npm, a browser with WebGL2",
+      "url": "https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/",
+      "author": { "@type": "Person", "name": "Oliverrr2424", "url": "https://github.com/Oliverrr2424" }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "How do I add an Apple Liquid Glass effect to a website?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Install the npm package apple-liquid-glass-webgl and point it at an element: import { LiquidGlass } from 'apple-liquid-glass-webgl'; new LiquidGlass('.navbar'). The element keeps its content, layout and events; the glass is drawn behind its children and follows the element through scrolling, resizing and animation." }
+        },
+        {
+          "@type": "Question",
+          "name": "Does the Liquid Glass effect work in Safari and Firefox?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes, with the refraction intact. This is the usual failure point elsewhere: most Liquid Glass libraries drive an SVG displacement map through backdrop-filter: url(#filter), which only Chromium honours — Safari and Firefox accept the property, silently drop the filter and leave a flat blur. apple-liquid-glass-webgl bends the backdrop in a WebGL2 fragment shader instead, and WebGL2 has shipped in Chrome, Edge, Firefox and Safari 15 and later, on desktop and mobile. Where WebGL2 is genuinely unavailable it falls back to backdrop-filter on purpose." }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I lose my DOM, accessibility or text selection with this WebGL glass effect?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. Only the backdrop is repainted into a canvas. The element's own children are never redrawn, so text stays real text that can be selected, translated and read by a screen reader, links stay focusable, and event handlers, layout and CSS are untouched. The glass canvas sits behind the children at z-index -1. This is the trade-off people usually accept when they choose a WebGL glass library, and it does not apply here." }
+        },
+        {
+          "@type": "Question",
+          "name": "How does it compare to SVG displacement map liquid glass libraries?",
+          "acceptedAnswer": { "@type": "Answer", "text": "They are the same idea reached by a different route. An SVG displacement map is simpler and needs no WebGL, but it only refracts in Chromium, is capped by the plus or minus 127 pixel range of an 8-bit displacement channel, and fakes rim light and dispersion with gradients. A WebGL2 shader refracts in every browser that has WebGL2, computes rim light, reflection and dispersion from the actual backdrop, and can deform under a press. The cost is that the page behind the glass has to be repainted, which apple-liquid-glass-webgl does for you in page coordinates with backdrop: 'auto'." }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I use it in Next.js, or without React at all?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Both. It is a framework-free class, so plain HTML and a script type=module tag are enough. In the Next.js App Router, add 'use client' to the component file that constructs it. An eight-line React component wrapping new LiquidGlass(ref.current, options) in useEffect, with glass.destroy() as the cleanup, is the whole integration — no React-specific wrapper package is needed." }
+        },
+        {
+          "@type": "Question",
+          "name": "How is this different from CSS backdrop-filter glassmorphism?",
+          "acceptedAnswer": { "@type": "Answer", "text": "backdrop-filter can only blur and tint the pixels behind an element. Apple's Liquid Glass also bends light: the backdrop is displaced by the shape of the glass, the edges gather and compress the scene, and the colour channels separate slightly. apple-liquid-glass-webgl repaints the page behind the element into a texture and runs a signed-distance-field refraction shader over it in WebGL2, so you get edge capture, dispersion, a specular highlight and a contour hairline that CSS cannot express." }
+        },
+        {
+          "@type": "Question",
+          "name": "Does the Liquid Glass effect work in React, Vue or Svelte?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. The library is framework-free, so you construct it after the element exists and destroy it on unmount: in React inside useEffect with a cleanup that calls glass.destroy(), which is safe under StrictMode's double mount; in Vue inside onMounted and onBeforeUnmount; in Svelte as an action. Importing the package is safe during server rendering because it only touches the DOM when constructed." }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I have to supply a background image for the glass?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. The default backdrop is 'auto', which paints the page below the element in CSS paint order, z-index included: background colours, images and gradients, borders, img, video, canvas and text. You only pass a backdrop explicitly when you want something else, such as a fixed wallpaper image, one specific video element, or a custom painter function." }
+        },
+        {
+          "@type": "Question",
+          "name": "What happens in browsers without WebGL2?",
+          "acceptedAnswer": { "@type": "Answer", "text": "The element falls back to a CSS backdrop-filter surface automatically. Every glass element carries data-liquid-glass=\"webgl\" or data-liquid-glass=\"fallback\", so one CSS rule can style the fallback, and LiquidGlass.isSupported() reports the same thing in advance. Under prefers-reduced-transparency the glass turns near-opaque instead." }
+        },
+        {
+          "@type": "Question",
+          "name": "Is it expensive? How many glass elements can one page have?",
+          "acceptedAnswer": { "@type": "Answer", "text": "A browser allows roughly 16 WebGL contexts per page. One LiquidGlass element or switch uses one context and a navbar uses two, so for a grid of cards you pass targets: '.card' and draw the whole group on a single canvas. Frames are only redrawn when something changes; a static scene costs nothing, and live redraw turns itself on while a canvas or playing video sits behind the glass." }
+        },
+        {
+          "@type": "Question",
+          "name": "Is apple-liquid-glass-webgl free and open source?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. It is MIT licensed, has no runtime dependencies, ships as plain ES modules with TypeScript declarations, and needs no build step. The source is on GitHub at Oliverrr2424/webgl-apple-liquid-glass and it is published on npm as apple-liquid-glass-webgl." }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I use it on a canvas or WebGL scene instead of DOM elements?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. LiquidGlassWebGL is the renderer underneath. You give it your own canvas, hand it a backdrop with setBackdrop(source) and describe the glass shapes with setElements([{ id, shape, x, y, width, height }]). Coordinates are canvas CSS pixels, compositeMode: 'overlay' leaves the rest of the canvas transparent, and hitTestEvent() hit-tests against the shader's own geometry." }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it include ready-made Liquid Glass UI components?",
+          "acceptedAnswer": { "@type": "Answer", "text": "It ships LiquidGlassNavbar and LiquidGlassSwitch: a segmented navigation bar and a toggle with the pressed liquid lens, drag, springs, keyboard support and ARIA. You size them with CSS and they read the page behind them like any other glass element." }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it reproduce the iOS 26 Liquid Glass look?",
+          "acceptedAnswer": { "@type": "Answer", "text": "It reproduces the optical behaviour: body refraction, edge capture, dispersion, rim light, backdrop reflection, specular highlight and the contour hairline, all as a material you can tune. The playground exposes every value as a live slider and copies the resulting material as code, so you can match a specific Apple surface rather than accept one preset." }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<header>
+  <nav class="links">
+    <a href="../">Playground</a>
+    <a href="https://github.com/Oliverrr2424/webgl-apple-liquid-glass">GitHub</a>
+    <a href="https://www.npmjs.com/package/apple-liquid-glass-webgl">npm</a>
+    <a href="zh/" hreflang="zh-Hans">中文</a>
+  </nav>
+  <h1>Apple Liquid Glass for the web</h1>
+  <p class="lede"><strong>apple-liquid-glass-webgl</strong> is a zero-dependency WebGL2 library that gives any HTML
+  element Apple-style Liquid Glass. Point it at an element and it refracts what is actually behind that element on
+  the page, while it scrolls, resizes and animates — <strong>in Chrome, Safari and Firefox alike</strong>, because
+  the refraction runs in a shader rather than in the Chromium-only
+  <code>backdrop-filter: url(#filter)</code> trick.</p>
+  <pre><code>npm install apple-liquid-glass-webgl</code></pre>
+</header>
+
+<main>
+  <div class="answer">
+    <p><strong>The short answer.</strong> Two lines give you the effect. <code>import { LiquidGlass } from
+    'apple-liquid-glass-webgl'</code>, then <code>new LiquidGlass('.navbar')</code>. The element keeps its content,
+    layout and events, the glass is drawn behind its children, and the shape and corner radius come from the
+    element's CSS <code>border-radius</code>. It works with React, Vue, Svelte, Next.js or plain HTML, and where
+    WebGL2 is missing it falls back to <code>backdrop-filter</code>.</p>
+  </div>
+
+  <div class="answer">
+    <p><strong>Why it survives Safari and Firefox.</strong> Most Liquid Glass libraries drive an SVG displacement
+    map through <code>backdrop-filter: url(#filter)</code>. Only Chromium honours that: Safari and Firefox accept
+    the property, silently drop the SVG part and leave you a flat blur. This library never uses it. It repaints the
+    page behind the element into a texture and bends that texture in a WebGL2 fragment shader — and WebGL2 has
+    shipped in Chrome, Edge, Firefox and Safari 15+. <strong>You also keep your DOM:</strong> the glass is a canvas
+    behind the element's children, so the text is still real text — selectable, translatable and read by screen
+    readers — which is the usual trade-off people accept when they reach for WebGL.</p>
+  </div>
+
+  <figure>
+    <img src="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-reel.gif"
+      alt="Four liquid-glass surfaces refracting a liquid marble backdrop, then the Earth, with the pre-blur ramped up behind them"
+      loading="lazy">
+    <figcaption>Four glass surfaces over live backdrops. Everything here is the public API; the
+      <a href="../">playground</a> runs the same code.</figcaption>
+  </figure>
+
+  <div class="toc">
+    <strong>On this page</strong>
+    <ul>
+      <li><a href="#what">What apple-liquid-glass-webgl is</a></li>
+      <li><a href="#vs-css">CSS, SVG displacement or WebGL: which approach?</a></li>
+      <li><a href="#quick-start">Quick start</a></li>
+      <li><a href="#backdrop">What is behind the glass</a></li>
+      <li><a href="#options">Options</a></li>
+      <li><a href="#frameworks">React, Next.js, Vue and Svelte</a></li>
+      <li><a href="#controls">Ready-made navbar and switch</a></li>
+      <li><a href="#canvas">Canvas and WebGL scenes</a></li>
+      <li><a href="#support">Browser support, performance and limits</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="#facts">Package facts</a></li>
+    </ul>
+  </div>
+
+  <h2 id="what">What apple-liquid-glass-webgl is</h2>
+  <p><strong>apple-liquid-glass-webgl is an open-source (MIT) JavaScript package that renders Apple's Liquid Glass
+  material on the web with WebGL2.</strong> Browsers do not let WebGL read page pixels, so the library repaints what
+  is behind the glass itself into a texture, then runs a signed-distance-field refraction shader over it. The result
+  is a surface that bends the page behind it, gathers the scene at its edges, splits the colour channels slightly and
+  carries a rim light, a specular highlight and a contour hairline — the optical behaviour of Apple's material, not a
+  blurred rectangle.</p>
+  <p>It works on ordinary DOM elements (a navbar, a card, a toast, a sidebar), on groups of elements drawn on one
+  canvas, and on canvases you own in a game or WebGL scene. It has no runtime dependencies, ships as plain ES modules
+  with TypeScript declarations, and needs no build step or bundler configuration.</p>
+
+  <h2 id="vs-css">Which approach should you use: CSS, SVG displacement, or WebGL?</h2>
+  <p>There are three ways to put Liquid Glass on a web page, and they fail in different places.
+  <strong>Plain CSS <code>backdrop-filter</code> can blur and tint what is behind an element, but it cannot bend
+  it.</strong> <strong>An SVG displacement map driven through <code>backdrop-filter: url(#filter)</code> does bend
+  it, but only in Chromium</strong> — Safari and Firefox drop the filter and render a flat blur.
+  <strong>A WebGL shader bends it everywhere WebGL2 runs</strong>, which is every current browser, at the cost of
+  repainting the backdrop yourself. This library is the third kind.</p>
+  <table>
+    <thead><tr>
+      <th></th>
+      <th>CSS <code>backdrop-filter</code></th>
+      <th>SVG displacement map</th>
+      <th>apple-liquid-glass-webgl</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>Blur and tint</td><td>Yes</td><td>Yes</td><td>Yes (<code>frost</code>, <code>tint</code>, <code>tintTone</code>)</td></tr>
+      <tr><td>Refraction through the body of the glass</td><td>No</td><td>Yes</td><td>Yes (<code>refraction</code>)</td></tr>
+      <tr><td>Refraction in Safari and Firefox</td><td>n/a</td><td><strong>No</strong> — flat blur</td><td><strong>Yes</strong> — WebGL2 ships in both</td></tr>
+      <tr><td>Edge capture: the scene compressed at the border</td><td>No</td><td>Limited by the ±127 px displacement range</td><td>Yes (<code>edgeReach</code>, <code>edgeWidth</code>)</td></tr>
+      <tr><td>Chromatic dispersion</td><td>No</td><td>Approximated per channel</td><td>Yes (<code>dispersion</code>)</td></tr>
+      <tr><td>Rim light, backdrop reflection, specular highlight</td><td>Faked with gradients</td><td>Faked with gradients</td><td>Computed from the backdrop itself</td></tr>
+      <tr><td>Press deformation for controls</td><td>No</td><td>No</td><td>Yes (<code>pressure</code>)</td></tr>
+      <tr><td>Your content stays real DOM</td><td>Yes</td><td>Yes</td><td><strong>Yes</strong> — the glass is drawn behind the element's children</td></tr>
+      <tr><td>Cost</td><td>Compositor</td><td>Filter graph per frame</td><td>One WebGL2 context, redrawn only on change</td></tr>
+    </tbody>
+  </table>
+  <p>The approaches are not exclusive: <code>backdrop-filter</code> is this library's built-in fallback, so a page
+  degrades to conventional glassmorphism where WebGL2 is missing.</p>
+  <p>The usual objection to WebGL glass — that you give up semantic HTML and accessibility — does not apply here.
+  Nothing is redrawn into a canvas except the <em>backdrop</em>. Your element's own children are never touched, so
+  text stays selectable and screen-reader-readable, links stay focusable, and your event handlers keep working.</p>
+
+  <h2 id="quick-start">Quick start</h2>
+  <pre><code>npm install apple-liquid-glass-webgl</code></pre>
+  <pre><code>import { LiquidGlass } from 'apple-liquid-glass-webgl';
+
+new LiquidGlass('.navbar');</code></pre>
+  <p>That is the whole integration. Readable text over a busy photo wants a body, and <code>tint</code> ramps in
+  gently, so readable values sit around 0.5–0.8:</p>
+  <pre><code>new LiquidGlass('.panel', { frost: 0.45, tint: 0.5, tintTone: 'light' }); // dark text
+new LiquidGlass('.toast', { frost: 0.3,  tint: 0.7, tintTone: 'dark'  }); // white text</code></pre>
+  <p>For a grid, draw the whole group on one canvas instead of one context per card:</p>
+  <pre><code>new LiquidGlass('.card-grid', { targets: '.card', frost: 0.3, tint: 0.2 });</code></pre>
+  <p>Lifecycle:</p>
+  <pre><code>const glass = new LiquidGlass('.card', options);
+await glass.ready;              // first frame drawn, images loaded
+glass.update({ tint: 0.4 });    // merge options
+glass.refresh();                // re-read selectors and repaint
+glass.destroy();                // restore the element, free the WebGL context
+
+LiquidGlass.isSupported();      // WebGL2 available
+LiquidGlass.from('.card');      // the instance on an element
+LiquidGlass.refreshAll();       // repaint everything next frame</code></pre>
+
+  <h2 id="backdrop">What is behind the glass</h2>
+  <p><strong>By default you do not supply a background at all.</strong> <code>backdrop: 'auto'</code> paints the page
+  below the element in CSS paint order, <code>z-index</code> included: backgrounds, borders, <code>&lt;img&gt;</code>,
+  <code>&lt;video&gt;</code>, <code>&lt;canvas&gt;</code> and text. A heading that scrolls under a fixed navbar shows
+  up inside the glass, aligned with the rest of it.</p>
+  <table>
+    <thead><tr><th><code>backdrop</code></th><th>Use it for</th></tr></thead>
+    <tbody>
+      <tr><td><code>'auto'</code></td><td>the page below the element (default)</td></tr>
+      <tr><td><code>'#hero-video'</code> or an element</td><td>a specific image, video, canvas or CSS background, where it sits on the page</td></tr>
+      <tr><td><code>'/wallpaper.jpg'</code></td><td>an image covering the viewport, like a fixed wallpaper</td></tr>
+      <tr><td><code>{ source, fit, position, anchor }</code></td><td>a source fitted like <code>object-fit</code> into the viewport, document or an element</td></tr>
+      <tr><td><code>(ctx, region) =&gt; { … }</code></td><td>anything else: draw it yourself in page coordinates</td></tr>
+      <tr><td><code>[ … ]</code></td><td>several of the above, bottom to top</td></tr>
+    </tbody>
+  </table>
+  <p>Everything is registered in page coordinates, so the part of the photo under a card is the part of the photo
+  under that card. Cross-origin images need CORS headers. <code>auto</code> does not reproduce
+  <code>::before</code>/<code>::after</code>, shadows, CSS filters, SVG or form controls — add those with a painter
+  function appended after <code>'auto'</code>.</p>
+
+  <h2 id="options">Options</h2>
+  <pre><code>new LiquidGlass(element, {
+  tint: 0.2,          // milky layer, 0–1.5 (default 0: clear)
+  tintTone: 'dark',   // 'light' (default), 'dark', or 'auto' from the backdrop
+  frost: 0.3,         // blur behind the lens, as a ratio of the short side (default 0)
+  backdrop: 'auto',
+  material: { refraction: 70 },
+});</code></pre>
+  <table>
+    <thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>tint</code>, <code>tintTone</code>, <code>frost</code>, <code>opacity</code></td><td><code>0</code>, <code>'light'</code>, <code>0</code>, <code>1</code></td><td>The look. Use <code>tintTone: 'dark'</code> behind white text.</td></tr>
+      <tr><td><code>backdrop</code></td><td><code>'auto'</code></td><td>What the glass refracts.</td></tr>
+      <tr><td><code>material</code></td><td>package default</td><td>The optical parameters; unknown keys throw.</td></tr>
+      <tr><td><code>targets</code></td><td>—</td><td>Draw several descendants as glass on one canvas.</td></tr>
+      <tr><td><code>shape</code>, <code>radius</code></td><td>from CSS</td><td><code>'rect'</code>, <code>'pill'</code> or <code>'circle'</code>, CSS px.</td></tr>
+      <tr><td><code>live</code></td><td><code>'auto'</code></td><td>Redraw every frame while a canvas or playing video sits behind the glass.</td></tr>
+      <tr><td><code>fallback</code></td><td><code>'css'</code></td><td><code>'css'</code>, <code>'none'</code>, or your own function.</td></tr>
+      <tr><td><code>maxDpr</code></td><td><code>2</code></td><td>Resolution cap.</td></tr>
+      <tr><td><code>zIndex</code></td><td><code>-1</code></td><td>Glass layer inside the element: behind its content.</td></tr>
+      <tr><td><code>respectReducedTransparency</code></td><td><code>true</code></td><td>Near-opaque glass under <code>prefers-reduced-transparency</code>.</td></tr>
+    </tbody>
+  </table>
+  <p>The material itself is tunable: <code>refraction</code>, <code>edgeReach</code>, <code>edgeWidth</code>,
+  <code>dispersion</code>, <code>frost</code>, <code>backdropBlur</code>, <code>body</code>, <code>absorption</code>,
+  <code>tint</code>, <code>rim</code>, <code>reflection</code>, <code>highlight</code>, <code>lightAngle</code>,
+  <code>echo</code>, <code>hairline</code>, <code>hairWidth</code> and <code>roundness</code>. Ratios are relative to
+  each surface's short side, so one material works from a 40 px toggle to a 400 px card. The
+  <a href="../">playground</a> edits every value live and copies the result as code.</p>
+
+  <h2 id="frameworks">React, Next.js, Vue and Svelte</h2>
+  <p><strong>You do not need a React wrapper package — this is the whole React component,</strong> and the same
+  eight lines work in Next.js, Remix and Astro. Mount after the element exists, destroy on unmount. It is safe under
+  StrictMode's double mount, and importing the package is safe during server rendering because it only touches the
+  DOM when constructed.</p>
+  <pre><code>// React — a complete, reusable glass component
+import { useEffect, useRef } from 'react';
+import { LiquidGlass } from 'apple-liquid-glass-webgl';
+
+export function Glass({ options, children, ...props }) {
+  const ref = useRef(null);
+  useEffect(() =&gt; {
+    const glass = new LiquidGlass(ref.current, options);
+    return () =&gt; glass.destroy();
+  }, []);
+  return &lt;div ref={ref} {...props}&gt;{children}&lt;/div&gt;;
+}
+
+// &lt;Glass className="navbar" options={{ frost: 0.3, tint: 0.2 }}&gt;…&lt;/Glass&gt;</code></pre>
+  <p>In the Next.js App Router, put <code>'use client'</code> at the top of that file. Nothing else changes: the
+  component renders a plain <code>&lt;div&gt;</code> on the server and the glass attaches on hydration.</p>
+  <pre><code>// Vue
+onMounted(() =&gt; { glass = new LiquidGlass(el.value, { tint: 0.2 }); });
+onBeforeUnmount(() =&gt; glass.destroy());
+
+// Svelte action: &lt;nav use:liquidGlass={{ tint: 0.2 }}&gt;
+export const liquidGlass = (node, options) =&gt; {
+  const glass = new LiquidGlass(node, options);
+  return { update: (next) =&gt; glass.update(next), destroy: () =&gt; glass.destroy() };
+};</code></pre>
+
+  <h2 id="controls">Ready-made navbar and switch</h2>
+  <p>The package ships two controls with the pressed liquid lens, drag, springs, keyboard support and ARIA. Size them
+  with CSS; like <code>LiquidGlass</code>, they read the page behind them.</p>
+  <pre><code>import { LiquidGlassNavbar, LiquidGlassSwitch } from 'apple-liquid-glass-webgl';
+
+const nav = new LiquidGlassNavbar('#nav', {
+  items: [
+    { value: 'home', label: 'Home' },
+    { value: 'work', label: 'Work', icon: '▣' },
+    { value: 'read', label: 'Read' },
+  ],
+  value: 'home',
+  onChange: (value, index) =&gt; router.push(value),
+});
+
+const toggle = new LiquidGlassSwitch('#dark-mode', {
+  checked: false,
+  onChange: (checked) =&gt; document.documentElement.classList.toggle('dark', checked),
+});</code></pre>
+  <figure>
+    <img src="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-press.gif"
+      alt="Press effects: a selected capsule dragged along its track, a button held until it blooms, a toggle flipped"
+      loading="lazy">
+    <figcaption>Pressing blooms the knob in place; dragging it past the midpoint changes state. Arrow keys, Home/End
+      and Space keep both controls keyboard-accessible.</figcaption>
+  </figure>
+
+  <h2 id="canvas">Canvas and WebGL scenes</h2>
+  <p><code>LiquidGlassWebGL</code> is the renderer underneath. Use it when you own the canvas and compose the frame
+  yourself — canvas apps, games, three.js or Pixi scenes. Coordinates are canvas CSS pixels and the backdrop is
+  whatever you hand it.</p>
+  <pre><code>import { LiquidGlassWebGL } from 'apple-liquid-glass-webgl';
+
+const glass = new LiquidGlassWebGL(canvas, { compositeMode: 'overlay' });
+glass.setBackdrop(sceneCanvas);      // canvas/video: live, image: static
+glass.setElements([
+  { id: 'bar',  shape: 'pill',   x: 100, y: 28,  width: 560, height: 66, tint: 0.2 },
+  { id: 'lens', shape: 'circle', x: 300, y: 200, size: 120, pressure: 0.6 },
+]);
+glass.render();</code></pre>
+  <p>A WebGL canvas is cleared after each frame, so create it with <code>preserveDrawingBuffer: true</code> or call
+  <code>LiquidGlass.refreshAll()</code> right after you render. Hit testing (<code>hitTestEvent</code>,
+  <code>hitTest</code>, <code>distanceAt</code>) uses the shader's own geometry, so circles, capsules and squircle
+  corners are respected instead of their bounding boxes.</p>
+
+  <h2 id="support">Browser support, performance and limits</h2>
+  <ul>
+    <li><strong>Support:</strong> the refraction runs in any browser with WebGL2 — Chrome, Edge, Firefox, and
+      Safari 15 and later, desktop and mobile. Nothing depends on <code>backdrop-filter: url(#filter)</code>, so
+      Safari and Firefox are not reduced to a flat blur the way SVG-displacement glass is. Where WebGL2 is missing
+      entirely, the CSS <code>backdrop-filter</code> fallback takes over automatically.</li>
+    <li><strong>Contexts:</strong> browsers allow about 16 WebGL contexts per page. A glass element or switch uses
+      one, a navbar uses two. Group elements with <code>targets</code>.</li>
+    <li><strong>Frames:</strong> nothing is redrawn unless something changed. Scroll, resize, font loading, DOM, class
+      and style changes and the end of CSS transitions are all picked up automatically.</li>
+    <li><strong>Accessibility:</strong> <code>prefers-reduced-transparency</code> is respected by default.</li>
+    <li><strong>Known limits:</strong> <code>auto</code> skips <code>::before</code>/<code>::after</code>, shadows,
+      CSS filters, SVG and form controls, and draws rotated or scaled text unrotated; scale and translate transforms
+      are followed, rotation is not; cross-origin images need CORS headers.</li>
+  </ul>
+
+  <h2 id="faq">FAQ</h2>
+
+  <h3 id="faq-add">How do I add an Apple Liquid Glass effect to a website?</h3>
+  <p>Install <code>apple-liquid-glass-webgl</code> from npm and point it at an element:
+  <code>new LiquidGlass('.navbar')</code>. The element keeps its content, layout and events, the glass is drawn
+  behind its children, and the shape comes from the element's CSS <code>border-radius</code>. Nothing else is
+  required — no wallpaper, no canvas, no build step.</p>
+
+  <h3 id="faq-safari">Does the Liquid Glass effect work in Safari and Firefox?</h3>
+  <p>Yes, with the refraction intact. This is the usual failure point elsewhere: most Liquid Glass libraries drive an
+  SVG displacement map through <code>backdrop-filter: url(#filter)</code>, which only Chromium honours — Safari and
+  Firefox accept the property, silently drop the filter and leave a flat blur. This library bends the backdrop in a
+  WebGL2 fragment shader instead, and WebGL2 has shipped in Chrome, Edge, Firefox and Safari 15 and later, on
+  desktop and mobile. Where WebGL2 is genuinely unavailable it falls back to <code>backdrop-filter</code> on
+  purpose.</p>
+
+  <h3 id="faq-dom">Do I lose my DOM, accessibility or text selection, like with other WebGL glass?</h3>
+  <p>No, and this is the trade-off people usually accept when they choose a WebGL library. Only the
+  <em>backdrop</em> is repainted into a canvas. Your element's own children are never redrawn: text stays real text
+  that can be selected, translated and read by a screen reader, links stay focusable, and your event handlers,
+  layout and CSS are untouched. The glass sits behind the children at <code>z-index: -1</code>.</p>
+
+  <h3 id="faq-vs-svg">How does it compare to SVG displacement / liquid-glass-react style libraries?</h3>
+  <p>They are the same idea reached by a different route. An SVG displacement map is simpler and needs no WebGL, but
+  it only refracts in Chromium, is capped by the ±127 px range of an 8-bit displacement channel, and fakes rim light
+  and dispersion with gradients. A WebGL2 shader refracts in every browser that has WebGL2, computes the rim light,
+  reflection and dispersion from the actual backdrop, and can deform under a press. The cost is that the page behind
+  the glass has to be repainted — which this library does for you, in page coordinates, with
+  <code>backdrop: 'auto'</code>.</p>
+
+  <h3 id="faq-nextjs">Can I use it in Next.js, or without React at all?</h3>
+  <p>Both. It is a framework-free class, so plain HTML and a <code>&lt;script type="module"&gt;</code> are enough. In
+  the Next.js App Router, add <code>'use client'</code> to the component file that constructs it; the eight-line
+  React component in <a href="#frameworks">React, Next.js, Vue and Svelte</a> is the whole integration, and no
+  React-specific wrapper package is needed.</p>
+
+  <h3 id="faq-vs-css">How is this different from CSS backdrop-filter glassmorphism?</h3>
+  <p><code>backdrop-filter</code> can only blur and tint the pixels behind an element. Apple's Liquid Glass also bends
+  light: the backdrop is displaced by the shape of the glass, the edges gather and compress the scene, and the colour
+  channels separate slightly. This library repaints the page behind the element and runs a signed-distance-field
+  refraction shader over it in WebGL2, adding edge capture, dispersion, rim light, backdrop reflection, a specular
+  highlight and a contour hairline that CSS cannot express.</p>
+
+  <h3 id="faq-react">Does it work in React, Vue or Svelte?</h3>
+  <p>Yes. It is framework-free: construct it after the element exists and destroy it on unmount. In React that is a
+  <code>useEffect</code> with a cleanup calling <code>glass.destroy()</code> — safe under StrictMode's double mount.
+  Vue uses <code>onMounted</code>/<code>onBeforeUnmount</code>, Svelte a use-action. Importing during server
+  rendering is safe.</p>
+
+  <h3 id="faq-backdrop">Do I have to supply a background image?</h3>
+  <p>No. The default <code>backdrop: 'auto'</code> paints the real page behind the element, in CSS paint order, and
+  keeps it aligned in page coordinates while you scroll. You pass a backdrop explicitly only when you want something
+  else, such as a fixed wallpaper, one specific <code>&lt;video&gt;</code>, or a painter function you write.</p>
+
+  <h3 id="faq-fallback">What happens without WebGL2?</h3>
+  <p>The element falls back to a CSS <code>backdrop-filter</code> surface. Every glass element carries
+  <code>data-liquid-glass="webgl"</code> or <code>"fallback"</code> so one CSS rule can style both, and
+  <code>LiquidGlass.isSupported()</code> reports the same thing in advance.</p>
+
+  <h3 id="faq-perf">Is it expensive? How many glass elements can one page have?</h3>
+  <p>Browsers allow roughly 16 WebGL contexts per page; one element or switch uses one, a navbar uses two. For a grid
+  of cards use <code>targets</code> so the whole group shares a single canvas. Frames are skipped when nothing
+  changed, and live redraw turns itself on only while a canvas or playing video sits behind the glass.</p>
+
+  <h3 id="faq-license">Is it free and open source?</h3>
+  <p>Yes — MIT licensed, no runtime dependencies, plain ES modules with TypeScript declarations, no build step. Source
+  on <a href="https://github.com/Oliverrr2424/webgl-apple-liquid-glass">GitHub</a>, published on
+  <a href="https://www.npmjs.com/package/apple-liquid-glass-webgl">npm</a>.</p>
+
+  <h3 id="faq-canvas">Can I use it on a canvas, game or three.js scene?</h3>
+  <p>Yes. <code>LiquidGlassWebGL</code> takes your canvas, a backdrop source and a list of glass shapes, and
+  <code>compositeMode: 'overlay'</code> leaves the rest of the canvas transparent so the glass composites over your
+  own rendering.</p>
+
+  <h3 id="faq-components">Does it include ready-made Liquid Glass components?</h3>
+  <p><code>LiquidGlassNavbar</code> (a segmented navigation bar) and <code>LiquidGlassSwitch</code> (a toggle), both
+  with the pressed liquid lens, drag, springs, keyboard support and ARIA.</p>
+
+  <h3 id="faq-ios26">Does it reproduce the iOS 26 Liquid Glass look?</h3>
+  <p>It reproduces the optical behaviour — body refraction, edge capture, dispersion, rim light, backdrop reflection,
+  specular highlight and contour hairline — as a material you tune rather than a single preset. The
+  <a href="../">playground</a> exposes every value as a live slider and copies the material as code, so you can match
+  a specific Apple surface.</p>
+
+  <h2 id="facts">Package facts</h2>
+  <table>
+    <tbody>
+      <tr><th>Package</th><td><code>apple-liquid-glass-webgl</code> on npm</td></tr>
+      <tr><th>Version</th><td>2.5.1</td></tr>
+      <tr><th>License</th><td>MIT</td></tr>
+      <tr><th>Runtime dependencies</th><td>None</td></tr>
+      <tr><th>Format</th><td>ES modules with TypeScript declarations; subpath exports <code>/v2</code>, <code>/dom</code>, <code>/controls</code></td></tr>
+      <tr><th>Requires</th><td>A browser with WebGL2; Node 18+ for the tooling</td></tr>
+      <tr><th>Main exports</th><td><code>LiquidGlass</code>, <code>LiquidGlassWebGL</code>, <code>LiquidGlassNavbar</code>, <code>LiquidGlassSwitch</code>, <code>getDefaultMaterial</code></td></tr>
+      <tr><th>Repository</th><td><a href="https://github.com/Oliverrr2424/webgl-apple-liquid-glass">github.com/Oliverrr2424/webgl-apple-liquid-glass</a></td></tr>
+      <tr><th>Playground</th><td><a href="../">oliverrr2424.github.io/webgl-apple-liquid-glass</a></td></tr>
+      <tr><th>Machine-readable summary</th><td><a href="../llms.txt">/llms.txt</a>, <a href="../llms-full.txt">/llms-full.txt</a></td></tr>
+    </tbody>
+  </table>
+</main>
+
+<footer>
+  <p>apple-liquid-glass-webgl — MIT licensed. Documentation for version 2.5.1.
+  <a href="../">Playground</a> · <a href="https://github.com/Oliverrr2424/webgl-apple-liquid-glass">GitHub</a> ·
+  <a href="https://www.npmjs.com/package/apple-liquid-glass-webgl">npm</a> · <a href="zh/">中文文档</a></p>
+</footer>
+</body>
+</html>

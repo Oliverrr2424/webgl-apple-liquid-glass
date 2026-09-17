@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>网页版苹果液态玻璃（Liquid Glass）— Safari 和 Firefox 同样有折射</title>
+<meta name="description" content="apple-liquid-glass-webgl 是一个零依赖的 WebGL2 库，让任意 HTML 元素获得苹果风格的液态玻璃效果：真正折射背后的页面内容。不依赖只有 Chromium 支持的 backdrop-filter: url(#filter)，所以 Chrome、Safari、Firefox 都有完整折射，而不是退化成一层模糊；同时保留原有 DOM，文字仍可选中、可被读屏软件读取。支持 React、Next.js、Vue、Svelte 和原生 HTML。">
+<link rel="canonical" href="https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/zh/">
+<link rel="alternate" hreflang="zh-Hans" href="https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/zh/">
+<link rel="alternate" hreflang="en" href="https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/">
+<link rel="alternate" hreflang="x-default" href="https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/">
+<meta name="author" content="Oliverrr2424">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="apple-liquid-glass-webgl">
+<meta property="og:title" content="网页版苹果液态玻璃（Liquid Glass）— Safari 和 Firefox 同样有折射">
+<meta property="og:description" content="零依赖 WebGL2 库：让任意 HTML 元素折射它背后的真实页面内容。不依赖只有 Chromium 支持的 backdrop-filter SVG 置换，Safari 和 Firefox 也不会退化成一层模糊；DOM 原样保留。">
+<meta property="og:url" content="https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/zh/">
+<meta property="og:image" content="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-reel.gif">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #15181d; --muted: #5c6472; --line: rgba(20,26,38,.12);
+    --surface: #f6f7f9; --code: #f1f3f6; --accent: #2f66e0; --accent-soft: rgba(47,102,224,.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0c0e; --fg: #eceef2; --muted: #a0a7b4; --line: rgba(255,255,255,.12);
+      --surface: #131519; --code: #16181d; --accent: #93b6ff; --accent-soft: rgba(147,182,255,.12); }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.8 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+      "Microsoft YaHei", system-ui, sans-serif; -webkit-text-size-adjust: 100%; }
+  main, header, footer { width: min(100% - 32px, 760px); margin-inline: auto; }
+  header { padding: 56px 0 8px; }
+  h1 { font-size: clamp(28px, 5.5vw, 38px); line-height: 1.3; margin: 0 0 12px; }
+  h2 { font-size: 23px; margin: 44px 0 10px; }
+  h3 { font-size: 18px; margin: 26px 0 6px; }
+  .lede { font-size: 18px; color: var(--muted); margin: 0 0 20px; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  nav.links { display: flex; flex-wrap: wrap; gap: 14px; font-size: 15px; padding: 0 0 8px; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  code { background: var(--code); padding: .15em .4em; border-radius: 5px; font-size: .88em; }
+  pre { background: var(--code); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto; font-size: 13.5px; line-height: 1.6; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 15px; display: block; overflow-x: auto; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; }
+  .answer { background: var(--accent-soft); border-left: 3px solid var(--accent);
+    padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+  .answer p { margin: 0; }
+  figure { margin: 24px 0; }
+  figure img { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); display: block; }
+  figcaption { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  footer { border-top: 1px solid var(--line); margin-top: 56px; padding: 22px 0 60px;
+    color: var(--muted); font-size: 14px; }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareSourceCode",
+      "@id": "https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/zh/#software",
+      "name": "apple-liquid-glass-webgl",
+      "alternateName": "苹果液态玻璃 WebGL",
+      "description": "零依赖的 WebGL2 JavaScript 库，为任意 HTML 元素渲染苹果风格的液态玻璃（Liquid Glass）材质：重绘元素背后的页面并在片元着色器里做真实折射，而不是仅用 CSS backdrop-filter 模糊。它不依赖只有 Chromium 支持的 backdrop-filter: url(#filter) SVG 置换贴图，因此 Chrome、Safari、Firefox 上都有完整折射；元素自身的 DOM 不被重绘，文字仍可选中、可被读屏软件读取。支持 React、Next.js、Vue、Svelte 和原生 HTML，在不支持 WebGL2 的浏览器上自动回退到 backdrop-filter。",
+      "applicationCategory": "DeveloperApplication",
+      "codeRepository": "https://github.com/Oliverrr2424/webgl-apple-liquid-glass",
+      "programmingLanguage": ["JavaScript", "GLSL"],
+      "softwareVersion": "2.5.1",
+      "license": "https://spdx.org/licenses/MIT.html",
+      "operatingSystem": "支持 WebGL2 的浏览器",
+      "url": "https://www.npmjs.com/package/apple-liquid-glass-webgl",
+      "inLanguage": "zh-Hans",
+      "keywords": "苹果液态玻璃, 液态玻璃效果, iOS 26 液态玻璃, 玻璃拟态, 毛玻璃, WebGL2, 折射, backdrop-filter 替代方案, SVG 置换贴图替代方案, Safari 液态玻璃, Firefox 液态玻璃, React, Next.js, Vue, Svelte, 原生 JavaScript",
+      "author": { "@type": "Person", "name": "Oliverrr2424", "url": "https://github.com/Oliverrr2424" },
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/zh/#faq",
+      "inLanguage": "zh-Hans",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "网页上怎么实现苹果的液态玻璃（Liquid Glass）效果？",
+          "acceptedAnswer": { "@type": "Answer", "text": "安装 npm 包 apple-liquid-glass-webgl，然后把它指向一个元素：import { LiquidGlass } from 'apple-liquid-glass-webgl'; new LiquidGlass('.navbar')。元素的内容、布局和事件都不变，玻璃绘制在子元素之后，并跟随元素滚动、缩放和动画。不需要提供壁纸，也不需要构建步骤。" }
+        },
+        {
+          "@type": "Question",
+          "name": "它和 CSS backdrop-filter 毛玻璃有什么区别？",
+          "acceptedAnswer": { "@type": "Answer", "text": "backdrop-filter 只能对元素背后的像素做模糊和着色，不能让光线弯曲。苹果的液态玻璃还会折射：背景被玻璃形状挤压位移，边缘会把场景压缩收拢，RGB 通道会轻微分离。apple-liquid-glass-webgl 会把元素背后的页面重绘成纹理，再用 WebGL2 的有向距离场折射着色器处理，因此有边缘捕捉、色散、镜面高光和轮廓细线，这些是 CSS 做不到的。" }
+        },
+        {
+          "@type": "Question",
+          "name": "支持 React、Vue、Svelte 吗？",
+          "acceptedAnswer": { "@type": "Answer", "text": "支持。这个库不依赖任何框架：在元素存在之后创建实例，在卸载时调用 destroy() 即可。React 中放在 useEffect 里并在清理函数中 destroy，在 StrictMode 的双次挂载下也安全；Vue 用 onMounted / onBeforeUnmount；Svelte 写成 action。服务端渲染时导入是安全的，因为只有构造时才会接触 DOM。" }
+        },
+        {
+          "@type": "Question",
+          "name": "必须自己准备一张背景图吗？",
+          "acceptedAnswer": { "@type": "Answer", "text": "不需要。默认 backdrop: 'auto' 会按 CSS 绘制顺序（包含 z-index）重绘元素下方的页面：背景色、渐变、图片、边框、img、video、canvas 和文字。只有当你想折射别的东西（固定壁纸、某个指定的视频、或自己写的绘制函数）时才需要显式传 backdrop。" }
+        },
+        {
+          "@type": "Question",
+          "name": "液态玻璃效果在 Safari 和 Firefox 上能用吗？",
+          "acceptedAnswer": { "@type": "Answer", "text": "能用，而且折射完整保留。这是其他方案最常见的失败点：大多数液态玻璃库用 backdrop-filter: url(#filter) 驱动 SVG 置换贴图，而只有 Chromium 支持这种写法，Safari 和 Firefox 会接受属性却丢掉滤镜，最后只剩一层平铺模糊。apple-liquid-glass-webgl 改为在 WebGL2 片元着色器里弯折背景，而 WebGL2 在 Chrome、Edge、Firefox 以及 Safari 15 及以上（桌面端与移动端）均已支持。只有在完全没有 WebGL2 的环境里，才会主动回退到 backdrop-filter。" }
+        },
+        {
+          "@type": "Question",
+          "name": "用了 WebGL 会不会丢失 DOM、无障碍和文字选中？",
+          "acceptedAnswer": { "@type": "Answer", "text": "不会。只有背景会被重绘进 canvas，元素自己的子节点从不参与重绘，所以文字仍然是真正的文字，可以选中、翻译、被读屏软件读取，链接可聚焦，事件处理、布局和 CSS 都不受影响。玻璃画布位于子元素之后（z-index: -1）。这通常是选择 WebGL 玻璃库时要付出的代价，但在这里不需要付。" }
+        },
+        {
+          "@type": "Question",
+          "name": "可以在 Next.js 里用吗？不用 React 可以吗？",
+          "acceptedAnswer": { "@type": "Answer", "text": "都可以。它是一个与框架无关的类，原生 HTML 加一个 script type=module 就能用。在 Next.js App Router 中，只需在创建实例的组件文件顶部加 'use client'。把 new LiquidGlass(ref.current, options) 放进 useEffect、并在清理函数里调用 glass.destroy() 的八行 React 组件就是全部集成工作，不需要任何 React 封装包。" }
+        },
+        {
+          "@type": "Question",
+          "name": "浏览器不支持 WebGL2 会怎样？",
+          "acceptedAnswer": { "@type": "Answer", "text": "会自动回退到 CSS backdrop-filter 表面。每个玻璃元素都带有 data-liquid-glass=\"webgl\" 或 \"fallback\" 属性，一条 CSS 规则就能给回退样式收尾；LiquidGlass.isSupported() 可以提前判断。开启系统的“减少透明度”偏好时，玻璃会变成接近不透明。" }
+        },
+        {
+          "@type": "Question",
+          "name": "性能开销大吗？一个页面能放多少块玻璃？",
+          "acceptedAnswer": { "@type": "Answer", "text": "浏览器大约允许每页 16 个 WebGL 上下文。一个 LiquidGlass 元素或开关占用一个，导航栏占两个，所以卡片网格应该用 targets: '.card' 把整组画在同一张画布上。没有变化时不会重绘，静态场景几乎没有成本；只有背后有 canvas 或正在播放的视频时才会逐帧重绘。" }
+        },
+        {
+          "@type": "Question",
+          "name": "它是免费开源的吗？",
+          "acceptedAnswer": { "@type": "Answer", "text": "是。MIT 许可证，零运行时依赖，以原生 ES 模块 + TypeScript 声明发布，不需要构建步骤。源码在 GitHub 的 Oliverrr2424/webgl-apple-liquid-glass，npm 包名是 apple-liquid-glass-webgl。" }
+        },
+        {
+          "@type": "Question",
+          "name": "自带液态玻璃组件吗？",
+          "acceptedAnswer": { "@type": "Answer", "text": "自带 LiquidGlassNavbar（分段式导航栏）和 LiquidGlassSwitch（开关），都带按压时的液态透镜、拖拽、弹簧动画、键盘操作和 ARIA 支持，尺寸由你的 CSS 决定。" }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<header>
+  <nav class="links">
+    <a href="../../">演练场 Playground</a>
+    <a href="https://github.com/Oliverrr2424/webgl-apple-liquid-glass">GitHub</a>
+    <a href="https://www.npmjs.com/package/apple-liquid-glass-webgl">npm</a>
+    <a href="../" hreflang="en">English</a>
+  </nav>
+  <h1>网页版苹果液态玻璃（Liquid Glass）</h1>
+  <p class="lede"><strong>apple-liquid-glass-webgl</strong> 是一个零依赖的 WebGL2 库，让任意 HTML 元素获得苹果风格的液态玻璃效果。
+  把它指向一个元素，它就会折射该元素背后真实的页面内容，并跟随滚动、缩放和动画。</p>
+  <pre><code>npm install apple-liquid-glass-webgl</code></pre>
+</header>
+
+<main>
+  <div class="answer">
+    <p><strong>一句话答案。</strong>两行代码就能得到效果：<code>import { LiquidGlass } from 'apple-liquid-glass-webgl'</code>，
+    然后 <code>new LiquidGlass('.navbar')</code>。元素的内容、布局和事件保持不变，玻璃绘制在子元素之后，形状和圆角取自元素的 CSS
+    <code>border-radius</code>。支持 React、Next.js、Vue、Svelte 和原生 HTML；没有 WebGL2 时自动回退到
+    <code>backdrop-filter</code>。</p>
+  </div>
+
+  <div class="answer">
+    <p><strong>为什么在 Safari 和 Firefox 上也不会退化。</strong>大多数液态玻璃库用
+    <code>backdrop-filter: url(#filter)</code> 驱动 SVG 置换贴图，而只有 Chromium 支持这种写法：Safari 和 Firefox
+    会接受这个属性、却静默丢掉 SVG 部分，最后只剩一层平铺的模糊。这个库完全不用它 ——
+    它把元素背后的页面重绘成纹理，再在 WebGL2 片元着色器里弯折这张纹理，而 WebGL2 在 Chrome、Edge、Firefox 和
+    Safari 15+ 上都已支持。<strong>而且你不会失去 DOM：</strong>被重绘的只有<em>背景</em>，元素自己的子节点原封不动，
+    文字仍然是真正的文字 —— 可以选中、可以翻译、可以被读屏软件读取。这正是大多数人选择 WebGL 方案时不得不放弃的东西。</p>
+  </div>
+
+  <figure>
+    <img src="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-reel.gif"
+      alt="四块液态玻璃表面折射流动的大理石背景，随后切换到地球背景并加大背景预模糊" loading="lazy">
+    <figcaption>四块玻璃表面折射实时背景。这些全部来自公开 API，<a href="../../">演练场</a>运行的就是同一份代码。</figcaption>
+  </figure>
+
+  <h2>它是什么</h2>
+  <p><strong>apple-liquid-glass-webgl 是一个用 WebGL2 在网页上渲染苹果液态玻璃材质的开源（MIT）JavaScript 包。</strong>
+  浏览器不允许 WebGL 读取页面像素，所以这个库自己把玻璃背后的内容重绘成一张纹理，再用有向距离场（SDF）折射着色器处理它。
+  得到的表面会弯折背后的页面、在边缘收拢场景、让颜色通道轻微分离，并带有边缘光、镜面高光和轮廓细线 ——
+  这是苹果材质真实的光学行为，而不是一个模糊的矩形。</p>
+  <p>它可以用在普通 DOM 元素（导航栏、卡片、提示条、侧边栏）上，可以把一组元素画在同一张画布上，
+  也可以用在你自己的 canvas、游戏或 WebGL 场景中。零运行时依赖，原生 ES 模块，附带 TypeScript 声明，无需构建配置。</p>
+
+  <h2>三种方案怎么选：CSS、SVG 置换贴图，还是 WebGL？</h2>
+  <p>网页上做液态玻璃只有三条路，各自的短板不同。<strong>纯 CSS <code>backdrop-filter</code> 只能模糊和着色，不能弯折光线。</strong>
+  <strong>用 <code>backdrop-filter: url(#filter)</code> 驱动 SVG 置换贴图确实能折射，但只在 Chromium 上有效</strong> ——
+  Safari 和 Firefox 会丢掉滤镜，只剩一层模糊。<strong>WebGL 着色器则在任何支持 WebGL2 的浏览器上都能折射</strong>，
+  代价是要自己重绘背景。本库属于第三种。</p>
+  <table>
+    <thead><tr><th></th><th>CSS <code>backdrop-filter</code></th><th>SVG 置换贴图</th><th>apple-liquid-glass-webgl</th></tr></thead>
+    <tbody>
+      <tr><td>模糊与着色</td><td>支持</td><td>支持</td><td>支持（<code>frost</code>、<code>tint</code>、<code>tintTone</code>）</td></tr>
+      <tr><td>玻璃体内折射</td><td>不支持</td><td>支持</td><td>支持（<code>refraction</code>）</td></tr>
+      <tr><td>Safari / Firefox 上的折射</td><td>不适用</td><td><strong>不支持</strong>，退化为模糊</td><td><strong>支持</strong>，两者都有 WebGL2</td></tr>
+      <tr><td>边缘捕捉：边界处场景被压缩</td><td>不支持</td><td>受 ±127px 位移范围限制</td><td>支持（<code>edgeReach</code>、<code>edgeWidth</code>）</td></tr>
+      <tr><td>色散</td><td>不支持</td><td>按通道近似</td><td>支持（<code>dispersion</code>）</td></tr>
+      <tr><td>边缘光、背景反射、镜面高光</td><td>只能用渐变模拟</td><td>只能用渐变模拟</td><td>由真实背景计算得出</td></tr>
+      <tr><td>控件按压形变</td><td>不支持</td><td>不支持</td><td>支持（<code>pressure</code>）</td></tr>
+      <tr><td>内容保持原生 DOM</td><td>是</td><td>是</td><td><strong>是</strong>，玻璃绘制在子元素之后</td></tr>
+      <tr><td>开销</td><td>合成器</td><td>每帧滤镜链</td><td>一个 WebGL2 上下文，仅在变化时重绘</td></tr>
+    </tbody>
+  </table>
+  <p>三者并不冲突：<code>backdrop-filter</code> 就是本库内置的回退方案，没有 WebGL2 的环境会退化成常规毛玻璃。</p>
+  <p>人们对 WebGL 玻璃方案最常见的顾虑 —— 会牺牲语义化 HTML 和无障碍 —— 在这里不成立：被画进 canvas 的只有<em>背景</em>，
+  元素自己的子节点从不参与重绘，所以文字可选中、可被读屏软件读取，链接可聚焦，事件处理也照常工作。</p>
+
+  <h2>快速开始</h2>
+  <pre><code>import { LiquidGlass } from 'apple-liquid-glass-webgl';
+
+new LiquidGlass('.navbar');</code></pre>
+  <p>集成到此为止。玻璃上要放文字时需要一点“体积感”，<code>tint</code> 的曲线很缓，可读的取值大约在 0.5–0.8：</p>
+  <pre><code>new LiquidGlass('.panel', { frost: 0.45, tint: 0.5, tintTone: 'light' }); // 深色文字
+new LiquidGlass('.toast', { frost: 0.3,  tint: 0.7, tintTone: 'dark'  }); // 白色文字</code></pre>
+  <p>卡片网格要共用一张画布，而不是每张卡片一个上下文：</p>
+  <pre><code>new LiquidGlass('.card-grid', { targets: '.card', frost: 0.3, tint: 0.2 });</code></pre>
+  <pre><code>const glass = new LiquidGlass('.card', options);
+await glass.ready;              // 首帧绘制完成、图片加载完成
+glass.update({ tint: 0.4 });    // 合并选项
+glass.refresh();                // 重新读取选择器并重绘
+glass.destroy();                // 还原元素，释放 WebGL 上下文</code></pre>
+
+  <h2>玻璃背后是什么</h2>
+  <p><strong>默认情况下你不需要提供任何背景。</strong><code>backdrop: 'auto'</code> 会按 CSS 绘制顺序（含 <code>z-index</code>）
+  重绘元素下方的页面：背景、边框、<code>&lt;img&gt;</code>、<code>&lt;video&gt;</code>、<code>&lt;canvas&gt;</code> 和文字。
+  滚动到固定导航栏下方的标题，会出现在玻璃里，并且和页面上的位置严格对齐。</p>
+  <p>要折射别的东西，就告诉它背后是什么：元素选择器（<code>'#hero-video'</code>）、图片地址（<code>'/wallpaper.jpg'</code>）、
+  类似 <code>object-fit</code> 的适配对象、自定义绘制函数 <code>(ctx, region) =&gt; {}</code>，或它们组成的数组（自下而上）。
+  所有内容都按页面坐标注册。跨域图片需要 CORS 响应头。<code>auto</code> 不会重绘
+  <code>::before</code>/<code>::after</code>、阴影、CSS 滤镜、SVG 和表单控件 —— 这些用绘制函数补上。</p>
+
+  <h2>框架用法（React / Vue / Svelte）</h2>
+  <pre><code>// React：在 useEffect 中创建，清理时 destroy（StrictMode 双次挂载下安全）
+function Glass({ options, ...props }) {
+  const ref = useRef(null);
+  useEffect(() =&gt; {
+    const glass = new LiquidGlass(ref.current, options);
+    return () =&gt; glass.destroy();
+  }, []);
+  return &lt;div ref={ref} {...props} /&gt;;
+}
+
+// Vue
+onMounted(() =&gt; { glass = new LiquidGlass(el.value, { tint: 0.2 }); });
+onBeforeUnmount(() =&gt; glass.destroy());</code></pre>
+
+  <h2>自带控件：导航栏与开关</h2>
+  <pre><code>import { LiquidGlassNavbar, LiquidGlassSwitch } from 'apple-liquid-glass-webgl';
+
+const nav = new LiquidGlassNavbar('#nav', {
+  items: [{ value: 'home', label: '首页' }, { value: 'work', label: '作品' }],
+  value: 'home',
+  onChange: (value) =&gt; router.push(value),
+});
+
+const toggle = new LiquidGlassSwitch('#dark-mode', {
+  checked: false,
+  onChange: (checked) =&gt; document.documentElement.classList.toggle('dark', checked),
+});</code></pre>
+  <p>按住时旋钮会原地绽放，拖过中点即切换状态；方向键、Home/End 和空格都可用，带完整 ARIA。尺寸由你的 CSS 决定。</p>
+
+  <h2>兼容性、性能与限制</h2>
+  <ul>
+    <li><strong>兼容性：</strong>任何支持 WebGL2 的浏览器 —— Chrome、Edge、Firefox、Safari 15 及以上，桌面与移动端均可；
+      其余环境自动使用 CSS <code>backdrop-filter</code> 回退。</li>
+    <li><strong>上下文数量：</strong>每页约 16 个 WebGL 上下文。玻璃元素或开关各占一个，导航栏占两个；用 <code>targets</code> 合并。</li>
+    <li><strong>重绘：</strong>没有变化就不重绘。滚动、缩放、字体加载、DOM/类名/样式变化、CSS 过渡结束都会自动捕捉。</li>
+    <li><strong>无障碍：</strong>默认尊重 <code>prefers-reduced-transparency</code>。</li>
+    <li><strong>已知限制：</strong><code>auto</code> 不处理伪元素、阴影、滤镜、SVG 和表单控件；旋转文字按未旋转绘制；
+      跟随缩放与平移变换，但不跟随旋转；跨域图片需要 CORS。</li>
+  </ul>
+
+  <h2>常见问题</h2>
+
+  <h3>网页上怎么做出苹果的液态玻璃效果？</h3>
+  <p>从 npm 安装 <code>apple-liquid-glass-webgl</code>，然后 <code>new LiquidGlass('.navbar')</code>。
+  元素内容、布局和事件都不受影响，形状取自元素的 CSS <code>border-radius</code>。不需要壁纸、不需要 canvas、不需要构建步骤。</p>
+
+  <h3>和 CSS 毛玻璃（backdrop-filter）有什么不同？</h3>
+  <p><code>backdrop-filter</code> 只能模糊和着色；液态玻璃还会折射、在边缘收拢场景、让颜色轻微分离。
+  这个库把页面重绘后交给 WebGL2 的 SDF 折射着色器，因此有边缘捕捉、色散、边缘光、背景反射、镜面高光和轮廓细线。</p>
+
+  <h3>支持 React / Vue / Svelte 吗？</h3>
+  <p>支持，且不依赖框架：元素存在后创建，卸载时 <code>destroy()</code>。React 的 StrictMode 双次挂载下安全，SSR 时导入也安全。</p>
+
+  <h3>必须自己提供背景图吗？</h3>
+  <p>不需要。默认 <code>backdrop: 'auto'</code> 折射的就是真实页面，并按页面坐标持续对齐。</p>
+
+  <h3>Safari 和 Firefox 上能用吗？折射会不会失效？</h3>
+  <p>能用，且折射完整保留。这正是其他方案最常翻车的地方：大多数液态玻璃库依赖
+  <code>backdrop-filter: url(#filter)</code>，而只有 Chromium 支持它，Safari 和 Firefox 会丢掉滤镜只留下模糊。
+  本库在 WebGL2 着色器里弯折背景，而 WebGL2 在 Chrome、Edge、Firefox 和 Safari 15+ 上均已支持（桌面端和移动端）。</p>
+
+  <h3>会不会像其他 WebGL 方案那样丢失 DOM 和无障碍？</h3>
+  <p>不会。只有<em>背景</em>被重绘进 canvas，元素自己的子节点不动，因此文字仍可选中、可翻译、可被读屏软件读取，
+  事件、布局和 CSS 都不受影响。玻璃位于子元素之后（<code>z-index: -1</code>）。</p>
+
+  <h3>可以在 Next.js 里用吗？不用 React 行不行？</h3>
+  <p>都可以。它是一个与框架无关的类，原生 HTML 加 <code>&lt;script type="module"&gt;</code> 就够了。
+  Next.js App Router 里，在创建实例的组件文件顶部加 <code>'use client'</code> 即可，不需要任何 React 封装包。</p>
+
+  <h3>不支持 WebGL2 怎么办？</h3>
+  <p>自动回退到 CSS <code>backdrop-filter</code>；元素上的 <code>data-liquid-glass</code> 属性会标明当前是
+  <code>webgl</code> 还是 <code>fallback</code>。</p>
+
+  <h3>是免费开源的吗？</h3>
+  <p>是，MIT 许可证，零运行时依赖，原生 ES 模块 + TypeScript 声明。源码见
+  <a href="https://github.com/Oliverrr2424/webgl-apple-liquid-glass">GitHub</a>，包发布在
+  <a href="https://www.npmjs.com/package/apple-liquid-glass-webgl">npm</a>。</p>
+
+  <h2>包信息</h2>
+  <table>
+    <tbody>
+      <tr><th>包名</th><td><code>apple-liquid-glass-webgl</code>（npm）</td></tr>
+      <tr><th>版本</th><td>2.5.1</td></tr>
+      <tr><th>许可证</th><td>MIT</td></tr>
+      <tr><th>运行时依赖</th><td>无</td></tr>
+      <tr><th>主要导出</th><td><code>LiquidGlass</code>、<code>LiquidGlassWebGL</code>、<code>LiquidGlassNavbar</code>、<code>LiquidGlassSwitch</code>、<code>getDefaultMaterial</code></td></tr>
+      <tr><th>仓库</th><td><a href="https://github.com/Oliverrr2424/webgl-apple-liquid-glass">github.com/Oliverrr2424/webgl-apple-liquid-glass</a></td></tr>
+      <tr><th>演练场</th><td><a href="../../">oliverrr2424.github.io/webgl-apple-liquid-glass</a></td></tr>
+      <tr><th>机器可读摘要</th><td><a href="../../llms.txt">/llms.txt</a>、<a href="../../llms-full.txt">/llms-full.txt</a></td></tr>
+    </tbody>
+  </table>
+</main>
+
+<footer>
+  <p>apple-liquid-glass-webgl — MIT 许可证，文档对应 2.5.1 版本。
+  <a href="../../">演练场</a> · <a href="https://github.com/Oliverrr2424/webgl-apple-liquid-glass">GitHub</a> ·
+  <a href="https://www.npmjs.com/package/apple-liquid-glass-webgl">npm</a> · <a href="../">English docs</a></p>
+</footer>
+</body>
+</html>

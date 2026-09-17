@@ -1,6 +1,12 @@
 # apple-liquid-glass-webgl
 
+[![npm](https://img.shields.io/npm/v/apple-liquid-glass-webgl?color=2f66e0)](https://www.npmjs.com/package/apple-liquid-glass-webgl)
+[![license](https://img.shields.io/npm/l/apple-liquid-glass-webgl?color=2f66e0)](LICENSE)
+[![dependencies](https://img.shields.io/badge/dependencies-none-2f66e0)](package.json)
+
 Apple-style liquid glass for the web, rendered with WebGL2. Point it at an element and it refracts what is actually behind that element on the page, while it scrolls, resizes and animates.
+
+CSS `backdrop-filter` can blur and tint what is behind an element; this bends it. The refraction runs in a WebGL2 shader, so it does not depend on `backdrop-filter: url(#filter)`, which only Chromium honours — Safari and Firefox get the same bent, dispersed, edge-captured glass, not a flat blur. The element keeps its DOM: your text stays real text, selectable and readable by a screen reader, because the glass is drawn behind its children.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Oliverrr2424/webgl-apple-liquid-glass/main/assets/readme/v2-reel.gif" alt="Four liquid-glass surfaces over a liquid marble backdrop, then over the Earth with the background pre-blur ramped up behind them" width="100%">
@@ -17,7 +23,7 @@ Apple-style liquid glass for the web, rendered with WebGL2. Point it at an eleme
   </tr>
 </table>
 
-[Playground](https://oliverrr2424.github.io/webgl-apple-liquid-glass/) · [Landing page example](examples/landing)
+[Playground](https://oliverrr2424.github.io/webgl-apple-liquid-glass/) · [Docs and FAQ](https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/) · [中文文档](https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/zh/) · [Landing page example](examples/landing)
 
 ## Install
 
@@ -258,6 +264,24 @@ glass.render();
 - `auto` skips `::before`/`::after`, shadows, filters, SVG and form controls, and draws rotated or scaled text unrotated. Use a painter for those.
 - Scale and translate transforms are followed; rotation is not.
 - Cross-origin images need CORS headers.
+
+## FAQ
+
+**How is this different from CSS `backdrop-filter` glassmorphism?** `backdrop-filter` blurs and tints the pixels behind an element. This repaints the page behind it and runs a signed-distance-field refraction shader over it, so the backdrop bends through the body of the glass, compresses at the edges, splits into colour channels, and carries a rim light, a specular highlight and a contour hairline. `backdrop-filter` is what it falls back to.
+
+**Does it work in Safari and Firefox?** Yes, with the refraction intact. Most liquid glass libraries drive an SVG displacement map through `backdrop-filter: url(#filter)`, which only Chromium honours; Safari and Firefox accept the property, drop the filter and leave a flat blur. This bends the backdrop in a WebGL2 shader instead, and WebGL2 has shipped in Chrome, Edge, Firefox and Safari 15+.
+
+**Do I lose the DOM, like with other WebGL approaches?** No. The glass is a canvas behind the element's children, so the text is still text — selectable, translatable, and read by screen readers — and your click handlers, layout and CSS are untouched.
+
+**Do I have to supply a background image?** No. `backdrop: 'auto'` paints the real page behind the element, in page coordinates, and keeps it aligned while you scroll.
+
+**Does it work with React, Vue or Svelte?** Yes — see [React, Vue, Svelte](#react-vue-svelte). Construct after the element exists, `destroy()` on unmount. Importing is safe during server rendering.
+
+**What happens without WebGL2?** The element falls back to a CSS `backdrop-filter` surface and gets `data-liquid-glass="fallback"`. `LiquidGlass.isSupported()` reports it in advance.
+
+**How many glass elements can one page have?** Browsers allow about 16 WebGL contexts; an element or switch uses one, a navbar two. Put groups on one canvas with `targets`.
+
+**Is it free?** MIT, no runtime dependencies, plain ES modules with TypeScript declarations, no build step.
 
 ## Development
 

@@ -1,0 +1,61 @@
+# apple-liquid-glass-webgl
+
+> Apple-style Liquid Glass for the web, rendered with WebGL2. A zero-dependency JavaScript
+> package (MIT, npm: `apple-liquid-glass-webgl`) that gives any HTML element a glass surface
+> which refracts what is actually behind that element on the page, while it scrolls, resizes
+> and animates. Unlike CSS `backdrop-filter`, which can only blur and tint, it bends the
+> backdrop through the shape of the glass, captures the scene at the edges, splits the colour
+> channels and adds rim light, backdrop reflection, a specular highlight and a contour hairline.
+>
+> Two things set it apart from the other Liquid Glass libraries. **The refraction works in
+> Safari and Firefox**, because it never uses `backdrop-filter: url(#filter)` — the SVG
+> displacement trick that only Chromium honours, leaving Safari and Firefox with a flat blur.
+> It bends the backdrop in a WebGL2 fragment shader, and WebGL2 ships in Chrome, Edge, Firefox
+> and Safari 15+. **And it keeps your DOM**: only the backdrop is repainted into a canvas, so
+> the element's own text stays real text — selectable, translatable and screen-reader
+> accessible — which is the trade-off people usually accept when choosing WebGL glass.
+
+The whole integration is two lines:
+
+```js
+import { LiquidGlass } from 'apple-liquid-glass-webgl';
+
+new LiquidGlass('.navbar');
+```
+
+Key facts:
+
+- Version 2.5.1, MIT licensed, no runtime dependencies, plain ES modules with TypeScript
+  declarations, no build step. Requires a browser with WebGL2 (Chrome, Edge, Firefox,
+  Safari 15+); falls back to CSS `backdrop-filter` everywhere else.
+- No background image is required. The default `backdrop: 'auto'` repaints the real page
+  below the element in CSS paint order (backgrounds, borders, `<img>`, `<video>`, `<canvas>`,
+  text) in page coordinates.
+- Works with React, Next.js, Vue, Svelte, Astro or plain HTML. No React wrapper package is
+  needed: an eight-line component that calls `new LiquidGlass(ref.current, options)` in
+  `useEffect` and `glass.destroy()` in the cleanup is the whole integration, safe under
+  StrictMode's double mount. Add `'use client'` in the Next.js App Router. Importing is safe
+  during server rendering.
+- Ships ready-made controls: `LiquidGlassNavbar` and `LiquidGlassSwitch`, with the pressed
+  liquid lens, drag, springs, keyboard support and ARIA.
+- `LiquidGlassWebGL` is the underlying renderer for canvases you own (games, three.js, Pixi).
+- About 16 WebGL contexts are allowed per page; group many elements with `targets` so they
+  share one canvas. Frames are skipped when nothing changed.
+
+## Docs
+
+- [Documentation and FAQ](https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/): what it is, how it differs from CSS glassmorphism, options, frameworks, limits, FAQ
+- [Full documentation as plain text](https://oliverrr2424.github.io/webgl-apple-liquid-glass/llms-full.txt): the complete README, including every option and material parameter
+- [中文文档 (Chinese documentation)](https://oliverrr2424.github.io/webgl-apple-liquid-glass/docs/zh/): the same material in Simplified Chinese
+- [README on GitHub](https://github.com/Oliverrr2424/webgl-apple-liquid-glass#readme): canonical source of the documentation
+
+## Code and packages
+
+- [GitHub repository](https://github.com/Oliverrr2424/webgl-apple-liquid-glass): source, issues, MIT license
+- [npm package](https://www.npmjs.com/package/apple-liquid-glass-webgl): `npm install apple-liquid-glass-webgl`
+- [Interactive playground](https://oliverrr2424.github.io/webgl-apple-liquid-glass/): every material parameter as a live slider, with "Copy code"
+
+## Optional
+
+- [Landing page example](https://github.com/Oliverrr2424/webgl-apple-liquid-glass/tree/main/examples/landing): a full page built on the public API
+- [TypeScript declarations](https://github.com/Oliverrr2424/webgl-apple-liquid-glass/blob/main/src/main.d.ts): the typed public surface

@@ -39,6 +39,23 @@ jobs:
           cp -r src playground assets site/
           rm -rf site/assets/readme
 
+          # The documentation pages and the files crawlers and AI assistants look
+          # for: robots.txt, the sitemap, and the llms.txt pair.
+          cp -r docs site/
+          cp robots.txt sitemap.xml llms.txt site/
+
+          # llms-full.txt is the README verbatim, so the machine-readable copy
+          # cannot drift from the documentation people read.
+          {
+            echo "# apple-liquid-glass-webgl — full documentation"
+            echo
+            echo "Source: https://github.com/Oliverrr2424/webgl-apple-liquid-glass#readme"
+            echo "Package: https://www.npmjs.com/package/apple-liquid-glass-webgl"
+            echo "License: MIT"
+            echo
+            cat README.md
+          } > site/llms-full.txt
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
