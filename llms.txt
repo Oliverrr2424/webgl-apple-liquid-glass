@@ -25,7 +25,7 @@ new LiquidGlass('.navbar');
 
 Key facts:
 
-- Version 2.5.1, MIT licensed, no runtime dependencies, plain ES modules with TypeScript
+- Version 2.6.0, MIT licensed, no runtime dependencies, plain ES modules with TypeScript
   declarations, no build step. Requires a browser with WebGL2 (Chrome, Edge, Firefox,
   Safari 15+); falls back to CSS `backdrop-filter` everywhere else.
 - No background image is required. The default `backdrop: 'auto'` repaints the real page
