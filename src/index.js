@@ -289,7 +289,7 @@ export class LiquidGlassWebGLV1 {
       throw new TypeError('setBackdrop needs a CanvasImageSource. Use loadBackdrop for a URL.');
     }
     const update = resolveBackdropUpdate(source, options.update);
-    this.renderer.setWallpapers([source], { update });
+    this.renderer.setWallpapers([source], { update, scale: options.scale });
     this.wallpaperIndex = 0;
     this.markBackdropDirty();
     if (options.autoStart ?? update === BACKDROP_UPDATES.LIVE) this.start();

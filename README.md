@@ -252,8 +252,8 @@ glass.setElements([
 glass.render();
 ```
 
-- **Elements:** `{ id, shape: 'rect' | 'pill' | 'circle', x, y, width, height | size, radius, tint, tintTone, frost, opacity, pressure, pressureAxes }`. `pressure` (0–1) squashes what is seen through a held control; `pressureAxes` weights it per axis.
-- **Backdrop:** `setBackdrop(source, { update: 'auto' | 'static' | 'live' })`, `loadBackdrop(url)`, `updateBackdrop()` after you draw into a static source. `compositeMode: 'replace'` (default) paints the backdrop too; `'overlay'` leaves the rest of the canvas transparent.
+- **Elements:** `{ id, shape: 'rect' | 'pill' | 'circle', x, y, width, height | size, radius, tint, tintTone, frost, opacity, pressure, pressureAxes, layer }`. `pressure` (0–1) squashes what is seen through a held control; `pressureAxes` weights it per axis. `layer` (integer, default `0`) stacks glass: a surface on layer 1 refracts the layer-0 glass beneath it, composited on the GPU in the same context (a sheet under its cards, no canvas round trip).
+- **Backdrop:** `setBackdrop(source, { update: 'auto' | 'static' | 'live', scale })`, `loadBackdrop(url)`, `updateBackdrop()` after you draw into a static source, `setBackdropScale(0.5)` to upload a canvas/video from a smaller copy — WebKit copies every canvas pixel through the CPU on each upload, so this is what keeps a live backdrop smooth on iPhone and iPad; the glass itself still renders at full resolution. `compositeMode: 'replace'` (default) paints the backdrop too; `'overlay'` leaves the rest of the canvas transparent.
 - **Frames:** `render()` is a no-op when nothing changed, and `render({ force: true })` always draws. `start()` / `stop()` run a loop for live sources.
 - **Hit testing:** `hitTestEvent(event)`, `hitTest(x, y)` and `distanceAt(x, y)` use the shader's own geometry.
 - Also: `setMaterial(partial)`, `updateElement(id, patch)`, `resize()`, `destroy()`, `onContextLost` / `onContextRestored` (context loss is handled), `effectiveMaterial` (after reduced transparency).

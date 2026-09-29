@@ -318,15 +318,68 @@ function backdropSourceFor(scene) {
 let animating = false;
 let backdropMode = 'static';
 
+// ---------------------------------------------------------- live upload scale
+//
+// A live backdrop re-uploads the whole content canvas every frame. Chrome
+// copies it GPU-to-GPU; WebKit (every browser on iPhone and iPad) copies every
+// pixel through system memory, which alone took ~50 ms per frame on an iPad
+// Pro at 2x. Rather than sniffing the browser, the frame loop watches its own
+// cost while a live scene runs and steps the upload scale down until a frame
+// fits the 60 Hz budget. The glass still renders at the device ratio; only the
+// image it refracts is resampled from the smaller copy. Static scenes upload
+// once and always stay at full scale.
+const LIVE_UPLOAD_SCALES = [1, 0.75, 0.5, 0.35];
+const LIVE_FRAME_BUDGET_MS = 11;
+const LIVE_GOVERNOR_SAMPLE = 6;
+let liveUploadScaleIndex = 0;
+let liveFrameCosts = [];
+
+function liveUploadScale() {
+  return animating && store.version === 'v2' ? LIVE_UPLOAD_SCALES[liveUploadScaleIndex] : 1;
+}
+
+function applyLiveUploadScale() {
+  const scale = liveUploadScale();
+  for (const instance of [glass, baseGlass, pressGlass]) instance.setBackdropScale?.(scale, false);
+}
+
+/** Feeds one live frame's main-thread cost to the governor. */
+function governLiveUpload(cpuMs) {
+  liveFrameCosts.push(cpuMs);
+  if (liveFrameCosts.length < LIVE_GOVERNOR_SAMPLE) return;
+  const median = liveFrameCosts.sort((a, b) => a - b)[liveFrameCosts.length >> 1];
+  liveFrameCosts = [];
+  const current = LIVE_UPLOAD_SCALES[liveUploadScaleIndex];
+  if (median > LIVE_FRAME_BUDGET_MS && liveUploadScaleIndex < LIVE_UPLOAD_SCALES.length - 1) {
+    // One step per sample window: the cost also has a fixed share (2D
+    // drawing, glass passes) that no upload scale removes, so a proportional
+    // jump would overshoot into needless softness.
+    liveUploadScaleIndex += 1;
+    applyLiveUploadScale();
+    return;
+  }
+  if (liveUploadScaleIndex === 0) return;
+  // Step back up only when the frame would still fit comfortably at the
+  // larger scale, assuming the whole cost scaled with the pixel count. That
+  // pessimistic estimate is the hysteresis against oscillating.
+  const larger = LIVE_UPLOAD_SCALES[liveUploadScaleIndex - 1];
+  if (median * (larger / current) ** 2 < LIVE_FRAME_BUDGET_MS * 0.8) {
+    liveUploadScaleIndex -= 1;
+    applyLiveUploadScale();
+  }
+}
+
 function syncBackdropMode() {
   const scene = currentScene();
   animating = isAnimated(scene);
   const mode = animating ? 'live' : 'static';
   if (mode !== backdropMode) {
     backdropMode = mode;
-    glass.setBackdrop(contentCanvas, { update: mode, autoStart: false, shouldRender: false });
-    baseGlass.setBackdrop(contentCanvas, { update: mode, autoStart: false, shouldRender: false });
-    pressGlass.setBackdrop(contentCanvas, { update: mode, autoStart: false, shouldRender: false });
+    liveFrameCosts = [];
+    const options = { update: mode, scale: liveUploadScale(), autoStart: false, shouldRender: false };
+    glass.setBackdrop(contentCanvas, options);
+    baseGlass.setBackdrop(contentCanvas, options);
+    pressGlass.setBackdrop(contentCanvas, options);
   }
   const video = scene.backdrop.type === 'video' ? scene.backdrop.source : null;
   for (const other of allScenes()) {
@@ -548,8 +601,27 @@ function panelGlassElements() {
   }));
 }
 
+/**
+ * V2 draws the sheet and its cards in one context: the sheet is layer 0 and
+ * is composited into the backdrop pyramid on the GPU, so the cards refract it
+ * without the wallpaper canvas being redrawn and re-uploaded on every frame.
+ * That round trip (WebGL -> 2D canvas -> WebGL texture) is a per-pixel CPU
+ * copy in WebKit and held the pull-down gesture to ~16 fps on iPad.
+ */
+function layeredPanels() {
+  return store.version === 'v2';
+}
+
 function applyPanelElements() {
   const base = panelBaseElement();
+  if (layeredPanels()) {
+    baseGlass.setElements([], false);
+    glass.setElements([
+      ...(base ? [{ ...base, layer: 0 }] : []),
+      ...panelGlassElements().map((element) => ({ ...element, layer: 1 })),
+    ], false);
+    return;
+  }
   baseGlass.setElements(base ? [base] : [], false);
   glass.setElements(panelGlassElements(), false);
 }
@@ -766,12 +838,15 @@ function frame(now) {
   const size = syncSizes();
   const scene = currentScene();
 
-  // A pulling sheet is a two-pass composition: redraw the wallpaper, render
-  // the full-screen base glass into the hidden buffer, composite that buffer
-  // into the backdrop, then let the upper cards sample the result. Redrawing
-  // the wallpaper for the active sheet avoids accumulating moved glass pixels
-  // in the 2D canvas while the finger is travelling.
-  if (contentDirty || size.resized || animating || panelActive()) {
+  // With V1 a pulling sheet is a two-pass composition: redraw the wallpaper,
+  // render the full-screen base glass into the hidden buffer, composite that
+  // buffer into the backdrop, then let the upper cards sample the result.
+  // Redrawing the wallpaper for the active sheet avoids accumulating moved
+  // glass pixels in the 2D canvas while the finger is travelling. V2 keeps
+  // the sheet as a glass layer inside the one context (see applyPanelElements),
+  // so the wallpaper canvas is left alone while the finger moves.
+  const compositePanel = panelActive() && !layeredPanels();
+  if (contentDirty || size.resized || animating || compositePanel) {
     drawSceneBackdrop(contentContext, scene, {
       width: size.width,
       height: size.height,
@@ -800,7 +875,7 @@ function frame(now) {
       glass.updateBackdrop(false);
       pressGlass.updateBackdrop(false);
       apiControlSpecimen.refresh();
-    } else if (panelActive()) {
+    } else if (compositePanel) {
       // The full-screen sheet moves over a static wallpaper. Only its geometry
       // changes; its source texture and blur pyramid can stay cached.
       if (baseBackdropInvalid || size.resized) {
@@ -835,25 +910,44 @@ function frame(now) {
   glass.render({ dpr: size.renderDpr });
   pressGlass.render({ dpr: size.renderDpr });
   drawOverlayLayer(size);
-  if (willDraw) stats.frame(performance.now() - started);
+  if (willDraw) {
+    const cost = performance.now() - started;
+    stats.frame(cost);
+    // Only steady live frames inform the upload scale: the first frame of a
+    // scene also pays for layout and the initial texture allocation. V1 has
+    // no scaled upload, so its frames are not measured either.
+    if (animating && !size.resized && store.version === 'v2') governLiveUpload(cost);
+  }
 
   const visibleShapeCount = glass.elements.length + pressGlass.elements.length;
   const mainPasses = store.version === 'v2'
-    ? Math.ceil(glass.elements.length / 16) + Math.ceil(pressGlass.elements.length / 16)
+    ? v2Passes(glass.elements) + v2Passes(pressGlass.elements)
     : effectiveFusion()
       ? connectedElementGroups(glass.elements, glass.material.mergeRadius).length
       : glass.elements.length;
   const groups = store.version === 'v2'
     ? mainPasses
     : mainPasses + pressGlass.elements.length;
+  const scale = liveUploadScale();
   stats.info({
     size: `${Math.round(size.width * size.renderDpr)}×${Math.round(size.height * size.renderDpr)}`,
     dpr: `${size.renderDpr}×`,
     shapes: `${visibleShapeCount} in ${groups} pass${groups === 1 ? '' : 'es'}`,
-    backdrop: animating ? 'live upload' : 'static upload',
+    backdrop: animating ? `live upload${scale < 1 ? ` ×${scale}` : ''}` : 'static upload',
   });
 
   if (animating) invalidate();
+}
+
+/** V2 draw passes: 16 shapes per pass, and a layer with layers above it is
+ * drawn a second time into the backdrop pyramid. */
+function v2Passes(elements) {
+  const counts = new Map();
+  for (const element of elements) counts.set(element.layer ?? 0, (counts.get(element.layer ?? 0) ?? 0) + 1);
+  const perLayer = [...counts.entries()].sort((a, b) => a[0] - b[0]).map(([, count]) => count);
+  return perLayer.reduce((passes, count, index) => (
+    passes + Math.ceil(count / 16) * (index < perLayer.length - 1 ? 2 : 1)
+  ), 0);
 }
 
 // Held navigation lens geometry (Press scene selector only) is fully

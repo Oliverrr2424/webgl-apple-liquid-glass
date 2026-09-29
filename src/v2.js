@@ -59,6 +59,12 @@ function normalizeElement(input, index) {
   if (!['auto', 'light', 'dark'].includes(tintTone)) {
     throw new TypeError(`Unknown liquid glass V2 tint tone: ${tintTone}`);
   }
+  // Surfaces on a higher layer refract the glass of every lower layer as
+  // part of their backdrop: a sheet on layer 0 under cards on layer 1.
+  const layer = Number(input.layer ?? 0);
+  if (!Number.isInteger(layer) || layer < 0) {
+    throw new TypeError('Liquid glass V2 element layer must be a non-negative integer.');
+  }
   return {
     ...input,
     id: input.id ?? `glass-v2-${index + 1}`,
@@ -71,9 +77,29 @@ function normalizeElement(input, index) {
     ...(frost === undefined ? {} : { frost }),
     ...(opacity === undefined ? {} : { opacity }),
     tintTone,
+    layer,
     pressure: Math.max(0, Math.min(1, pressure)),
     pressureAxes: pressureAxes.map((v) => Math.max(0, Math.min(1, v))),
   };
+}
+
+/** Elements grouped by ascending layer, each group in authored order. */
+function groupByLayer(elements) {
+  const layers = new Map();
+  for (const element of elements) {
+    const layer = element.layer ?? 0;
+    if (!layers.has(layer)) layers.set(layer, []);
+    layers.get(layer).push(element);
+  }
+  return [...layers.keys()].sort((a, b) => a - b).map((layer) => layers.get(layer));
+}
+
+function clampBackdropScale(scale) {
+  const value = Number(scale ?? 1);
+  if (!Number.isFinite(value) || value <= 0 || value > 1) {
+    throw new TypeError('Liquid glass V2 backdrop scale must be a number in (0, 1].');
+  }
+  return Math.max(0.1, value);
 }
 
 function resolveImage(source) {
@@ -186,6 +212,11 @@ export class LiquidGlassWebGLV2 {
     this.animationFrame = 0;
     this.dirty = true;
     this.backdropDirty = true;
+    // The backdrop pyramid no longer matches the wallpaper texture (a layered
+    // frame composited glass into it, or a resize emptied it) and is rebuilt
+    // on the GPU next frame. Unlike backdropDirty this never re-reads the source.
+    this.pyramidStale = false;
+    this.backdropScale = 1;
     this.lightFieldDirty = true;
     this.lastFrame = { width: 0, height: 0, dpr: 0 };
     this.warnedShapeLimit = false;
@@ -336,12 +367,32 @@ export class LiquidGlassWebGLV2 {
       throw new TypeError('setBackdrop needs a CanvasImageSource. Use loadBackdrop for a URL.');
     }
     const update = resolveBackdropUpdate(source, options.update);
+    if (options.scale !== undefined) this.backdropScale = clampBackdropScale(options.scale);
     this.backdrops = [source];
-    this.renderer.setWallpapers([source], { update });
+    this.renderer.setWallpapers([source], { update, scale: this.backdropScale });
     this.wallpaperIndex = 0;
     this.markBackdropDirty();
     if (options.autoStart ?? update === 'live') this.start();
     if (options.shouldRender ?? true) this.render();
+    return this;
+  }
+
+  /**
+   * Upload scale for canvas and video backdrops, in (0, 1]. Browsers that
+   * copy canvas pixels through system memory on every upload (WebKit) pay per
+   * pixel, so 0.5 makes a live backdrop about four times cheaper. The glass
+   * itself still renders at full resolution; only the refracted image is
+   * resampled from the smaller copy.
+   */
+  setBackdropScale(scale, shouldRender = true) {
+    const next = clampBackdropScale(scale);
+    if (next === this.backdropScale) return this;
+    this.backdropScale = next;
+    if (this.renderer.setWallpaperScale(next) && !this.renderer.hasLiveBackdrop()) {
+      this.renderer.refreshWallpapers(true);
+    }
+    this.markBackdropDirty();
+    if (shouldRender) this.render();
     return this;
   }
 
@@ -428,12 +479,17 @@ export class LiquidGlassWebGLV2 {
     return { width, height, dpr };
   }
 
+  /** The image the light probe reads: the scaled upload copy when there is one. */
+  probeSource() {
+    return this.renderer.probeSource(this.wallpaperIndex) ?? this.backdrops[this.wallpaperIndex];
+  }
+
   updateLightField() {
     this.lightFieldDirty = false;
     // A synchronous probe supersedes any off-thread result still in flight.
     this.lightProbeId += 1;
     this.lightProbeQueued = false;
-    const source = this.backdrops[this.wallpaperIndex];
+    const source = this.probeSource();
     const [sourceWidth, sourceHeight] = backdropSize(source);
     if (!(sourceWidth > 0) || !(sourceHeight > 0) || typeof document === 'undefined') {
       this.lightPixels = null;
@@ -517,7 +573,7 @@ export class LiquidGlassWebGLV2 {
       if (queue) this.lightProbeQueued = true;
       return true;
     }
-    const source = this.backdrops[this.wallpaperIndex];
+    const source = this.probeSource();
     const [sourceWidth, sourceHeight] = backdropSize(source);
     if (!(sourceWidth > 0) || !(sourceHeight > 0) || !this.lightProbeWorker()) return false;
     const id = ++this.lightProbeId;
@@ -625,9 +681,27 @@ export class LiquidGlassWebGLV2 {
     if (!options.force && !this.dirty && !resized && !liveBackdrop) return this;
 
     this.resize(width, height, dpr);
+    const layers = groupByLayer(this.elements.filter((element) => element.w > 0 && element.h > 0));
+    if (this.compositeMode === 'overlay' && !layers.length) {
+      // Nothing to refract: clear the output and leave the backdrop alone, so
+      // an idle overlay never pays for a live upload. A resize emptied the
+      // pyramid's render targets; the next frame with glass rebuilds them.
+      this.renderer.clearOutput();
+      if (resized) this.pyramidStale = true;
+      this.dirty = false;
+      this.lastFrame = { width, height, dpr };
+      return this;
+    }
     const now = globalThis.performance?.now?.() ?? Date.now();
-    if (this.backdropDirty || resized || liveBackdrop) {
+    const sourceChanged = this.backdropDirty || resized || liveBackdrop;
+    if (sourceChanged || this.pyramidStale) {
+      // A layered frame left lower glass in the pyramid, or a resize emptied
+      // it; rebuilding from the cached wallpaper texture is GPU-only and never
+      // touches the source.
       this.renderer.buildBackdrop(this.wallpaperIndex, this.wallpaperZoom);
+      this.pyramidStale = false;
+    }
+    if (sourceChanged) {
       // The optical backdrop remains fully live, but the low-resolution light
       // probe runs at a steadier cadence. This decouples moving content from the
       // white key highlight and removes single-frame direction spikes.
@@ -650,7 +724,7 @@ export class LiquidGlassWebGLV2 {
     else this.renderer.drawBackdrop();
 
     const material = this.effectiveMaterial;
-    const elements = this.elements.filter((element) => element.w > 0 && element.h > 0);
+    const elements = layers.flat();
     const elapsed = this.lastLightBlendTime ? Math.min(100, now - this.lastLightBlendTime) : 100;
     const blend = liveBackdrop ? 1 - Math.exp(-elapsed / 280) : 1;
     const activeLightIds = new Set(elements.map((element) => element.id));
@@ -675,19 +749,36 @@ export class LiquidGlassWebGLV2 {
       this.tintLightForElement(element, width, height)
     ));
     this.lastLightBlendTime = now;
-    if (elements.length > MAX_GLASS_SHAPES && !this.warnedShapeLimit) {
+    if (layers.some((group) => group.length > MAX_GLASS_SHAPES) && !this.warnedShapeLimit) {
       this.warnedShapeLimit = true;
       console.warn(`LiquidGlassWebGLV2: more than ${MAX_GLASS_SHAPES} shapes require multiple passes; overlapping shapes across a pass boundary may composite differently.`);
     }
-    for (let i = 0; i < elements.length; i += MAX_GLASS_SHAPES) {
-      this.renderer.drawGlassV2Group(
-        elements.slice(i, i + MAX_GLASS_SHAPES),
-        material,
-        dpr,
-        lightDirections.slice(i, i + MAX_GLASS_SHAPES),
-        tintLights.slice(i, i + MAX_GLASS_SHAPES),
-      );
-    }
+    const drawLayer = (group, offset, intoBackdrop) => {
+      for (let i = 0; i < group.length; i += MAX_GLASS_SHAPES) {
+        this.renderer.drawGlassV2Group(
+          group.slice(i, i + MAX_GLASS_SHAPES),
+          material,
+          dpr,
+          lightDirections.slice(offset + i, offset + i + MAX_GLASS_SHAPES),
+          tintLights.slice(offset + i, offset + i + MAX_GLASS_SHAPES),
+          { intoBackdrop },
+        );
+      }
+    };
+    let offset = 0;
+    layers.forEach((group, index) => {
+      // Every layer reaches the screen. A layer with others above it is also
+      // composited into the backdrop pyramid, after its own screen pass has
+      // sampled the untouched pyramid, so the layers above refract it. That
+      // is one GPU-side copy per layer instead of a canvas round trip.
+      drawLayer(group, offset, false);
+      if (index < layers.length - 1 && this.renderer.beginBackdropLayer()) {
+        drawLayer(group, offset, true);
+        this.renderer.commitBackdropLayer();
+        this.pyramidStale = true;
+      }
+      offset += group.length;
+    });
 
     this.dirty = false;
     this.lastFrame = { width, height, dpr };

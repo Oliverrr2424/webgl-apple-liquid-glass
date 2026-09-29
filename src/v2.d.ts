@@ -52,6 +52,12 @@ export interface LiquidGlassV2Element {
    * is `light`, matching the switch material. `auto` derives its tone from a
    * fixed-size backdrop probe below the component, independent of its size. */
   tintTone?: 'auto' | 'light' | 'dark';
+  /** Compositing layer, a non-negative integer (default 0). Surfaces on a
+   * higher layer refract the glass of every lower layer as part of their
+   * backdrop, e.g. a full-screen sheet on layer 0 under cards on layer 1.
+   * Lower layers are composited into the backdrop on the GPU; no canvas
+   * round trip is involved. */
+  layer?: number;
   [key: string]: unknown;
 }
 
@@ -68,6 +74,11 @@ export interface LiquidGlassV2BackdropOptions {
   update?: LiquidGlassV2BackdropUpdate;
   autoStart?: boolean;
   shouldRender?: boolean;
+  /** Upload scale for canvas/video sources, in (0, 1]. Default 1. Browsers
+   * that copy canvas pixels through system memory on every upload (WebKit)
+   * pay per pixel; 0.5 makes a live backdrop about four times cheaper while
+   * the glass itself still renders at full resolution. */
+  scale?: number;
 }
 
 export interface LiquidGlassV2Options {
@@ -136,6 +147,8 @@ export declare class LiquidGlassWebGLV2 {
   setBackdrop(source: CanvasImageSource, options?: LiquidGlassV2BackdropOptions): this;
   loadBackdrop(source: string | CanvasImageSource, options?: LiquidGlassV2BackdropOptions): Promise<this>;
   updateBackdrop(shouldRender?: boolean): this;
+  /** Change the canvas/video upload scale, see `LiquidGlassV2BackdropOptions.scale`. */
+  setBackdropScale(scale: number, shouldRender?: boolean): this;
   setWallpaperIndex(index: number, shouldRender?: boolean): this;
   distanceAt(x: number, y: number): number;
   hitTest(x: number, y: number, options?: { tolerance?: number }): ResolvedLiquidGlassV2Element | null;

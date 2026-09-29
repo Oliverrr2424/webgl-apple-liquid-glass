@@ -1,6 +1,6 @@
 {
   "name": "apple-liquid-glass-webgl",
-  "version": "2.5.1",
+  "version": "2.6.0",
   "description": "Apple-style liquid glass in one line. Real WebGL2 refraction of the page behind any HTML element, in Chrome, Safari and Firefox alike - no Chromium-only backdrop-filter SVG trick. React, Vue, Svelte or plain JS.",
   "keywords": [
     "apple-liquid-glass",

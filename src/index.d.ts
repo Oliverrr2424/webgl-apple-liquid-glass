@@ -7,6 +7,8 @@ export interface LiquidGlassBackdropOptions {
   update?: LiquidGlassBackdropUpdate;
   autoStart?: boolean;
   shouldRender?: boolean;
+  /** Upload scale for canvas/video sources, in (0, 1]. Default 1. */
+  scale?: number;
 }
 
 export interface LiquidGlassMaterial {

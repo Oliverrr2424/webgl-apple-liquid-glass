@@ -198,30 +198,90 @@ export class GlassRenderer {
     ];
   }
 
+  // Canvas and video frames are stored premultiplied by every browser.
+  isPremultipliedSource(source) {
+    const tagName = source?.tagName?.toUpperCase();
+    return tagName === 'CANVAS' || tagName === 'VIDEO'
+      || source?.constructor?.name === 'OffscreenCanvas'
+      || source?.constructor?.name === 'VideoFrame';
+  }
+
+  // The image that actually reaches texImage2D. A live source with a scale
+  // below one is first drawn into a smaller intermediate canvas: that draw is
+  // a GPU-side blit, while the upload that follows is a CPU readback of every
+  // pixel in WebKit, so shrinking it is the only lever on iOS/iPadOS.
+  uploadSource(entry) {
+    const [width, height] = this.sourceSize(entry.source);
+    const scale = Math.min(1, Math.max(0.1, Number(entry.scale) || 1));
+    if (scale >= 1 || !this.isPremultipliedSource(entry.source)) {
+      return [entry.source, width, height];
+    }
+    const scaledWidth = Math.max(1, Math.round(width * scale));
+    const scaledHeight = Math.max(1, Math.round(height * scale));
+    if (!entry.scaled) {
+      entry.scaled = typeof document !== 'undefined'
+        ? document.createElement('canvas')
+        : new globalThis.OffscreenCanvas(scaledWidth, scaledHeight);
+    }
+    if (entry.scaled.width !== scaledWidth) entry.scaled.width = scaledWidth;
+    if (entry.scaled.height !== scaledHeight) entry.scaled.height = scaledHeight;
+    const context = entry.scaled.getContext('2d');
+    context.clearRect(0, 0, scaledWidth, scaledHeight);
+    context.drawImage(entry.source, 0, 0, scaledWidth, scaledHeight);
+    return [entry.scaled, scaledWidth, scaledHeight];
+  }
+
+  // The image the light probe should read: the scaled copy when there is one,
+  // so the probe's own readback shrinks with the upload.
+  probeSource(index) {
+    const entry = this.wallpapers[index];
+    if (!entry) return null;
+    const scale = Math.min(1, Math.max(0.1, Number(entry.scale) || 1));
+    return entry.scaled && scale < 1 ? entry.scaled : entry.source;
+  }
+
   uploadWallpaper(entry, forceAllocation = false) {
     if (this.lost || !entry.texture) return false;
-    const [width, height] = this.sourceSize(entry.source);
-    if (!(width > 0) || !(height > 0)) return false;
+    const [sourceWidth, sourceHeight] = this.sourceSize(entry.source);
+    if (!(sourceWidth > 0) || !(sourceHeight > 0)) return false;
+    const [source, width, height] = this.uploadSource(entry);
 
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, entry.texture);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    // Rows arrive top-first and FS_WALLPAPER flips its lookup instead of
+    // asking for UNPACK_FLIP_Y_WEBGL: a flip request adds a CPU pass over
+    // every uploaded pixel in the browsers that copy through system memory.
+    // Declaring premultiplied canvas/video sources as such removes the
+    // un-premultiply pass in the same way (and keeps Firefox on its GPU path).
+    const premultiplied = this.isPremultipliedSource(source);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultiplied);
     if (!forceAllocation && entry.ready && entry.width === width && entry.height === height) {
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, entry.source);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, source);
     } else {
       // Plain RGBA8, decoded to linear in FS_WALLPAPER. An SRGB8_ALPHA8
       // destination knocks Chrome's canvas/video upload off the GPU-to-GPU
       // copy path on Windows (ANGLE/D3D11), turning every live backdrop frame
       // into a full readback and re-upload that costs ~10 ms of GPU time.
       gl.texImage2D(
-        gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, entry.source,
+        gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, source,
       );
     }
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     entry.width = width;
     entry.height = height;
     entry.ready = true;
     return true;
+  }
+
+  /** Upload scale for live backdrops, 0.1..1. Takes effect on the next upload. */
+  setWallpaperScale(scale) {
+    const next = Math.min(1, Math.max(0.1, Number(scale) || 1));
+    let changed = false;
+    for (const entry of this.wallpapers) {
+      if ((entry.scale ?? 1) !== next) changed = true;
+      entry.scale = next;
+    }
+    return changed;
   }
 
   resize(w, h) {
@@ -297,11 +357,14 @@ export class GlassRenderer {
   setWallpapers(images, options = {}) {
     const gl = this.gl;
     const update = options.update === 'live' ? 'live' : 'static';
+    const scale = Math.min(1, Math.max(0.1, Number(options.scale) || 1));
     if (!this.lost) this.wallpapers.forEach((entry) => gl.deleteTexture(entry.texture));
     this.wallpapers = images.map((source) => ({
       texture: null,
       source,
       update,
+      scale,
+      scaled: null,
       ready: false,
       width: 0,
       height: 0,
@@ -342,22 +405,7 @@ export class GlassRenderer {
     gl.uniform1i(this.progWall.loc.uUseImage, wallpaper?.ready ? 1 : 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-    gl.useProgram(this.progDown.p);
-    gl.uniform1i(this.progDown.loc.uTex, 0);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.tex);
-    for (let i = 1; i < this.mipLevels; i++) {
-      const [sw, sh] = this.mipSize(i - 1);
-      const [dw, dh] = this.mipSize(i);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_BASE_LEVEL, i - 1);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, i - 1);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbos[i]);
-      gl.viewport(0, 0, dw, dh);
-      gl.uniform2f(this.progDown.loc.uTexel, 1 / sw, 1 / sh);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    }
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_BASE_LEVEL, 0);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, this.mipLevels - 1);
+    this.downsampleBackdrop();
 
     // V2 only samples tex's downsample pyramid. The reconstructed blurTex
     // chain below belongs to V1; rebuilding it on live V2 frames is wasted work.
@@ -407,6 +455,54 @@ export class GlassRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this.tex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_BASE_LEVEL, 0);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, this.mipLevels - 1);
+  }
+
+  // Rebuilds the progressively blurred chain from whatever mip 0 now holds.
+  downsampleBackdrop() {
+    if (this.lost || !this.fbos.length) return;
+    const gl = this.gl;
+    gl.bindVertexArray(this.quad);
+    gl.disable(gl.BLEND);
+    gl.useProgram(this.progDown.p);
+    gl.uniform1i(this.progDown.loc.uTex, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.tex);
+    for (let i = 1; i < this.mipLevels; i++) {
+      const [sw, sh] = this.mipSize(i - 1);
+      const [dw, dh] = this.mipSize(i);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_BASE_LEVEL, i - 1);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, i - 1);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbos[i]);
+      gl.viewport(0, 0, dw, dh);
+      gl.uniform2f(this.progDown.loc.uTexel, 1 / sw, 1 / sh);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_BASE_LEVEL, 0);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, this.mipLevels - 1);
+  }
+
+  // Opens a glass layer that becomes part of the backdrop. Mip 0 is copied
+  // into the spare chain; drawGlassV2Group(..., { intoBackdrop: true }) then
+  // draws over that copy while still sampling the complete, untouched
+  // pyramid, so nothing is lost to a feedback-loop workaround.
+  beginBackdropLayer() {
+    if (this.lost || !this.fbos.length || !this.blurFbos.length) return false;
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.fbos[0]);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.blurFbos[0]);
+    gl.blitFramebuffer(
+      0, 0, this.w, this.h, 0, 0, this.w, this.h, gl.COLOR_BUFFER_BIT, gl.NEAREST,
+    );
+    return true;
+  }
+
+  // Closes the layer: the drawn copy becomes the backdrop and its blurred
+  // chain is rebuilt. The next buildBackdrop() starts from the wallpaper again.
+  commitBackdropLayer() {
+    if (this.lost || !this.fbos.length || !this.blurFbos.length) return;
+    [this.tex, this.blurTex] = [this.blurTex, this.tex];
+    [this.fbos, this.blurFbos] = [this.blurFbos, this.fbos];
+    this.downsampleBackdrop();
   }
 
   // Draws the sharp backdrop to the screen.
@@ -541,8 +637,14 @@ export class GlassRenderer {
   // nothing from the material calculation. In particular, similarly named
   // uniforms are filled using V2's own units: edgeWidth is a fraction,
   // dispersion is a pixel split, and roundness is a short-half ratio.
-  drawGlassV2Group(elements, m, dpr, lightDirections = [], tintLights = []) {
+  //
+  // With `intoBackdrop` the group is composited into the backdrop copy opened
+  // by beginBackdropLayer() instead of the screen, so a later layer refracts
+  // this glass as part of its backdrop. The sRGB attachment encodes on write,
+  // so the shader emits linear radiance for that target.
+  drawGlassV2Group(elements, m, dpr, lightDirections = [], tintLights = [], options = {}) {
     if (!elements.length || this.lost || !this.tex) return;
+    const intoBackdrop = Boolean(options.intoBackdrop) && this.blurFbos.length > 0;
 
     const gl = this.gl;
     const { loc, p } = this.progGlass;
@@ -594,7 +696,7 @@ export class GlassRenderer {
       pressAxes[i * 2 + 1] = element.pressureAxes?.[1] ?? 1;
     });
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, intoBackdrop ? this.blurFbos[0] : null);
     gl.viewport(0, 0, this.w, this.h);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -604,6 +706,7 @@ export class GlassRenderer {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.tex);
     gl.uniform1i(loc.uSrc, 0);
+    gl.uniform1i(loc.uOutputLinear, intoBackdrop ? 1 : 0);
     gl.uniform2f(loc.uRes, this.w, this.h);
     gl.uniform1f(loc.uDpr, dpr);
     gl.uniform2f(loc.uCenter,

@@ -25,7 +25,28 @@ window.runTest = () => {
     }
     // Wall + downsample mip chain + background + glass. No unused V1 upsample.
     if (draws !== glass.renderer.mipLevels + 2) throw new Error(`Unexpected live V2 passes: ${draws}`);
-    return {checks:[`live draws=${draws}`, 'unused V1 reconstruction skipped']};
+    const liveDraws = draws;
+
+    // An overlay with nothing to draw must not upload the live source at all:
+    // a canvas upload is a full CPU copy in WebKit, and a page often keeps an
+    // idle glass instance around between interactions.
+    let uploads = 0;
+    const sub = gl.texSubImage2D.bind(gl);
+    gl.texSubImage2D = (...args) => { uploads++; return sub(...args); };
+    glass.compositeMode = 'overlay';
+    glass.setElements([], false);
+    draws = 0;
+    glass.render({dpr:1});
+    glass.render({dpr:1});
+    if (draws !== 0 || uploads !== 0) throw new Error(`Idle overlay still cost draws=${draws} uploads=${uploads}`);
+    glass.setElements([{shape:'pill', x:70,y:220,w:500,h:110}], false);
+    draws = 0;
+    glass.render({dpr:1});
+    // The pyramid is rebuilt (wall + mips) before the glass draws again.
+    if (draws !== glass.renderer.mipLevels + 1 || uploads !== 1) {
+      throw new Error(`Overlay resume drew ${draws} passes with ${uploads} uploads`);
+    }
+    return {checks:[`live draws=${liveDraws}`, 'unused V1 reconstruction skipped', 'idle overlay uploads nothing']};
   } finally { glass.destroy(); }
 };
 </script>

@@ -36,6 +36,9 @@ uniform float uHighlight;
 uniform float uEcho;
 uniform float uHairline;
 uniform float uHairWidth;
+// 1 while a layer is composited into the sRGB backdrop texture, which encodes
+// on write; 0 for the display-referred drawing buffer.
+uniform int uOutputLinear;
 
 // Softness ratio -> pre-blur radius, as a fraction of the component short side.
 const float FROST_PREBLUR_SCALE = 0.05;
@@ -48,6 +51,13 @@ vec3 linearToSrgb(vec3 c) {
   return mix(1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055,
              12.92 * c,
              lessThanEqual(c, vec3(0.0031308)));
+}
+
+vec3 srgbToLinear(vec3 c) {
+  bvec3 cutoff = lessThanEqual(c, vec3(0.04045));
+  vec3 low = c / 12.92;
+  vec3 high = pow((c + 0.055) / 1.055, vec3(2.4));
+  return mix(high, low, cutoff);
 }
 
 float sdRoundBox(vec2 p, vec2 b, float r) {
@@ -377,6 +387,10 @@ void main() {
   // brighter than either the glass or the backdrop, sprinkling over-bright
   // pixels along the outer edge. Saturate before premultiplying.
   color = clamp(color, 0.0, 1.0);
+  if (uOutputLinear == 1) {
+    color = srgbToLinear(color);
+    hairColor = srgbToLinear(hairColor);
+  }
   vec3 premultiplied = hairColor * hairAlpha + color * mask * (1.0 - hairAlpha);
   float surfaceOpacity = clamp(uShapeOpacities[chosen], 0.0, 1.0);
   outColor = vec4(premultiplied * surfaceOpacity, alpha * surfaceOpacity);

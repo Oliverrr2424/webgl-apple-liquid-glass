@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      html, body { margin: 0; background: #0b0d10; }
+      #output { display: block; width: 320px; height: 200px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="output"></canvas>
+    <script type="module">
+      import { LiquidGlassWebGLV2 } from '../src/v2.js';
+
+      // A live canvas backdrop can be uploaded from a smaller copy. Browsers
+      // that copy canvas pixels through system memory (WebKit) pay per pixel,
+      // so the scale is the lever that keeps a live backdrop affordable on
+      // phones and tablets; the glass itself still renders at full size.
+      window.runTest = async () => {
+        const checks = [];
+        const output = document.querySelector('#output');
+        const source = document.createElement('canvas');
+        source.width = 640;
+        source.height = 400;
+        const context = source.getContext('2d');
+        const fill = (color) => { context.fillStyle = color; context.fillRect(0, 0, 640, 400); };
+        fill('#d02020');
+
+        const glass = new LiquidGlassWebGLV2(output, {
+          compositeMode: 'overlay', autoResize: false, preserveDrawingBuffer: true,
+          elements: [{ id: 'surface', shape: 'rect', x: 60, y: 35, w: 200, h: 130, frost: 0.4 }],
+        });
+        const gl = glass.renderer.gl;
+        const entry = () => glass.renderer.wallpapers[0];
+        const sample = (x, y) => {
+          const pixel = new Uint8Array(4);
+          gl.readPixels(x * 2, gl.drawingBufferHeight - y * 2 - 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+          return Array.from(pixel);
+        };
+        const dominant = (pixel) => ['r', 'g', 'b'][pixel.indexOf(Math.max(pixel[0], pixel[1], pixel[2]))];
+
+        try {
+          for (const bad of [0, -0.5, 1.5, Number.NaN]) {
+            let threw = false;
+            try { glass.setBackdrop(source, { update: 'live', autoStart: false, shouldRender: false, scale: bad }); } catch { threw = true; }
+            if (!threw) throw new Error(`backdrop scale ${bad} was accepted`);
+          }
+          checks.push('scale validated');
+
+          glass.setBackdrop(source, { update: 'live', autoStart: false, shouldRender: false, scale: 0.5 });
+          glass.render({ dpr: 2 });
+          if (entry().width !== 320 || entry().height !== 200) {
+            throw new Error(`scaled live upload is ${entry().width}x${entry().height}, expected 320x200`);
+          }
+          if (glass.probeSource() !== entry().scaled) throw new Error('the light probe still reads the full-size source');
+          if (dominant(sample(160, 100)) !== 'r') throw new Error(`scaled backdrop lost its colour: ${sample(160, 100)}`);
+          checks.push('half-size live upload');
+
+          // Live frames keep following the source through the smaller copy.
+          fill('#2040d0');
+          glass.render({ dpr: 2 });
+          if (dominant(sample(160, 100)) !== 'b') throw new Error(`scaled live backdrop did not follow the source: ${sample(160, 100)}`);
+          checks.push('scaled live frames follow the source');
+
+          glass.setBackdropScale(1, false);
+          glass.render({ dpr: 2 });
+          if (entry().width !== 640 || entry().height !== 400) {
+            throw new Error(`restoring the scale left the upload at ${entry().width}x${entry().height}`);
+          }
+          if (glass.probeSource() !== source) throw new Error('the light probe did not return to the source');
+          checks.push('scale restored');
+
+          // A static canvas re-uploads once when its scale changes.
+          glass.setBackdrop(source, { update: 'static', autoStart: false, shouldRender: false, scale: 1 });
+          let uploads = 0;
+          const texImage2D = gl.texImage2D.bind(gl);
+          gl.texImage2D = (...args) => { uploads++; return texImage2D(...args); };
+          glass.setBackdropScale(0.5, false);
+          glass.render({ dpr: 2 });
+          glass.render({ dpr: 2, force: true });
+          if (uploads !== 1) throw new Error(`a static scale change uploaded ${uploads} times`);
+          if (entry().width !== 320) throw new Error('a static canvas ignored the new scale');
+          checks.push('static re-upload once');
+
+          // Decoded images are uploaded once and never resampled.
+          const bitmap = await createImageBitmap(source);
+          glass.setBackdrop(bitmap, { update: 'static', autoStart: false, shouldRender: false, scale: 0.5 });
+          glass.render({ dpr: 2 });
+          if (entry().width !== 640) throw new Error('an image backdrop was resampled by the scale');
+          bitmap.close();
+          checks.push('images stay full size');
+          return { checks };
+        } finally {
+          glass.destroy();
+        }
+      };
+    </script>
+  </body>
+</html>

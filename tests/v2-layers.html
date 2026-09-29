@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      html, body { margin: 0; background: #0b0d10; }
+      #output { display: block; width: 320px; height: 200px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="output"></canvas>
+    <script type="module">
+      import { LiquidGlassWebGLV2 } from '../src/v2.js';
+
+      // A sheet on layer 0 with a card on layer 1: the card refracts the sheet,
+      // the sheet is composited into the backdrop pyramid on the GPU, and the
+      // next frame rebuilds the pyramid from the wallpaper texture without
+      // re-reading the source canvas.
+      window.runTest = () => {
+        const checks = [];
+        const output = document.querySelector('#output');
+        const backdrop = document.createElement('canvas');
+        backdrop.width = 640;
+        backdrop.height = 400;
+        const context = backdrop.getContext('2d');
+        context.fillStyle = '#102030';
+        context.fillRect(0, 0, 640, 400);
+        context.fillStyle = '#d02020';
+        context.fillRect(0, 0, 320, 400);
+
+        const glass = new LiquidGlassWebGLV2(output, {
+          compositeMode: 'overlay', autoResize: false, preserveDrawingBuffer: true,
+        });
+        glass.setBackdrop(backdrop, { update: 'static', autoStart: false, shouldRender: false });
+        const gl = glass.renderer.gl;
+        let draws = 0;
+        let uploads = 0;
+        const drawArrays = gl.drawArrays.bind(gl);
+        gl.drawArrays = (...args) => { draws++; return drawArrays(...args); };
+        const texSubImage2D = gl.texSubImage2D.bind(gl);
+        gl.texSubImage2D = (...args) => { uploads++; return texSubImage2D(...args); };
+        const texImage2D = gl.texImage2D.bind(gl);
+        gl.texImage2D = (...args) => { uploads++; return texImage2D(...args); };
+        const since = (label, fn) => {
+          const before = draws;
+          fn();
+          checks.push(`${label}=${draws - before}`);
+          return draws - before;
+        };
+        const sample = (x, y) => {
+          const pixel = new Uint8Array(4);
+          gl.readPixels(x * 2, gl.drawingBufferHeight - y * 2 - 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+          return Array.from(pixel);
+        };
+        const luminance = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+        const card = { id: 'card', shape: 'pill', x: 100, y: 80, w: 120, h: 40, layer: 1 };
+        const sheet = { id: 'sheet', shape: 'rect', x: 20, y: 20, w: 280, h: 160, tint: 1.5, frost: 0.2, layer: 0 };
+        try {
+          for (const bad of [{ layer: 1.5 }, { layer: -1 }, { layer: 'top' }]) {
+            let threw = false;
+            try { glass.setElements([{ ...card, ...bad }], false); } catch { threw = true; }
+            if (!threw) throw new Error(`layer ${JSON.stringify(bad.layer)} was accepted`);
+          }
+          checks.push('layer validated');
+
+          // Reference: the card alone over the raw backdrop.
+          glass.setElements([card], false);
+          glass.render({ dpr: 2 });
+          const cardAlone = sample(160, 100);
+          const mips = glass.renderer.mipLevels;
+
+          glass.setElements([card, sheet], false);
+          uploads = 0;
+          // Sheet on screen, sheet baked + (mips - 1) pyramid levels, card on screen.
+          const layered = since('layered', () => glass.render({ dpr: 2 }));
+          if (gl.getError() !== gl.NO_ERROR) throw new Error('layered frame raised a GL error');
+          if (layered !== mips + 2) {
+            throw new Error(`layered frame drew ${layered} passes, expected ${mips + 2}`);
+          }
+          if (uploads !== 0) throw new Error('a layered frame uploaded the static source');
+          const cardOverSheet = sample(160, 100);
+          const sheetOnScreen = sample(40, 160);
+          if (sheetOnScreen[3] < 250) throw new Error(`the lower layer did not reach the screen: ${sheetOnScreen}`);
+          if (luminance(cardOverSheet) - luminance(cardAlone) < 40) {
+            throw new Error(`the card did not refract the tinted sheet: alone=${cardAlone} over=${cardOverSheet}`);
+          }
+          checks.push(`card alone=${Math.round(luminance(cardAlone))} over sheet=${Math.round(luminance(cardOverSheet))}`);
+
+          // The next dirty frame rebuilds the pyramid from the wallpaper (GPU
+          // only) before drawing, and a frame with one layer again rebuilds
+          // once and then settles back to output-only passes.
+          const again = since('layered-again', () => glass.updateElement('card', { x: 101 }));
+          if (again !== 2 * mips + 2) {
+            throw new Error(`a second layered frame drew ${again} passes, expected ${2 * mips + 2}`);
+          }
+          const backToCard = since('flat', () => glass.setElements([card]));
+          if (backToCard !== mips + 1) throw new Error(`the flat frame after layers drew ${backToCard} passes, expected ${mips + 1}`);
+          const flatAgain = since('flat-again', () => glass.updateElement('card', { x: 100 }));
+          if (flatAgain !== 1) throw new Error(`a flat frame kept rebuilding the pyramid: ${flatAgain} passes`);
+          if (uploads !== 0) throw new Error('pyramid rebuilds re-uploaded the static source');
+          const restored = sample(160, 100);
+          if (Math.abs(luminance(restored) - luminance(cardAlone)) > 6) {
+            throw new Error(`the backdrop kept the baked sheet: ${restored} vs ${cardAlone}`);
+          }
+          checks.push('pyramid restored');
+          return { checks };
+        } finally {
+          glass.destroy();
+        }
+      };
+    </script>
+  </body>
+</html>

@@ -222,8 +222,11 @@ void main() {
   vec3 col;
   if (uUseImage == 1) {
     // Wallpaper textures are plain RGBA8 holding display/sRGB values; decode
-    // to linear radiance here.
-    col = srgbToLinear(texture(uWallpaper, coverUV(uv)).rgb);
+    // to linear radiance here. They are uploaded top row first (no
+    // UNPACK_FLIP_Y_WEBGL), so the lookup flips instead.
+    vec2 wallpaperUV = coverUV(uv);
+    wallpaperUV.y = 1.0 - wallpaperUV.y;
+    col = srgbToLinear(texture(uWallpaper, wallpaperUV).rgb);
   } else {
     // Procedural palette constants are authored as display/sRGB colours. The
     // SRGB render target expects linear shader output and encodes it on write.
